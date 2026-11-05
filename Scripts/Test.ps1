@@ -26,6 +26,7 @@ foreach ($name in @('ManagedRegression.exe', 'NativeLaunch.exe')) {
     $source = if ($name -eq 'ManagedRegression.exe') { Join-Path $repository "tests/Managed/bin/Release/$name" } else { Join-Path $repository "Build/Release/$name" }
     Copy-Item -LiteralPath $source -Destination $product -Force
 }
+Copy-Item -LiteralPath (Join-Path $repository 'tests/Managed/bin/Release/ManagedRegression.exe.config') -Destination $product -Force
 $os = Get-ItemProperty -LiteralPath 'HKLM:/SOFTWARE/Microsoft/Windows NT/CurrentVersion'
 $environment = [ordered]@{
     captured_at = (Get-Date).ToUniversalTime().ToString('o')
@@ -66,7 +67,7 @@ function Invoke-RegressionProcess {
         $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
         $output | Set-Content -LiteralPath (Join-Path $ResultsDirectory $LogName) -Encoding utf8NoBOM
         if ($process.ExitCode -ne 0) {
-            throw "回归进程失败：$Executable，退出码 $($process.ExitCode)，日志 $LogName`n$output"
+            throw "回归进程失败：$Executable，退出码 $($process.ExitCode)，日志 $(Join-Path $ResultsDirectory $LogName)"
         }
         if (-not [string]::IsNullOrWhiteSpace($output)) { Write-Host $output.TrimEnd() }
     } finally {
@@ -85,7 +86,7 @@ function Assert-NativeReport {
             $values[$key] = $value
         }
         if ($values.failures -ne '0' -or $values.acp -ne "$CodePage") {
-            throw "原生回归失败：$path`n$(Get-Content -Raw -LiteralPath $path)"
+            throw "原生回归失败：$path（ACP=$($values.acp)，failures=$($values.failures)）"
         }
     }
 }

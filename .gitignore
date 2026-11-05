@@ -29,3 +29,4 @@ $tf*/
 .vs/
 artifacts/
 *.exp
+.serena/

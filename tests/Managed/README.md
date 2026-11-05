@@ -1,33 +1,22 @@
 # 托管回归程序
 
-需要 Windows、VS2019 MSBuild 和 .NET Framework 4 targeting pack；没有 NuGet 或现代 .NET SDK 依赖。项目保持旧格式、.NET 4 Client Profile、x86。
+需要 Windows、VS2019 MSBuild 和 .NET Framework 4.8 运行时。项目保留旧 csproj 和 x86 测试宿主；微软 reference assemblies 作为构建期 NuGet 包统一定义在根 `Directory.Build.props`，不依赖管理员安装 targeting pack 或现代 .NET SDK。
 
-在仓库根目录用 PowerShell 构建并运行：
+从仓库根目录完成产品构建后，独立复测实际产品：
 
 ```powershell
-& 'C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe' .\tests\Managed\ManagedRegression.csproj /m:1 /p:Configuration=Release /p:PostBuildEvent= /v:minimal /nologo
-if ($LASTEXITCODE -ne 0) { throw 'Managed regression build failed.' }
-& .\tests\Managed\bin\Release\ManagedRegression.exe
-if ($LASTEXITCODE -ne 0) { throw 'Managed regression tests failed.' }
+pwsh -NoProfile -File ./build.ps1
+pwsh -NoProfile -File ./Scripts/Test.ps1 `
+  -BuildDirectory ./Build/Release `
+  -ResultsDirectory ./artifacts/tests/manual
 ```
 
-`PostBuildEvent=` 禁用安装器资源和外部语言文件的构建后复制动作；本项目只构建自身及 LECommonLibrary、LEProc、LEGUI 引用，不构建根解决方案或原生项目。WPF 使用程序集内置的默认语言资源。任一测试失败时 exe 返回 1。
+`Scripts/Test.ps1` 将测试程序放到指定产品的隔离副本旁，加载该产品的实际程序集和语言文件。位置检查拒绝从 GAC、其他输出目录或源码副本加载产品；内部启动计划通过实际 LEProc 程序集调用。任一测试失败时宿主返回非零，不写整轮成功标记。不要用缺少产品资源的测试输出目录代替完整产品验收。
 
-完整产品回归使用根目录 `Scripts/Test.ps1`：它把测试 exe 放到指定产品的隔离副本旁，加载该产品的 Common、LEProc 和 GUI。运行时位置检查会拒绝从 GAC、源码输出目录或其他位置加载程序集；直接运行上述测试输出目录时，验证范围为该目录中随项目引用复制的产品。
+参数回归使用 Windows `CommandLineToArgvW` 往返，并由真实子进程读取参数、工作目录及相对文件。显式配置中的 Parameter 保持原始 Windows 命令行片段优先，不再次编码。
 
-覆盖 Windows `CommandLineToArgvW` 的参数往返（空参数、空白、嵌入引号、尾部反斜杠和 Unicode）、显式配置参数原样优先、XML 配置所有字段及顺序、缺失可选字段默认值、无效 XML 返回空数组的现有契约、默认配置创建与已有文件保护、独占锁下保存失败抛出异常。
+配置回归覆盖字段、顺序、旧字段默认值、无效 XML 读取契约、默认配置创建和已有文件保护。写入检查包括独占锁、非法 XML 控制字符及孤立代理项，确认原文件字节保持、临时文件清理和修正后重试。
 
-工作目录测试把回归 exe 和公共库复制到临时目标目录，反射调用实际产品 `LEProc.exe` 内部启动计划给出的路径、命令行和工作目录，验证子进程参数及相对文件读取。没有编译一份启动计划源码副本，也没有添加生产测试接口。临时目录在测试结束后删除。
+WPF 回归在 STA 线程实例化真实配置窗口，触发保存和快捷方式事件，确认失败不继续启动或关闭，持久化失败不改变内存列表；不可用区域或时区必须重新选择后保存。独立语言子进程读取只读翻译并在加载后移动文件，检查实际语言选择及句柄释放。它们验证行为，不锁定提示文案。
 
-WPF 回归在 STA 线程中实例化真实配置窗口，锁定文件后触发保存和快捷方式按钮，验证应用保存异常会中止后续操作、窗口仍可编辑并重试保存；全局保存和另存为失败时内存列表与文件保持一致，解锁后能重试。测试通过反射调用现有事件或保存方法，不比较界面文案，不添加生产测试接口。
-
-旧 GUI 二进制下，全局保存和另存为回归分别检出“保存失败后仍更改内存配置”和“保存失败后仍添加配置”；编译修复后的 GUI 后通过。Dispatcher 错误对话框、删除确认、另存为模糊遮罩清理及启动提权流程仍需交互式 UI smoke。
-
-共享命令行接口位于 `LECommonLibrary.WindowsCommandLine`：
-
-- `QuoteArgument(string argument)` 编码一个已解析参数。
-- `JoinArguments(IEnumerable<string> arguments)` 编码参数序列。
-
-两者拒绝 null，单个参数也拒绝 Windows 命令行无法表示的 NUL 字符。空参数合法。不要把已经是原始 Windows 命令行的 `profile.Parameter` 传入这些接口。
-
-实现前已用 Windows 解析器复现旧 LEProc 空格拼接和旧提权套引号算法的参数损坏；还调用旧 Release 公共库确认锁定目标文件时保存 API 会吞掉写入异常。相应回归现在验证实际参数边界及调用者可观察到的保存失败，不比较界面文案。
+实际数量和失败详情以每轮 `managed.log` 为准。Dispatcher 的交互式对话框、UAC 以及完整 Shell 安装需要各自的验收，不能由参数或配置测试推定。

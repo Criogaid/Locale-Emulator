@@ -41,6 +41,7 @@ namespace ManagedRegression
             var tests = new Action[]
             {
                 RuntimeProductAssembliesAreAdjacent,
+                RuntimeConfigurationsMatchFrameworkTargets,
                 WindowsArgumentsRoundTrip,
                 QuoteArgumentRejectsUnrepresentableInput,
                 ProfileParametersRemainRaw,
@@ -79,12 +80,30 @@ namespace ManagedRegression
         private static void RuntimeProductAssembliesAreAdjacent()
         {
             var directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var products = new[] { typeof(LEConfig).Assembly, typeof(LEGUI.App).Assembly, LoadLauncherAssembly() };
+            var products = new[] { typeof(LEConfig).Assembly, typeof(LEGUI.App).Assembly, LoadLauncherAssembly(),
+                Assembly.LoadFrom(Path.Combine(directory, "LEInstaller.exe")),
+                Assembly.LoadFrom(Path.Combine(directory, "LEContextMenuHandler.dll")) };
             foreach (var product in products)
                 Check(!product.GlobalAssemblyCache && string.Equals(Path.GetDirectoryName(product.Location),
                     directory, StringComparison.OrdinalIgnoreCase),
                     "Runtime product assembly resolved outside the harness directory: "
                     + product.FullName + " at " + product.Location);
+        }
+
+        private static void RuntimeConfigurationsMatchFrameworkTargets()
+        {
+            var directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            foreach (var file in new[] { "LEProc.exe", "LEGUI.exe", "LEInstaller.exe", "ManagedRegression.exe" })
+            {
+                var path = Path.Combine(directory, file);
+                var product = Assembly.LoadFrom(path);
+                var framework = (System.Runtime.Versioning.TargetFrameworkAttribute)Attribute.GetCustomAttribute(
+                    product, typeof(System.Runtime.Versioning.TargetFrameworkAttribute));
+                var configuration = XDocument.Load(path + ".config");
+                var runtime = configuration.Root.Element("startup").Element("supportedRuntime");
+                Check(framework != null && (string)runtime.Attribute("sku") == framework.FrameworkName,
+                    "Runtime configuration does not match the compiled framework target: " + file);
+            }
         }
 
         private static Assembly LoadLauncherAssembly()

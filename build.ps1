@@ -19,12 +19,14 @@ $msbuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
 
 function Invoke-Build {
     param([string]$Project, [string]$Platform, [string]$LogName, [string]$Target)
-    & $msbuild (Join-Path $repository $Project) "/t:$Target" /m /nologo /v:minimal /p:Configuration=Release "/p:SolutionDir=$repository/" "/p:Platform=$Platform" /fl "/flp:logfile=$(Join-Path $logs $LogName);verbosity=normal;encoding=UTF-8"
+    & $msbuild (Join-Path $repository $Project) "/t:$Target" /m /nr:false /nologo /v:minimal /p:Configuration=Release "/p:SolutionDir=$repository/" "/p:Platform=$Platform" /fl "/flp:logfile=$(Join-Path $logs $LogName);verbosity=normal;encoding=UTF-8"
     if ($LASTEXITCODE -ne 0) {
         throw "构建失败：$Project，详细日志：$(Join-Path $logs $LogName)"
     }
 }
 
+Invoke-Build 'LocaleEmulator.sln' 'Any CPU' 'product-restore.log' 'Restore'
+Invoke-Build 'tests/Managed/ManagedRegression.csproj' 'AnyCPU' 'managed-restore.log' 'Restore'
 Invoke-Build 'LocaleEmulator.sln' 'Any CPU' 'product-build.log' 'Rebuild'
 Invoke-Build 'tests/Managed/ManagedRegression.csproj' 'AnyCPU' 'managed-build.log' 'Build'
 Invoke-Build 'tests/Native/NativeProbe.vcxproj' 'Win32' 'probe-build.log' 'Build'
@@ -44,6 +46,7 @@ New-Item -ItemType Directory -Path $package -Force | Out-Null
 
 $requiredFiles = @(
     'LEProc.exe', 'LEGUI.exe', 'LEInstaller.exe',
+    'LEProc.exe.config', 'LEGUI.exe.config', 'LEInstaller.exe.config',
     'LECommonLibrary.dll', 'LEContextMenuHandler.dll',
     'LoaderDll.dll', 'LocaleEmulator.dll', 'LEVersion.xml'
 )
@@ -52,9 +55,10 @@ foreach ($name in $requiredFiles) {
 }
 Copy-Item -LiteralPath (Join-Path $buildDirectory 'Lang') -Destination $package -Recurse
 Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination $package
+Copy-Item -LiteralPath (Join-Path $repository 'Directory.Build.props') -Destination $package
 $packageDocs = Join-Path $package 'docs'
 New-Item -ItemType Directory -Path $packageDocs -Force | Out-Null
-foreach ($name in @('SOURCES.md', 'MAINTENANCE.md', 'THIRD_PARTY_NOTICES.md')) {
+foreach ($name in @('SOURCES.md', 'MAINTENANCE.md', 'QUALITY.md', 'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $repository "docs/$name") -Destination $packageDocs
 }
 $packageNative = Join-Path $package 'Native'
@@ -75,6 +79,7 @@ $changes = & git -C $repository status --porcelain=v1
 if ($LASTEXITCODE -ne 0) { throw '无法读取构建工作区状态。' }
 $os = Get-ItemProperty -LiteralPath 'HKLM:/SOFTWARE/Microsoft/Windows NT/CurrentVersion'
 [xml]$nativeToolchain = Get-Content -Raw -LiteralPath (Join-Path $repository 'Native/Toolchain.props')
+[xml]$managedToolchain = Get-Content -Raw -LiteralPath (Join-Path $repository 'Directory.Build.props')
 [ordered]@{
     version = $version.ToString()
     commit = $commit
@@ -83,6 +88,7 @@ $os = Get-ItemProperty -LiteralPath 'HKLM:/SOFTWARE/Microsoft/Windows NT/Current
     host = [ordered]@{ display_version = $os.DisplayVersion; build = $os.CurrentBuild; ubr = $os.UBR }
     msbuild = (Get-Item -LiteralPath $msbuild).VersionInfo.FileVersion
     native_platform = 'Win32'
+    managed_framework = $managedToolchain.Project.PropertyGroup.TargetFrameworkVersion
     native_toolset = $nativeToolchain.Project.PropertyGroup.PlatformToolset
     windows_sdk = $nativeToolchain.Project.PropertyGroup.WindowsTargetPlatformVersion
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $package 'build-info.json') -Encoding utf8NoBOM

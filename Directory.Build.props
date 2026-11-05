@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <ReferenceAssembliesVersion>1.0.3</ReferenceAssembliesVersion>
+    <RestorePackagesPath>$(MSBuildThisFileDirectory)artifacts\packages\</RestorePackagesPath>
+    <!-- VS2019 的 WPF 临时工程不导入 NuGet targets，因此显式共享官方参考程序集根目录。 -->
+    <TargetFrameworkRootPath>$(RestorePackagesPath)microsoft.netframework.referenceassemblies.net48\$(ReferenceAssembliesVersion)\build\</TargetFrameworkRootPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="[$(ReferenceAssembliesVersion)]" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

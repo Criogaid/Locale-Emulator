@@ -10,7 +10,7 @@
 
 - Git 和 PowerShell 7。
 - Visual Studio 2019 Build Tools：MSBuild、MSVC v142 x86/x64 工具、Windows SDK `10.0.19041.0`。原生版本统一定义在 [Toolchain.props](Native/Toolchain.props)。
-- .NET Framework 4 targeting pack，以及 Windows 11 自带的 .NET Framework 4.x 运行时。现有 C# 工程暂保留 v4.0 目标；未引入现代 .NET SDK 或 NuGet 测试框架。
+- .NET Framework 4.8 运行时（Windows 11 已提供）。托管目标统一定义在 [Directory.Build.props](Directory.Build.props)；首次构建从 NuGet 恢复微软官方 reference assemblies，无需管理员安装 targeting pack，也不需要现代 .NET SDK。引用包仅用于构建，不进入发行包。
 
 在仓库目录运行：
 
@@ -59,7 +59,7 @@ pwsh -NoProfile -File ./Scripts/Test.ps1 `
   -ResultsDirectory ./artifacts/tests/manual
 ```
 
-14 项托管回归使用指定产品的实际程序集，覆盖加载位置、Windows 命令行参数往返、真实子进程的工作目录和相对文件访问、配置完整读写、坏配置、锁定文件保存失败及实际 WPF 保存流程。原生探针通过真实 LEProc 注入，分别检查 CP932/936 的默认转换、显式异码页转换、字体枚举字符集、Unicode/空格目录和子进程继承。另外验证只读安装目录的独立配置启动，以及盘符根目录的父子进程工作目录。GUI 与安装器主窗口也接受启动和正常关闭检查。
+托管回归使用指定产品的实际程序集，覆盖加载位置、Windows 命令行参数往返、真实子进程的工作目录和相对文件访问、配置完整读写、非法 XML 输入与原子保存、锁定文件、不可用区域或时区、只读翻译及实际 WPF 保存流程。原生探针通过真实 LEProc 注入，分别检查 CP932/936 的默认转换、显式异码页转换、字体枚举字符集、Unicode/空格目录和子进程继承。另外验证只读安装目录的独立配置启动，以及盘符根目录的父子进程工作目录。GUI 与安装器主窗口也接受启动和正常关闭检查；实际测试数量见每轮的 `managed.log`。
 
 每轮在 `environment.json` 记录 Windows DisplayVersion、build、UBR、主机架构和两个 Core DLL 的 SHA256。`result.json` 仅在整轮通过后写入。字体探针验证 API 枚举行为，不代替实际游戏的像素显示、输入法或字体布局测试。
 

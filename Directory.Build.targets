@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe')">
+    <AppConfig>$(IntermediateOutputPath)$(TargetFileName).config</AppConfig>
+  </PropertyGroup>
+  <Target Name="GenerateRuntimeConfiguration" BeforeTargets="PrepareForBuild"
+          Condition="'$(MSBuildProjectExtension)' == '.csproj' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe')">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile File="$(AppConfig)" Encoding="UTF-8" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="&lt;configuration&gt;&lt;startup&gt;&lt;supportedRuntime version=&quot;v4.0&quot; sku=&quot;$(TargetFrameworkMoniker)&quot; /&gt;&lt;/startup&gt;&lt;/configuration&gt;" />
+    <ItemGroup>
+      <FileWrites Include="$(AppConfig)" />
+    </ItemGroup>
+  </Target>
+</Project>

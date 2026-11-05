@@ -8,8 +8,6 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>ManagedRegression</RootNamespace>
     <AssemblyName>ManagedRegression</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
     <PlatformTarget>x86</PlatformTarget>
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <WarningLevel>4</WarningLevel>
