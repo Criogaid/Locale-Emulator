@@ -37,9 +37,10 @@ namespace LEGUI
 
         private void bSaveGlobalSetting_Click(object sender, RoutedEventArgs e)
         {
-            if (cbGlobalProfiles.Items.Count == 0)
+            if (cbGlobalProfiles.SelectedIndex < 0)
                 return;
 
+            App.ValidateProfileSelection(cbLocation.SelectedIndex, cbTimezone.SelectedIndex);
             var crt = _profiles[cbGlobalProfiles.SelectedIndex];
             crt.Location = _cultureInfos[cbLocation.SelectedIndex].Name;
             crt.Timezone = _timezones[cbTimezone.SelectedIndex].Id;
@@ -110,6 +111,7 @@ namespace LEGUI
 
         private void SaveProfileAs(string name)
         {
+            App.ValidateProfileSelection(cbLocation.SelectedIndex, cbTimezone.SelectedIndex);
             var pro = new LEProfile(name,
                                     Guid.NewGuid().ToString(),
                                     cbShowInMainMenu.IsChecked != null && (bool)cbShowInMainMenu.IsChecked,

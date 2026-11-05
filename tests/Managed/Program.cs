@@ -17,6 +17,7 @@ namespace ManagedRegression
         [STAThread]
         private static int Main(string[] args)
         {
+            Console.OutputEncoding = new UTF8Encoding(false);
             if (args.Length > 0 && args[0] == "--child")
             {
                 Console.WriteLine(Encode(Environment.CurrentDirectory));
@@ -24,6 +25,12 @@ namespace ManagedRegression
                 foreach (var argument in args.Skip(1))
                     Console.WriteLine(Encode(argument));
                 return 0;
+            }
+
+            if (args.Length == 1 && args[0] == "--language-probe")
+            {
+                try { WpfRegression.RunLanguageProbe(); return 0; }
+                catch (Exception error) { Console.Error.WriteLine(error); return 1; }
             }
 
             return RunTests();
@@ -44,9 +51,12 @@ namespace ManagedRegression
                 InvalidConfigKeepsEmptyResultContract,
                 GlobalConfigCreationPreservesExistingFile,
                 SaveFailureIsObservable,
+                SerializationFailurePreservesExistingConfig,
                 WpfRegression.AppConfigSaveFailureDoesNotLaunchOrShutdown,
                 WpfRegression.GlobalSaveFailureKeepsSelectedProfile,
-                WpfRegression.GlobalSaveAsFailureKeepsProfiles
+                WpfRegression.GlobalSaveAsFailureKeepsProfiles,
+                WpfRegression.UnavailableProfileSelectionPreservesConfiguration,
+                WpfRegression.ReadOnlyLanguageLoadsAndReleasesFile
             };
             var failures = 0;
             foreach (var test in tests)
@@ -263,6 +273,31 @@ namespace ManagedRegression
                 using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                     Throws<IOException>(() => LEConfig.SaveApplicationConfigFile(path, new LEProfile(true)));
                 Check(File.ReadAllText(path) == "preserve-me", "Failed save modified the existing config.");
+            });
+        }
+
+        private static void SerializationFailurePreservesExistingConfig()
+        {
+            InTemporaryDirectory(directory =>
+            {
+                var path = Path.Combine(directory, "existing.xml");
+                var original = new LEProfile(true);
+                LEConfig.SaveApplicationConfigFile(path, original);
+                var bytes = File.ReadAllBytes(path);
+                foreach (var invalid in new[] { "before\u0001after", "unpaired\ud800" })
+                {
+                    var changed = original;
+                    changed.Parameter = invalid;
+                    Throws<InvalidDataException>(() => LEConfig.SaveApplicationConfigFile(path, changed));
+                    Check(File.ReadAllBytes(path).SequenceEqual(bytes),
+                        "Serialization failure damaged the existing configuration.");
+                    Check(Directory.GetFiles(directory).Length == 1,
+                        "Failed configuration save left a temporary file.");
+                }
+                original.Parameter = "valid retry";
+                LEConfig.SaveApplicationConfigFile(path, original);
+                Check(LEConfig.GetProfiles(path).Single().Parameter == original.Parameter,
+                    "A valid save could not replace the configuration after a failure.");
             });
         }
 

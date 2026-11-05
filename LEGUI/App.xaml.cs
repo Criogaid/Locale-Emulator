@@ -12,17 +12,24 @@ namespace LEGUI
     {
         internal static string StandaloneFilePath = string.Empty;
 
+        internal static void ValidateProfileSelection(int locationIndex, int timezoneIndex)
+        {
+            if (locationIndex < 0 || timezoneIndex < 0)
+                throw new InvalidDataException("请先选择当前系统可用的区域和时区。");
+        }
+
         protected override void OnStartup(StartupEventArgs e)
         {
             AppDomain.CurrentDomain.UnhandledException +=
                 (sender, args) => MessageBox.Show(((Exception) args.ExceptionObject).Message);
             DispatcherUnhandledException += (sender, args) =>
             {
-                if (!(args.Exception is IOException) && !(args.Exception is UnauthorizedAccessException))
+                if (!(args.Exception is IOException) && !(args.Exception is UnauthorizedAccessException)
+                    && !(args.Exception is InvalidDataException))
                     return;
 
                 args.Handled = true;
-                MessageBox.Show("无法完成文件操作：" + args.Exception.Message, "Locale Emulator",
+                MessageBox.Show("无法保存配置或完成文件操作：" + args.Exception.Message, "Locale Emulator",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             };
 

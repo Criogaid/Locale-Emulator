@@ -17,19 +17,8 @@ namespace LEGUI
         internal static string GetString(string key)
         {
             var dict = LoadDictionary();
-            try
-            {
-                var s = (string)dict[key];
-
-                if (string.IsNullOrEmpty(s))
-                    return key;
-
-                return s;
-            }
-            catch
-            {
-                return key;
-            }
+            var value = dict[key] as string;
+            return string.IsNullOrEmpty(value) ? key : value;
         }
 
         private static ResourceDictionary LoadDictionary()
@@ -46,19 +35,16 @@ namespace LEGUI
                 var fallbackLangPath = Path.Combine(langDir,
                                                     $@"{CurrentCultureInfo.TwoLetterISOLanguageName}.xaml");
 
-                if (File.Exists(firstLangPath))
-                    Application.Current.Resources.MergedDictionaries
-                               .Insert(0,
-                                       XamlReader.Load(new FileStream(firstLangPath, FileMode.Open))
-                                       as ResourceDictionary);
-                else
-                    Application.Current.Resources.MergedDictionaries
-                               .Insert(0,
-                                       XamlReader.Load(new FileStream(fallbackLangPath, FileMode.Open))
-                                       as ResourceDictionary);
+                var path = File.Exists(firstLangPath) ? firstLangPath : fallbackLangPath;
+                using (var stream = File.OpenRead(path))
+                    dictionary = XamlReader.Load(stream) as ResourceDictionary;
+                if (dictionary != null)
+                    Application.Current.Resources.MergedDictionaries.Insert(0, dictionary);
             }
-            catch
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException
+                                          || error is XamlParseException)
             {
+                // External translations are optional; preserve the bundled default on read or parse failure.
             }
 
             //If dictionary is still null, use default language.

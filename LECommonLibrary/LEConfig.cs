@@ -142,7 +142,30 @@ namespace LECommonLibrary
 
             var tree = new XElement("LEConfig", baseNode);
 
-            tree.Save(writeTo);
+            var destination = Path.GetFullPath(writeTo);
+            var temporary = Path.Combine(Path.GetDirectoryName(destination), Path.GetRandomFileName());
+            var created = false;
+            try
+            {
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    created = true;
+                    try { tree.Save(stream); }
+                    catch (ArgumentException error)
+                    {
+                        throw new InvalidDataException("配置包含 XML 不允许的字符，请检查名称和参数。", error);
+                    }
+                    stream.Flush(true);
+                }
+                if (File.Exists(destination))
+                    File.Replace(temporary, destination, null);
+                else
+                    File.Move(temporary, destination);
+            }
+            finally
+            {
+                if (created) File.Delete(temporary);
+            }
         }
     }
 }

@@ -63,6 +63,7 @@ namespace LEGUI
 
         private void SaveSetting()
         {
+            App.ValidateProfileSelection(cbLocation.SelectedIndex, cbTimezone.SelectedIndex);
             var crt = new LEProfile(Path.GetFileName(App.StandaloneFilePath),
                                     Guid.NewGuid().ToString(),
                                     false,
