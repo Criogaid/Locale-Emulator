@@ -27,3 +27,5 @@ _ReSharper*/
 *.vssscc
 $tf*/
 .vs/
+artifacts/
+*.exp

@@ -16,6 +16,15 @@ namespace LEGUI
         {
             AppDomain.CurrentDomain.UnhandledException +=
                 (sender, args) => MessageBox.Show(((Exception) args.ExceptionObject).Message);
+            DispatcherUnhandledException += (sender, args) =>
+            {
+                if (!(args.Exception is IOException) && !(args.Exception is UnauthorizedAccessException))
+                    return;
+
+                args.Handled = true;
+                MessageBox.Show("无法完成文件操作：" + args.Exception.Message, "Locale Emulator",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            };
 
             base.OnStartup(e);
         }
@@ -32,8 +41,6 @@ namespace LEGUI
             }
 
             var isGlobalProfile = string.IsNullOrEmpty(StandaloneFilePath);
-
-            LEConfig.CheckGlobalConfigFile(true);
 
             // We check StandaloneFilePath before loading UI, because this wil be faster.
             if (
@@ -60,7 +67,7 @@ namespace LEGUI
                                         MessageBoxButton.OK,
                                         MessageBoxImage.Error);
 
-                    Current.Shutdown();
+                    Current.Shutdown(1);
                 }
                 else
                 {
@@ -72,19 +79,30 @@ namespace LEGUI
                                                                          Path.GetDirectoryName(LEConfig.GlobalConfigPath),
                                                                          "LEGUI.exe"),
                                                             e.Args);
+                        Current.Shutdown();
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
                         MessageBox.Show("LEGUI requires administrator privilege to write to the current directory.",
                                         "Locale Emulator",
                                         MessageBoxButton.OK,
                                         MessageBoxImage.Error);
-                    }
-                    finally
-                    {
-                        Current.Shutdown();
+                        Current.Shutdown(1);
                     }
                 }
+                return;
+            }
+
+            try
+            {
+                LEConfig.CheckGlobalConfigFile(true);
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                MessageBox.Show("无法创建配置文件：" + error.Message, "Locale Emulator",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Current.Shutdown(1);
+                return;
             }
 
             I18n.LoadLanguage();

@@ -51,9 +51,11 @@ namespace LEGUI
                                         && (bool)cbIsAdvancedRedirection.IsChecked;
             crt.RunWithSuspend = cbStartAsSuspend.IsChecked != null && (bool)cbStartAsSuspend.IsChecked;
 
-            _profiles[cbGlobalProfiles.SelectedIndex] = crt;
+            var profiles = _profiles.ToArray();
+            profiles[cbGlobalProfiles.SelectedIndex] = crt;
+            LEConfig.SaveGlobalConfigFile(profiles);
 
-            LEConfig.SaveGlobalConfigFile(_profiles.ToArray());
+            _profiles[cbGlobalProfiles.SelectedIndex] = crt;
         }
 
         private void cbGlobalProfiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -82,23 +84,28 @@ namespace LEGUI
         {
             mainGrid.Effect = new BlurEffect();
 
-            var ib = new InputBox
-                     {
-                         Owner = this,
-                         WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                         Instruction = I18n.GetString("SaveAsInstruction"),
-                         OkText = I18n.GetString("Save"),
-                         CancelText = I18n.GetString("Cancel")
-                     };
-
-            if (ib.ShowDialog() == true && !string.IsNullOrEmpty(ib.Text))
+            try
             {
-                SaveProfileAs(ib.Text);
+                var ib = new InputBox
+                         {
+                             Owner = this,
+                             WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                             Instruction = I18n.GetString("SaveAsInstruction"),
+                             OkText = I18n.GetString("Save"),
+                             CancelText = I18n.GetString("Cancel")
+                         };
 
-                cbGlobalProfiles.SelectedIndex = _profiles.Count - 1;
+                if (ib.ShowDialog() == true && !string.IsNullOrEmpty(ib.Text))
+                {
+                    SaveProfileAs(ib.Text);
+
+                    cbGlobalProfiles.SelectedIndex = _profiles.Count - 1;
+                }
             }
-
-            mainGrid.Effect = null;
+            finally
+            {
+                mainGrid.Effect = null;
+            }
         }
 
         private void SaveProfileAs(string name)
@@ -114,9 +121,9 @@ namespace LEGUI
                                     cbIsAdvancedRedirection.IsChecked != null && (bool)cbIsAdvancedRedirection.IsChecked,
                                     cbStartAsSuspend.IsChecked != null && (bool)cbStartAsSuspend.IsChecked);
 
-            _profiles.Add(pro);
+            LEConfig.SaveGlobalConfigFile(_profiles.Concat(new[] { pro }).ToArray());
 
-            LEConfig.SaveGlobalConfigFile(_profiles.ToArray());
+            _profiles.Add(pro);
 
             // Update cbGlobalProfiles.
             cbGlobalProfiles.ItemsSource = _profiles.Select(p => p.Name);
@@ -130,9 +137,10 @@ namespace LEGUI
             if (MessageBoxResult.No == MessageBox.Show(I18n.GetString("ConfirmDel"), "", MessageBoxButton.YesNo))
                 return;
 
-            _profiles.RemoveAt(cbGlobalProfiles.SelectedIndex);
+            var selectedIndex = cbGlobalProfiles.SelectedIndex;
+            LEConfig.SaveGlobalConfigFile(_profiles.Where((profile, index) => index != selectedIndex).ToArray());
 
-            LEConfig.SaveGlobalConfigFile(_profiles.ToArray());
+            _profiles.RemoveAt(selectedIndex);
 
             // Update cbGlobalProfiles.
             cbGlobalProfiles.ItemsSource = _profiles.Select(p => p.Name);

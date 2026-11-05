@@ -19,11 +19,16 @@ namespace LEGUI
         private readonly List<CultureInfo> _cultureInfos = new List<CultureInfo>();
         private readonly List<TimeZoneInfo> _timezones = new List<TimeZoneInfo>();
 
+        private string ApplicationPath
+        {
+            get { return App.StandaloneFilePath.Substring(0, App.StandaloneFilePath.Length - ".le.config".Length); }
+        }
+
         public AppConfig()
         {
             InitializeComponent();
 
-            Title += Path.GetFileName(App.StandaloneFilePath).Replace(".le.config", "");
+            Title += Path.GetFileName(ApplicationPath);
 
             // Region.
             _cultureInfos = CultureInfo.GetCultures(CultureTypes.AllCultures).OrderBy(i => i.DisplayName).ToList();
@@ -81,7 +86,7 @@ namespace LEGUI
 
                 link.SetPath(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
                                           "LEProc.exe"));
-                link.SetArguments($"-run \"{path}\"");
+                link.SetArguments(WindowsCommandLine.JoinArguments(new[] { "-run", path }));
                 link.SetIconLocation(AssociationReader.GetAssociatedIcon(Path.GetExtension(path)).Replace("%1", path), 0);
 
                 link.SetDescription($"Run {Path.GetFileName(path)} with Locale Emulator");
@@ -103,7 +108,7 @@ namespace LEGUI
         {
             //Run the application.
             Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "LEProc.exe"),
-                          $"-run \"{App.StandaloneFilePath.Replace(".le.config", "")}\"");
+                          WindowsCommandLine.JoinArguments(new[] { "-run", ApplicationPath }));
 
             Application.Current.Shutdown();
         }
@@ -119,7 +124,7 @@ namespace LEGUI
         {
             SaveSetting();
 
-            CreateShortcut(App.StandaloneFilePath.Replace(".le.config", ""));
+            CreateShortcut(ApplicationPath);
 
             RunAndShutdown();
         }

@@ -21,35 +21,19 @@ namespace LEProc
         {
             SystemHelper.DisableDPIScale();
 
-            try
-            {
-                Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
-                        "LEUpdater.exe"),
-                    "schedule");
-            }
-            catch
-            {
-            }
-
             if (!GlobalHelper.CheckCoreDLLs())
             {
                 MessageBox.Show(
-                    "Some of the core Dlls are missing.\r\n" +
-                    "Please whitelist these Dlls in your antivirus software, then download and re-install LE.\r\n"
-                    +
-                    "\r\n" +
-                    "These Dlls are:\r\n" +
-                    "LoaderDll.dll\r\n" +
-                    "LocaleEmulator.dll",
+                    "程序目录缺少核心 DLL，请检查安装文件是否完整。\r\n\r\n" +
+                    "所需文件：\r\nLoaderDll.dll\r\nLocaleEmulator.dll\r\n\r\n" +
+                    $"程序目录：{Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)}\r\n" +
+                    "https://github.com/Criogaid/Locale-Emulator/issues",
                     "Locale Emulator Version " + GlobalHelper.GetLEVersion(),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
 
                 return;
             }
-            
-            //If global config does not exist, create a new one.
-            LEConfig.CheckGlobalConfigFile(true);
 
             if (args.Length == 0)
             {
@@ -90,6 +74,10 @@ namespace LEProc
             {
                 Args = args;
 
+                if (((Args[0] == "-run" || Args[0] == "-manage") && Args.Length < 2)
+                    || (Args[0] == "-runas" && Args.Length < 3))
+                    throw new ArgumentException("缺少启动参数：-run/-manage 需要路径，-runas 需要配置 GUID 和路径。");
+
                 switch (Args[0])
                 {
                     case "-run": //-run %APP%
@@ -99,7 +87,7 @@ namespace LEProc
                     case "-manage": //-manage %APP%
                         Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
                                 "LEGUI.exe"),
-                            $"\"{Args[1]}.le.config\"");
+                            WindowsCommandLine.QuoteArgument(Args[1] + ".le.config"));
                         break;
 
                     case "-global": //-global
@@ -112,15 +100,16 @@ namespace LEProc
                         break;
 
                     default:
-                        if (File.Exists(Args[0]))
-                        {
-                            RunWithDefaultProfile(Args[0]);
-                        }
+                        if (!File.Exists(Args[0]))
+                            throw new FileNotFoundException("找不到目标程序或命令无效。", Args[0]);
+                        RunWithDefaultProfile(Args[0]);
                         break;
                 }
             }
-            catch
+            catch (Exception e)
             {
+                MessageBox.Show("无法启动：" + e.Message, "Locale Emulator",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -145,9 +134,11 @@ namespace LEProc
         {
             path = SystemHelper.EnsureAbsolutePath(path);
 
-            // We do not check whether the config exists because only when it exists can this method be called.
+            var profiles = LEConfig.GetProfiles().Where(p => p.Guid == guid).ToArray();
+            if (profiles.Length == 0)
+                throw new InvalidDataException("找不到指定的全局配置：" + guid);
 
-            var profile = LEConfig.GetProfiles().First(p => p.Guid == guid);
+            var profile = profiles[0];
 
             DoRunWithLEProfile(path, 3, profile);
         }
@@ -162,11 +153,14 @@ namespace LEProc
             {
                 Process.Start(
                     Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "LEGUI.exe"),
-                    $"\"{path}.le.config\"");
+                    WindowsCommandLine.QuoteArgument(path + ".le.config"));
             }
             else
             {
-                var profile = LEConfig.GetProfiles(conf)[0];
+                var profiles = LEConfig.GetProfiles(conf);
+                if (profiles.Length == 0)
+                    throw new InvalidDataException("应用配置为空或格式无效：" + conf);
+                var profile = profiles[0];
                 DoRunWithLEProfile(path, 2, profile);
             }
         }
@@ -175,6 +169,9 @@ namespace LEProc
         {
             try
             {
+                if (!File.Exists(absPath))
+                    throw new FileNotFoundException("找不到目标程序。", absPath);
+
                 if (profile.RunAsAdmin && !SystemHelper.IsAdministrator())
                 {
                     ElevateProcess();
@@ -200,19 +197,14 @@ namespace LEProc
 
                 var applicationName = string.Empty;
                 var commandLine = string.Empty;
+                var currentDirectory = Path.GetDirectoryName(absPath);
 
-                if (Path.GetExtension(absPath).ToLower() == ".exe")
+                if (string.Equals(Path.GetExtension(absPath), ".exe", StringComparison.OrdinalIgnoreCase))
                 {
-                    applicationName = absPath;
-
-                    commandLine = absPath.StartsWith("\"")
-                        ? $"{absPath} "
-                        : $"\"{absPath}\" ";
-
-                    // use arguments in le.config, prior to command line arguments
-                    commandLine += string.IsNullOrEmpty(profile.Parameter) && Args.Skip(argumentsStart).Any()
-                        ? Args.Skip(argumentsStart).Aggregate((a, b) => $"{a} {b}")
-                        : profile.Parameter;
+                    var plan = LaunchPlan.Create(absPath, profile.Parameter, Args.Skip(argumentsStart));
+                    applicationName = plan.ApplicationName;
+                    commandLine = plan.CommandLine;
+                    currentDirectory = plan.CurrentDirectory;
                 }
                 else
                 {
@@ -229,7 +221,6 @@ namespace LEProc
                     commandLine += jb[1].Replace("%1", absPath).Replace("%*", profile.Parameter);
                 }
 
-                var currentDirectory = Path.GetDirectoryName(absPath);
                 var ansiCodePage = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.ANSICodePage;
                 var oemCodePage = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.OEMCodePage;
                 var localeID = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.LCID;

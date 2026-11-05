@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 
@@ -123,10 +122,7 @@ namespace LECommonLibrary
         /// <param name="args"></param>
         public static void RunWithElevatedProcess(string executable, string[] args)
         {
-            var arg = string.Empty;
-            arg = args == null
-                      ? string.Empty
-                      : args.Aggregate(arg, (current, s) => current + $" \"{s}\"");
+            var arg = args == null ? string.Empty : WindowsCommandLine.JoinArguments(args);
 
             var shExecInfo = new SHELLEXECUTEINFO();
 

@@ -1,47 +1,78 @@
-Locale Emulator
-===============
+# Locale Emulator
 
-[![license](https://img.shields.io/github/license/xupefei/Locale-Emulator.svg)](https://www.gnu.org/licenses/lgpl-3.0.en.html)
-[![AppVeyor](https://img.shields.io/appveyor/ci/xupefei/Locale-Emulator.svg)](https://ci.appveyor.com/project/xupefei/Locale-Emulator)
-[![Github All Releases](https://img.shields.io/github/downloads/xupefei/Locale-Emulator/total.svg)](https://github.com/xupefei/Locale-Emulator/releases)
-[![GitHub release](https://img.shields.io/github/release/xupefei/Locale-Emulator.svg)](https://github.com/xupefei/Locale-Emulator/releases/latest)
+在一个仓库中维护 Locale Emulator 的 C# 前端和原生 Core，统一构建、验证及打包。现有配置界面和传统右键菜单继续沿用。
 
-Yet Another System Region and Language Simulator
+当前维护范围是 **Windows 11 x64 主机运行 x86 目标程序**。x64 目标程序及 ARM64 主机需要独立的兼容性工作。
 
-![LE interface](https://i.imgur.com/E4Gqyly.png)
+## 构建
 
-## Download ##
+需要安装：
 
-Download available at <https://github.com/xupefei/Locale-Emulator/releases>.
+- Git 和 PowerShell 7。
+- Visual Studio 2019 Build Tools：MSBuild、MSVC v142 x86/x64 工具、Windows SDK `10.0.19041.0`。原生版本统一定义在 [Toolchain.props](Native/Toolchain.props)。
+- .NET Framework 4 targeting pack，以及 Windows 11 自带的 .NET Framework 4.x 运行时。现有 C# 工程暂保留 v4.0 目标；未引入现代 .NET SDK 或 NuGet 测试框架。
 
-For usage, please read <https://xupefei.github.io/Locale-Emulator/> (in English and 中文).
+在仓库目录运行：
 
-## Translate ##
+```powershell
+pwsh -NoProfile -File ./build.ps1
+```
 
-If you want to help translating Locale Emulator, you can find all strings in
+该入口会编译五个托管项目和两个原生 DLL，构建回归程序，运行测试，收集完整发行文件，再从 ZIP 解包复测。遇到构建、测试或文件校验失败会停止，不产生成功标记。
 
- -  `DefaultLanguage.xaml` in `LEGUI/Lang` folder.
- -  `DefaultLanguage.xml` in `LEContextMenuHandler/Lang` folder.
+原生构建使用官方编译器、Windows SDK 及系统 DLL 导出生成的导入库，不依赖 `_Compilers`、旧 WDK 或预编译 MyLib 库。相关旧文件保留在上游提交历史中。
 
-After you translated the above files into your language, please inform me by creating a pull request.
+主要输出：
 
-## Build ##
+| 位置 | 内容 |
+| --- | --- |
+| `Build/Release/` | 前端、原生 DLL 和测试程序 |
+| `artifacts/Locale.Emulator.<版本>.zip` | 完整便携发行包 |
+| `artifacts/package/Locale.Emulator.<版本>/` | 打包目录、构建提交信息与 SHA256SUMS |
+| `artifacts/logs/` | 各工程构建日志 |
+| `artifacts/tests/source/` | 源码构建产物的运行报告 |
+| `artifacts/tests/package/` | 实际 ZIP 解包后的运行报告 |
 
- 1. Clone the repo using Git.
- 2. Install Microsoft Visual Studio 2015 / 2017.
- 3. Open `LocaleEmulator.sln`.
- 4. Perform Build action.
- 5. Clone and build the core libraries: https://github.com/xupefei/Locale-Emulator-Core
- 6. Copy LoaderDll.dll and LocaleEmulator.dll from Locale-Emulator-Core to Locale-Emulator build folder.
+Visual Studio 可打开 `LocaleEmulator.sln` 构建完整产品。原生工程目前只有 Release/Win32 配置；解决方案的 Debug 配置也映射到原生 Release。发布和回归以根构建脚本的 Release 配置为准。
 
-## License ##
+## 使用
 
-![LGPL](https://www.gnu.org/graphics/lgplv3-147x51.png)
+将发行包解压到可写目录。直接指定 EXE 时，配置优先级为应用自己的 `.le.config`、第一个全局配置、默认日文配置：
 
-`LEContextMenuHandler` project use source codes from [Microsoft All-In-One Code Framework](https://blogs.msdn.com/b/onecode/) which is licensed by [Microsoft Public License](https://www.microsoft.com/en-us/openness/licenses.aspx#MPL).
+```powershell
+./LEProc.exe 'D:/Games/My Game/game.exe' 'argument with spaces'
+```
 
-[Flat icon set](commit/eae9fbc27f1a4c85986577202b61742c6287e10a) from [graphicex](https://graphicex.com/icon-and-logo/15983-flat-alphabet-in-9-colors-with-long-shadow-6913875.html).
+使用 `LEGUI.exe` 编辑全局配置；将目标程序拖到 LEGUI 可创建应用配置，再通过 `LEProc.exe -run <目标程序> [参数]` 使用它。配置中的 Parameter 仍是完整 Windows 命令行片段，并优先于额外传入的参数。
 
-All other source code files are licensed under [LGPL-3.0](https://opensource.org/licenses/LGPL-3.0).
+需要传统右键菜单时，可手动运行 `LEInstaller.exe` 安装或卸载。Windows 11 下该菜单位于“显示更多选项”；新式一级菜单尚未加入。构建回归只打开和关闭安装器，不点击安装按钮，也不修改 Shell 注册。
 
-If you want make any modification on these source codes while keeping new codes not protected by LGPL-3.0, please contact me for a sublicense instead.
+已移除访问归档上游 HTTP 清单的自动更新器。更新通过本仓库的源码或后续正式发行包完成。
+
+## 回归验证
+
+独立复测已构建的产品：
+
+```powershell
+pwsh -NoProfile -File ./Scripts/Test.ps1 `
+  -BuildDirectory ./Build/Release `
+  -ResultsDirectory ./artifacts/tests/manual
+```
+
+14 项托管回归使用指定产品的实际程序集，覆盖加载位置、Windows 命令行参数往返、真实子进程的工作目录和相对文件访问、配置完整读写、坏配置、锁定文件保存失败及实际 WPF 保存流程。原生探针通过真实 LEProc 注入，分别检查 CP932/936 的默认转换、显式异码页转换、字体枚举字符集、Unicode/空格目录和子进程继承。另外验证只读安装目录的独立配置启动，以及盘符根目录的父子进程工作目录。GUI 与安装器主窗口也接受启动和正常关闭检查。
+
+每轮在 `environment.json` 记录 Windows DisplayVersion、build、UBR、主机架构和两个 Core DLL 的 SHA256。`result.json` 仅在整轮通过后写入。字体探针验证 API 枚举行为，不代替实际游戏的像素显示、输入法或字体布局测试。
+
+原版 v2.5.0.1 与源码构建的原生对照、已复现的问题及验证范围见 [维护记录](docs/MAINTENANCE.md)。
+
+## 仓库结构与来源
+
+C# 工程保留原目录；`Native/` 包含注入器与语言模拟实现；`tests/Managed` 和 `tests/Native` 保存无需第三方测试依赖的回归程序。两个仓库的原始提交历史已经合并，来源 SHA 和导入方式见 [源码来源](docs/SOURCES.md)。
+
+## 许可
+
+前端保留 LGPL-3.0 的 `COPYING`、`COPYING.LESSER`。传统 Shell 扩展中的 Microsoft 示例代码另按 Ms-PL 授权，图标保留上游来源。
+
+Core 保留 `Native/LICENSE-GPL.txt`、`Native/LICENSE-LGPL.txt`，其上游 README 明确授予 Loader、LoaderDll、LocaleEmulator 三个源码目录 LGPL-3.0。具体来源、第三方边界及 Fork 调查取舍见 [源码来源](docs/SOURCES.md)。发行包携带许可文本及来源记录。
+
+上游：[Locale-Emulator](https://github.com/xupefei/Locale-Emulator)、[Locale-Emulator-Core](https://github.com/xupefei/Locale-Emulator-Core)。

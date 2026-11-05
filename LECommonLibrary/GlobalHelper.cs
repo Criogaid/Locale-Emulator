@@ -29,48 +29,18 @@ namespace LECommonLibrary
             }
         }
 
-        public static int GetLastUpdate()
-        {
-            try
-            {
-                var doc = XDocument.Load(GlobalVersionPath);
-
-                return int.Parse(doc.Descendants("LEVersion").First().Attribute("LastUpdate").Value);
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        public static void SetLastUpdate(int date)
-        {
-            try
-            {
-                var doc = XDocument.Load(GlobalVersionPath);
-
-                doc.Descendants("LEVersion").First().Attribute("LastUpdate").Value = date.ToString().PadLeft(8, '0');
-
-                doc.Save(GlobalVersionPath);
-            }
-            catch
-            {
-            }
-        }
-
         public static void ShowErrorDebugMessageBox(string commandLine, uint errorCode)
         {
             MessageBox.Show(
-                            $"Error Number: {Convert.ToString(errorCode, 16).ToUpper()}\r\n"
-                            + $"Commands: {commandLine}\r\n" + "\r\n"
-                            + $"{string.Format($"{Environment.OSVersion} {(SystemHelper.Is64BitOS() ? "x64" : "x86")}", Environment.OSVersion, SystemHelper.Is64BitOS() ? "x64" : "x86")}\r\n"
+                            $"错误代码：0x{errorCode:X}\r\n"
+                            + $"命令行：{commandLine}\r\n"
+                            + $"系统：{Environment.OSVersion} {(SystemHelper.Is64BitOS() ? "x64" : "x86")}\r\n"
+                            + $"程序目录：{Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)}\r\n"
+                            + $"当前目录：{Environment.CurrentDirectory}\r\n"
                             + $"{GenerateSystemDllVersionList()}\r\n"
-                            + "If you have any antivirus software running, please turn it off and try again.\r\n"
-                            + "If this window still shows, try go to Safe Mode and drag the application "
-                            + "executable onto LEProc.exe.\r\n"
-                            + "If you have tried all above but none of them works, feel free to submit an issue at\r\n"
-                            + "https://github.com/xupefei/Locale-Emulator/issues.\r\n" + "\r\n" + "\r\n"
-                            + "You can press CTRL+C to copy this message to your clipboard.\r\n",
+                            + "请提交错误代码、命令行和系统版本，帮助排查启动失败原因。\r\n"
+                            + "https://github.com/Criogaid/Locale-Emulator/issues\r\n\r\n"
+                            + "可以按 CTRL+C 复制本窗口内容。\r\n",
                             "Locale Emulator Version " + GetLEVersion());
         }
 

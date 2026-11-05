@@ -61,6 +61,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="SystemHelper.cs" />
+    <Compile Include="WindowsCommandLine.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="key.snk" />

@@ -142,13 +142,7 @@ namespace LECommonLibrary
 
             var tree = new XElement("LEConfig", baseNode);
 
-            try
-            {
-                tree.Save(writeTo);
-            }
-            catch
-            {
-            }
+            tree.Save(writeTo);
         }
     }
 }
