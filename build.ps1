@@ -57,6 +57,9 @@ New-Item -ItemType Directory -Path $packageDocs -Force | Out-Null
 foreach ($name in @('SOURCES.md', 'MAINTENANCE.md', 'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $repository "docs/$name") -Destination $packageDocs
 }
+$packageNative = Join-Path $package 'Native'
+New-Item -ItemType Directory -Path $packageNative -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $repository 'Native/Toolchain.props') -Destination $packageNative
 $licenses = Join-Path $package 'licenses'
 New-Item -ItemType Directory -Path $licenses -Force | Out-Null
 foreach ($name in @('COPYING', 'COPYING.LESSER')) {
@@ -102,6 +105,16 @@ foreach ($entry in Get-Content -LiteralPath (Join-Path $unpacked 'SHA256SUMS')) 
     $expected, $relative = $entry -split '  ', 2
     $actual = (Get-FileHash -LiteralPath (Join-Path $unpacked $relative) -Algorithm SHA256).Hash
     if ($actual -ne $expected) { throw "发行包文件校验失败：$relative" }
+}
+foreach ($markdown in Get-ChildItem -LiteralPath $unpacked -Filter '*.md' -File -Recurse) {
+    foreach ($link in [regex]::Matches((Get-Content -Raw -LiteralPath $markdown.FullName), '\]\(([^)]+)\)')) {
+        $target = $link.Groups[1].Value
+        if ($target -match '^(https?://|#)') { continue }
+        $target = ($target -split '#', 2)[0]
+        if (-not (Test-Path -LiteralPath (Join-Path $markdown.DirectoryName $target))) {
+            throw "发行包文档链接缺少目标：$($markdown.Name) -> $target"
+        }
+    }
 }
 & (Join-Path $repository 'Scripts/Test.ps1') -BuildDirectory $unpacked -ResultsDirectory (Join-Path $artifacts 'tests/package')
 Write-Host "完整构建、回归及发行包验证通过：$archive"

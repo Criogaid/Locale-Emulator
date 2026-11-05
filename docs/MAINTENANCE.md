@@ -6,7 +6,7 @@
 
 合仓提交为 `8d41af63e4a1b163da2a2f654b6a83b33d58e060`，父提交分别是前端 `2f3f30dc5169b3cf051af389ec1dcc52f167a93d` 和 Core `ae7160dc5deb97947396abcd784f9b98b6ee38b3`。Core 的 31 个原始提交均保留；导入时 Native tree 与原始 Core tree 相同。来源和许可见 [SOURCES.md](SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-`build.ps1` 是完整产品构建入口，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。构建脚本自动收集前端、Core DLL、语言资源、许可、来源记录、构建提交与文件哈希，并验证实际 ZIP 解包产物。
+`build.ps1` 是完整产品构建入口，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。构建脚本自动收集前端、Core DLL、语言资源、许可、来源记录、构建提交与文件哈希，并验证实际 ZIP 解包产物。包内保留工具链元数据，解包后检查随包文档的相对链接，避免来源链接指向缺失文件。
 
 ## 原版行为基线与工具链迁移
 
@@ -51,6 +51,7 @@
 | 只读目录与根目录 | 对隔离产品副本拒绝文件创建，验证独立配置启动无需写安装目录；原生辅助器验证盘符根目录中的父子进程工作目录 |
 | 主窗口启动 | GUI 与安装器实际创建对应框架主窗口并正常关闭；没有点击安装按钮或注册扩展 |
 | 发行包复测 | 从实际 ZIP 解包，逐文件 SHA256 验证，再通过相同产品运行回归 |
+| 干净检出集成 | 在没有 Build、bin 或 artifacts 的独立工作树运行完整构建及发行包复测 |
 
 本机运行报告位于 `artifacts/tests/`，其中 `environment.json` 记录环境、`native-932.txt`/`native-936.txt` 及 `.child` 记录父子结果，`ui-smoke.json` 记录窗口检查，`result.json` 仅在整轮成功后生成。包内的 `build-info.json` 区分正式提交构建与有未提交修改的开发构建。
 
