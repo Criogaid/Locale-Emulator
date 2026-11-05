@@ -14,14 +14,22 @@ PSTR WCharToMByte(PCWSTR Unicode, ULONG_PTR Length)
     if (Length == -1)
         Length = StrLengthW(Unicode);
 
-    ++Length;
-    Length *= sizeof(WCHAR);
+    if (Length > ULONG_MAX / sizeof(WCHAR) - 1)
+        return nullptr;
+    const ULONG SourceBytes = static_cast<ULONG>(Length * sizeof(WCHAR));
+    const ULONG Capacity = SourceBytes + sizeof(WCHAR);
 
-    AnsiString = (PSTR)AllocateMemoryP(Length);
+    AnsiString = (PSTR)AllocateMemoryP(Capacity);
     if (AnsiString == nullptr)
         return nullptr;
 
-    RtlUnicodeToMultiByteN(AnsiString, Length, nullptr, Unicode, Length);
+    ULONG Written = 0;
+    if (NT_FAILED(RtlUnicodeToMultiByteN(AnsiString, Capacity - 1, &Written, Unicode, SourceBytes)))
+    {
+        FreeMemoryP(AnsiString);
+        return nullptr;
+    }
+    AnsiString[Written] = 0;
 
     return AnsiString;
 }
@@ -33,13 +41,22 @@ PWSTR MByteToWChar(PCSTR AnsiString, ULONG_PTR Length)
     if (Length == -1)
         Length = StrLengthA(AnsiString);
 
-    ++Length;
+    if (Length > ULONG_MAX / sizeof(WCHAR) - 1)
+        return nullptr;
+    const ULONG SourceBytes = static_cast<ULONG>(Length);
+    const ULONG Capacity = (SourceBytes + 1) * sizeof(WCHAR);
 
-    Unicode = (PWSTR)AllocateMemoryP(Length * sizeof(WCHAR));
+    Unicode = (PWSTR)AllocateMemoryP(Capacity);
     if (Unicode == nullptr)
         return nullptr;
 
-    RtlMultiByteToUnicodeN(Unicode, Length * sizeof(WCHAR), nullptr, AnsiString, Length);
+    ULONG Written = 0;
+    if (NT_FAILED(RtlMultiByteToUnicodeN(Unicode, Capacity - sizeof(WCHAR), &Written, AnsiString, SourceBytes)))
+    {
+        FreeMemoryP(Unicode);
+        return nullptr;
+    }
+    Unicode[Written / sizeof(WCHAR)] = 0;
 
     return Unicode;
 }
@@ -100,19 +117,6 @@ VOID InitEmptyLargeString(PLARGE_UNICODE_STRING String)
     ZeroMemory(String, sizeof(*String));
 }
 
-VOID InitStringFromLargeString(PANSI_STRING AnsiString, PLARGE_UNICODE_STRING LargeString)
-{
-    AnsiString->Length           = LargeString->Length;
-    AnsiString->MaximumLength    = LargeString->MaximumLength;
-    AnsiString->Buffer           = LargeString->AnsiBuffer;
-}
-
-VOID InitStringFromLargeString(PUNICODE_STRING UnicodeString, PLARGE_UNICODE_STRING LargeString)
-{
-    UnicodeString->Length           = LargeString->Length;
-    UnicodeString->MaximumLength    = LargeString->MaximumLength;
-    UnicodeString->Buffer           = LargeString->UnicodeBuffer;
-}
 
 PLARGE_UNICODE_STRING LargeStringDuplicate(PLARGE_UNICODE_STRING LargeString, PLARGE_UNICODE_STRING Destination)
 {
@@ -131,7 +135,12 @@ PLARGE_UNICODE_STRING LargeStringDuplicate(PLARGE_UNICODE_STRING LargeString, PL
     if (LargeString->Ansi)
         return nullptr;
 
-    InitStringFromLargeString(&Unicode, LargeString);
+    if (LargeString->Length > MAX_USHORT - sizeof(WCHAR) ||
+        LargeString->MaximumLength < LargeString->Length || LargeString->Length % sizeof(WCHAR) != 0)
+        return nullptr;
+    Unicode.Length = static_cast<USHORT>(LargeString->Length);
+    Unicode.MaximumLength = Unicode.Length;
+    Unicode.Buffer = LargeString->UnicodeBuffer;
     if (NT_FAILED(RtlDuplicateUnicodeString(RTL_DUPSTR_ADD_NULL, &Unicode, &NewUnicode)))
         return nullptr;
 
@@ -154,9 +163,11 @@ PLARGE_UNICODE_STRING LargeStringAnsiToUnicode(PLARGE_UNICODE_STRING LargeAnsiSt
     ANSI_STRING     AnsiString;
     UNICODE_STRING  UnicodeString;
 
-    AnsiString.Buffer          = LargeAnsiString->AnsiBuffer;
-    AnsiString.Length          = LargeAnsiString->Length;
-    AnsiString.MaximumLength   = LargeAnsiString->MaximumLength;
+    if (LargeAnsiString->Length > MAX_USHORT || LargeAnsiString->MaximumLength < LargeAnsiString->Length)
+        return nullptr;
+    AnsiString.Buffer = LargeAnsiString->AnsiBuffer;
+    AnsiString.Length = static_cast<USHORT>(LargeAnsiString->Length);
+    AnsiString.MaximumLength = AnsiString.Length;
 
     if (NT_FAILED(RtlAnsiStringToUnicodeString(&UnicodeString, &AnsiString, TRUE)))
         return nullptr;
@@ -182,16 +193,14 @@ VOID FreeLargeString(PLARGE_UNICODE_STRING LargeString)
 
     if (LargeString->Ansi)
     {
-        Ansi.Length         = LargeString->Length;
-        Ansi.MaximumLength  = LargeString->MaximumLength;
+        ZeroMemory(&Ansi, sizeof(Ansi));
         Ansi.Buffer         = LargeString->AnsiBuffer;
 
         RtlFreeAnsiString(&Ansi);
     }
     else
     {
-        Unicode.Length          = LargeString->Length;
-        Unicode.MaximumLength   = LargeString->MaximumLength;
+        ZeroMemory(&Unicode, sizeof(Unicode));
         Unicode.Buffer          = LargeString->UnicodeBuffer;
 
         RtlFreeUnicodeString(&Unicode);

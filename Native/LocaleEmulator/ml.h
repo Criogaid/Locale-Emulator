@@ -993,31 +993,38 @@ ForceInline int CDECL _purecall()
 
 
 #define ML_OVERLOAD_NEW \
-            inline PVoid CDECL operator new[](size_t Size) \
+            PVoid CDECL operator new[](size_t Size, const std::nothrow_t&) noexcept \
             { \
                 return AllocateMemoryP(Size); \
             } \
-            inline PVoid CDECL operator new(size_t Size) \
+            PVoid CDECL operator new(size_t Size, const std::nothrow_t& Tag) noexcept \
             { \
-                return operator new[](Size); \
+                return operator new[](Size, Tag); \
             } \
-            inline Void CDECL operator delete(PVoid Buffer) \
+            Void CDECL operator delete(PVoid Buffer) noexcept \
             { \
                 if (Buffer != NULL) \
                     FreeMemoryP(Buffer); \
             } \
-            inline Void CDECL operator delete(PVoid Buffer, UInt_Ptr) \
+            Void CDECL operator delete(PVoid Buffer, size_t) noexcept \
             { \
-                if (Buffer != NULL) \
-                    FreeMemoryP(Buffer); \
+                operator delete(Buffer); \
             } \
-            inline Void CDECL operator delete[](PVoid Buffer) \
+            Void CDECL operator delete[](PVoid Buffer) noexcept \
             { \
-                delete Buffer; \
+                operator delete(Buffer); \
             } \
-            inline Void CDECL operator delete[](PVoid Buffer, UInt_Ptr) \
+            Void CDECL operator delete[](PVoid Buffer, size_t) noexcept \
             { \
-                delete Buffer; \
+                operator delete(Buffer); \
+            } \
+            Void CDECL operator delete(PVoid Buffer, const std::nothrow_t&) noexcept \
+            { \
+                operator delete(Buffer); \
+            } \
+            Void CDECL operator delete[](PVoid Buffer, const std::nothrow_t&) noexcept \
+            { \
+                operator delete(Buffer); \
             }
 
 _ML_C_TAIL_
@@ -10740,53 +10747,7 @@ _ML_CPP_TAIL_
 
 #endif // CPP_DEFINED
 
-#if ML_X86
 
-ForceInline UInt32 FASTCALL GetEfFlags()
-{
-    INLINE_ASM
-    {
-        pushfd;
-        pop eax;
-    }
-}
-
-ForceInline UInt32 FASTCALL SetEfFlags(UInt32 EfFlags)
-{
-    INLINE_ASM
-    {
-        push EfFlags;
-        popfd;
-    }
-}
-
-ForceInline Void SetDirectionFlag()
-{
-    INLINE_ASM std;
-}
-
-ForceInline Void ClearDirectionFlag()
-{
-    INLINE_ASM cld;
-}
-
-inline Bool IsCPUIDValid()
-{
-    __asm
-    {
-        pushfd;
-        pop eax;
-        or eax, 1 << 21;
-        push eax;
-        popfd;
-        pushfd;
-        pop eax;
-        shr eax, 21;
-        and eax, 1;
-    }
-}
-
-#endif // x86
 
 _ML_C_TAIL_
 
@@ -12437,13 +12398,6 @@ NTAPI
 KiUserExceptionDispatcher(
     PEXCEPTION_RECORD   ExceptionRecord,
     PCONTEXT            Context
-);
-
-NATIVE_API
-VOID
-NTAPI
-RtlRaiseException(
-    PEXCEPTION_RECORD ExceptionRecord
 );
 
 NATIVE_API
@@ -17028,13 +16982,6 @@ NtQueueApcThread(
     IN PVOID            Argument2 OPTIONAL
 );
 
-NATIVE_API
-VOID
-NTAPI
-RtlCaptureContext(
-    OUT PCONTEXT ContextRecord
-);
-
 #if ML_KERNEL_MODE
 
 NTKRNLAPI
@@ -21276,16 +21223,6 @@ RtlConvertExclusiveToShared(
 );
 
 #endif // r3
-
-NATIVE_API
-USHORT
-NTAPI
-RtlCaptureStackBackTrace(
-    IN  ULONG   FramesToSkip,
-    IN  ULONG   FramesToCapture,
-    OUT PVOID*  BackTrace,
-    OUT PULONG  BackTraceHash OPTIONAL
-);
 
 #endif // _NTRTL_H_0fd28a55_9a32_4533_8006_a0469dd77ef2_
 #ifndef _NTNLS_H_66774c20_dc28_4a7e_9714_c1f39fdb5d5f_
@@ -27499,7 +27436,7 @@ public:
         }
         else
         {
-            RefCount = new ULongPtr(1);
+            RefCount = new (std::nothrow) ULongPtr(1);
             Reference = Ptr;
         }
 
@@ -27733,14 +27670,14 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         template<typename F> \
         NoInline Function(const F &func) \
         { \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
         } \
 \
         template<typename F> \
         SELF_TYPE& operator=(const F &func) \
         { \
             this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
             return *this; \
         } \
 \
@@ -27815,14 +27752,14 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         template<typename F> \
         NoInline Function(const F &func) \
         { \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
         } \
 \
         template<typename F> \
         SELF_TYPE& operator=(const F &func) \
         { \
             this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
             return *this; \
         } \
 \
@@ -27897,14 +27834,14 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         template<typename F> \
         NoInline Function(const F &func) \
         { \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
         } \
 \
         template<typename F> \
         SELF_TYPE& operator=(const F &func) \
         { \
             this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
             return *this; \
         } \
 \
@@ -27980,14 +27917,14 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         template<typename F> \
         NoInline Function(const F &func) \
         { \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
         } \
 \
         template<typename F> \
         SELF_TYPE& operator=(const F &func) \
         { \
             this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
+            this->invoker = new (std::nothrow) FunctionInvoker<F>(func); \
             return *this; \
         } \
 \
@@ -28705,11 +28642,14 @@ protected:
     {
         UNICODE_STRING Expr, Name;
 
-        Expr.Length         = Expression->Length;
+        if (Expression->Length > MAX_USHORT || GetLength() > MAX_USHORT)
+            return FALSE;
+
+        Expr.Length         = (USHORT)Expression->Length;
         Expr.MaximumLength  = Expr.Length;
         Expr.Buffer         = Expression->Buffer;
 
-        Name.Length         = GetLength();
+        Name.Length         = (USHORT)GetLength();
         Name.MaximumLength  = Name.Length;
         Name.Buffer         = GetBuffer();
 
@@ -28805,14 +28745,17 @@ protected:
         return StrLengthW(Str);
     }
 
-    static VOID InitString(PSTRING_TYPE String, STRING_CONST_POINTER_TYPE Buffer, LARGE_LENGTH_TYPE Count = kMaxNumberValue)
+    static BOOL InitString(PSTRING_TYPE String, STRING_CONST_POINTER_TYPE Buffer, LARGE_LENGTH_TYPE Count = kMaxNumberValue)
     {
         if (Count == kMaxNumberValue)
             Count = GetStringCount(Buffer);
+        if (Count > kMaxLength / kCharSize)
+            return FALSE;
 
         String->Buffer          = (STRING_POINTER_TYPE)Buffer;
-        String->Length          = CountToLength(Count);
+        String->Length          = static_cast<STRING_LENGTH_TYPE>(CountToLength(Count));
         String->MaximumLength   = String->Length;
+        return TRUE;
     }
 };
 
@@ -29236,7 +29179,8 @@ public:
     NoInline BOOL MatchExpression(STRING_CONST_POINTER_TYPE Expression, BOOL IgnoreCase = TRUE) const
     {
         STRING_TYPE Expr;
-        StringImplement::InitString(&Expr, Expression);
+        if (!StringImplement::InitString(&Expr, Expression))
+            return FALSE;
         return GetImplement()->MatchExpression(&Expr, IgnoreCase);
     }
 
@@ -30282,7 +30226,7 @@ public:
         HashTableEntry *Entry;
 
         ml::MlInitialize();
-        this->CalcTable = new ULONG[this->CalcTableSize];
+        this->CalcTable = new (std::nothrow) ULONG[this->CalcTableSize];
         if (this->CalcTable == nullptr)
             return STATUS_NO_MEMORY;
 
@@ -30434,7 +30378,7 @@ protected:
         HashTableEntry *NewEntries, *OldEntries, *Entry;
 
         NewSize = GetTableSize(this->TableSize == 0 ? INITIAL_TABLE_SIZE : (ULONG_PTR)(this->TableSize * this->GrowthFactor));
-        NewEntries = new HashTableEntry[NewSize];
+        NewEntries = new (std::nothrow) HashTableEntry[NewSize];
         if (NewEntries == nullptr)
             return STATUS_NO_MEMORY;
 
@@ -30939,7 +30883,7 @@ CreateThreadT(
 
     StartParameterWrapper *func;
 
-    func = new StartParameterWrapper(StartAddress, StartParameter);
+    func = new (std::nothrow) StartParameterWrapper(StartAddress, StartParameter);
     if (func == NULL)
         return STATUS_NO_MEMORY;
 
@@ -30973,7 +30917,7 @@ NTSTATUS QueueApcRoutine(const F &ApcFunction, HANDLE Thread = CurrentThread)
     NTSTATUS Status;
     ml::Function<void()> *func;
 
-    func = new ml::Function<void()>(ApcFunction);
+    func = new (std::nothrow) ml::Function<void()>(ApcFunction);
     if (func == NULL)
         return STATUS_NO_MEMORY;
 
@@ -31026,7 +30970,7 @@ QueueNormalApc(
     PKAPC       Apc;
     NTSTATUS    Status;
 
-    Apc = new KAPC;
+    Apc = new (std::nothrow) KAPC;
     if (Apc == nullptr)
         return STATUS_NO_MEMORY;
 
@@ -31193,7 +31137,6 @@ ML_NAMESPACE_END_(Ldr);
 
 ML_NAMESPACE_BEGIN(Mm);
 
-#define SEC_IMAGE         0x1000000
 
 NTSTATUS
 AllocVirtualMemory(
@@ -32052,7 +31995,7 @@ SetAsyncCall(
 
     } PARAMETER;
 
-    PARAMETER *func = new PARAMETER(Callback, Context, Period);
+    PARAMETER *func = new (std::nothrow) PARAMETER(Callback, Context, Period);
     if (func == nullptr)
         return STATUS_NO_MEMORY;
 
@@ -32122,7 +32065,7 @@ SetAsyncCall(
 
     } PARAMETER;
 
-    PARAMETER *func = new PARAMETER(Callback, Period);
+    PARAMETER *func = new (std::nothrow) PARAMETER(Callback, Period);
     if (func == nullptr)
         return STATUS_NO_MEMORY;
 
@@ -32347,7 +32290,7 @@ enum
     OpJR10              = 0xA0000000,
 };
 
-typedef struct
+typedef struct _TRAMPOLINE_NAKED_CONTEXT
 {
 
 #if ML_X86
@@ -33584,7 +33527,7 @@ public:
         TrieT*      root;
         NTSTATUS    Status;
 
-        root = new TrieT();
+        root = new (std::nothrow) TrieT();
         if (root == nullptr)
             return STATUS_NO_MEMORY;
 
@@ -33610,7 +33553,7 @@ protected:
 
     PNodeType CreateNode()
     {
-        PNodeType Node = new NodeType();
+        PNodeType Node = new (std::nothrow) NodeType();
 
 #if TRIE_DEBUG
         NodeCount += Node != nullptr;
@@ -33877,7 +33820,7 @@ inline PVOID SearchPatternSafe(const ml::String& Pattern, PVOID Begin, LONG_PTR 
             }
 
             if (CurrentBytes == nullptr)
-                CurrentBytes = new ml::String::ByteArray;
+                CurrentBytes = new (std::nothrow) ml::String::ByteArray;
 
             Hex = p.ToHex();
             CurrentBytes->Add(Hex);

@@ -1,11 +1,5 @@
 ﻿#include "ml.h"
 
-// UCRT vswprintf adds a buffer count; ntdll exposes the legacy bounded formatter.
-extern "C" int __cdecl vswprintf(wchar_t* buffer, size_t count, const wchar_t* format, va_list args)
-{
-    return _vsnwprintf(buffer, count, format, args);
-}
-
 #if ML_KERNEL_MODE
 
 
@@ -2055,7 +2049,10 @@ NTSTATUS CreateMiniDump(PEXCEPTION_POINTERS ExceptionPointers)
     NtQueryInformationProcess(NtCurrentProcess(), ProcessTimes, &Times, sizeof(Times), NULL);
 
     Nt_GetModuleFileName(NULL, MiniDumpFile, countof(MiniDumpFile));
-    swprintf(findextw(MiniDumpFile), L".%I64X.crash.dmp", Times.CreationTime.QuadPart);
+    PWSTR Extension = findextw(MiniDumpFile);
+    if (_snwprintf(Extension, countof(MiniDumpFile) - (Extension - MiniDumpFile),
+            L".%I64X.crash.dmp", Times.CreationTime.QuadPart) < 0)
+        return STATUS_NAME_TOO_LONG;
 
     Status = File.Create(MiniDumpFile);
     FAIL_RETURN(Status);
@@ -9017,15 +9014,7 @@ class MemoryPatchManager
 {
 protected:
     GrowableArray<PTRAMPOLINE_DATA> TrampolineList;
-    HANDLE ExecutableHeap;
 
-public:
-    MemoryPatchManager()
-    {
-        this->ExecutableHeap = RtlCreateHeap(HEAP_CREATE_ENABLE_EXECUTE | HEAP_GROWABLE | HEAP_CREATE_ALIGN_16, nullptr, 0, 0, nullptr, nullptr);
-    }
-
-protected:
     NoInline NTSTATUS HandleMemoryPatch(PPATCH_MEMORY_DATA PatchData, PVOID BaseAddress)
     {
         auto&       Patch = PatchData->Memory;
@@ -9055,7 +9044,10 @@ protected:
 
                 TrampolineData = AllocateTrampolineData();
                 if (TrampolineData == nullptr)
-                    return STATUS_NO_MEMORY;
+                {
+                    Status = ProtectMemory(Address, Patch.Size, Protect, nullptr);
+                    return NT_FAILED(Status) ? Status : STATUS_NO_MEMORY;
+                }
 
                 TrampolineData->PatchData = *PatchData;
                 TrampolineData->PatchData.Memory.Backup = 0;
@@ -9072,9 +9064,10 @@ protected:
             CopyMemory(Address, &Patch.Data, Patch.Size);
         }
 
+        FlushInstructionCache(Address, Patch.Size);
         Status = ProtectMemory(Address, Patch.Size, Protect, nullptr);
 
-        return STATUS_SUCCESS;
+        return Status;
     }
 
     NoInline NTSTATUS HandleFunctionPatch(PPATCH_MEMORY_DATA PatchData, PVOID BaseAddress)
@@ -9161,6 +9154,13 @@ protected:
             if (Trampoline - TrampolineData->Trampoline > TRAMPOLINE_SIZE)
                 RaiseDebugBreak();
 
+            Status = ProtectMemory(TrampolineData, sizeof(*TrampolineData), PAGE_EXECUTE_READ, &Protect);
+            if (NT_FAILED(Status))
+            {
+                FreeTrampolineData(TrampolineData);
+                return Status;
+            }
+
             FlushInstructionCache(TrampolineData->Trampoline, TRAMPOLINE_SIZE);
 
             if (Function.Trampoline != nullptr)
@@ -9181,7 +9181,7 @@ protected:
 
         Status = ProtectMemory(Address, CopyOpSize, Protect, &Protect);
 
-        return STATUS_SUCCESS;
+        return Status;
     }
 
     NoInline NTSTATUS GenerateHookCode(PBYTE Buffer, PVOID SourceIp, PVOID Target, ULONG_PTR HookOp, ULONG_PTR HookOpSize)
@@ -9931,13 +9931,14 @@ protected:
 
     PTRAMPOLINE_DATA AllocateTrampolineData()
     {
-        return (PTRAMPOLINE_DATA)RtlAllocateHeap(this->ExecutableHeap, HEAP_ZERO_MEMORY, sizeof(TRAMPOLINE_DATA));
+        // 独立分配，避免改写一个跳板时同时改变其他跳板所在堆页的权限。
+        return (PTRAMPOLINE_DATA)::AllocateVirtualMemory(sizeof(TRAMPOLINE_DATA), PAGE_READWRITE);
     }
 
     VOID FreeTrampolineData(PTRAMPOLINE_DATA TrampolineData)
     {
         if (TrampolineData != nullptr)
-            RtlFreeHeap(this->ExecutableHeap, 0, TrampolineData);
+            ::FreeVirtualMemory(TrampolineData);
     }
 
     NTSTATUS RemoveTrampolineData(PTRAMPOLINE_DATA TrampolineData)

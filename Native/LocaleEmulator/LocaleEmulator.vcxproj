@@ -66,13 +66,16 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <Optimization>MaxSpeed</Optimization>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <!-- 私有 KERNELBASE NLS 调用目标被 CFG 拒绝，见 Native/README.md 的支持边界。 -->
+      <ControlFlowGuard>false</ControlFlowGuard>
       <PreprocessorDefinitions>_NO_CRT_STDIO_INLINE;WIN32;NDEBUG;USE_NT_VER=1</PreprocessorDefinitions>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <PrecompiledHeaderOutputFile>$(IntDir)LocaleEmulator.pch</PrecompiledHeaderOutputFile>
@@ -81,7 +84,7 @@
       <AdditionalOptions>/utf-8 /we4715 /arch:SSE </AdditionalOptions>
       <CallingConvention>FastCall</CallingConvention>
       <ExceptionHandling>false</ExceptionHandling>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
@@ -107,12 +110,13 @@
       <SubSystem>NotSet</SubSystem>
       <OutputFile>$(OutDir)LocaleEmulator.dll</OutputFile>
       <ImportLibrary>$(OutDir)LocaleEmulator.lib</ImportLibrary>
-      <DelayLoadDLLs>USER32.dll;DBGHELP.dll;GDI32.dll;KERNEL32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <DelayLoadDLLs>USER32.dll;DBGHELP.dll;GDI32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
       <AdditionalDependencies>libvcruntime.lib;$(IntDir)NativeNtdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions />
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <OptimizeReferences>true</OptimizeReferences>
-      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
-      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers>
+      <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <DataExecutionPrevention>true</DataExecutionPrevention>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <MinimumRequiredVersion />

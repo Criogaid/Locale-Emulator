@@ -2,9 +2,7 @@
 
 ML_OVERLOAD_NEW
 
-#pragma comment(linker, "/ENTRY:DllMain")
-#pragma comment(linker, "/SECTION:.text,ERW /MERGE:.rdata=.text /MERGE:.data=.text")
-#pragma comment(linker, "/SECTION:.Asuna,ERW /MERGE:.text=.Asuna")
+#pragma comment(linker, "/ENTRY:LeDllEntry")
 #pragma comment(linker, "/EXPORT:GetFileAttributesA=_FuckStupid2DJGame@4")
 
 EXTC ULONG NTAPI FuckStupid2DJGame(PCSTR FileName)
@@ -74,7 +72,7 @@ NTSTATUS GetNlsFile(PUNICODE_STRING NlsFile, ULONG NlsIndex, PCWSTR SubKey)
     NTSTATUS    Status;
     PKEY_VALUE_PARTIAL_INFORMATION FileName;
 
-    swprintf(NlsIndexBuffer, L"%d", NlsIndex);
+    _snwprintf(NlsIndexBuffer, countof(NlsIndexBuffer), L"%d", NlsIndex);
 
     Status = GetKeyValue(REGKEY_ROOT, SubKey, NlsIndexBuffer, &FileName);
     FAIL_RETURN(Status);
@@ -92,7 +90,7 @@ NTSTATUS GetLangFile(PUNICODE_STRING LangFile, ULONG LangIndex, PCWSTR SubKey)
     NTSTATUS    Status;
     PKEY_VALUE_PARTIAL_INFORMATION FileName;
 
-    swprintf(LangIndexBuffer, L"%04x", LangIndex);
+    _snwprintf(LangIndexBuffer, countof(LangIndexBuffer), L"%04x", LangIndex);
 
     Status = GetKeyValue(REGKEY_ROOT, SubKey, LangIndexBuffer, &FileName);
     FAIL_RETURN(Status);
@@ -180,9 +178,9 @@ NTSTATUS LeGlobalData::Initialize()
                 UnloadPeImage(ReloadedNtdll);
             }
 
-            DefaultACPLength    = (swprintf(DefaultACP, L"%d", LePeb->Leb.AnsiCodePage) + 1) * sizeof(WCHAR);
-            DefaultOEMCPLength  = (swprintf(DefaultOEMCP, L"%d", LePeb->Leb.OemCodePage) + 1) * sizeof(WCHAR);
-            DefaultLCIDLength   = (swprintf(DefaultLCID, L"%d", LePeb->Leb.LocaleID) + 1) * sizeof(WCHAR);
+            DefaultACPLength    = (_snwprintf(DefaultACP, countof(DefaultACP), L"%d", LePeb->Leb.AnsiCodePage) + 1) * sizeof(WCHAR);
+            DefaultOEMCPLength  = (_snwprintf(DefaultOEMCP, countof(DefaultOEMCP), L"%d", LePeb->Leb.OemCodePage) + 1) * sizeof(WCHAR);
+            DefaultLCIDLength   = (_snwprintf(DefaultLCID, countof(DefaultLCID), L"%d", LePeb->Leb.LocaleID) + 1) * sizeof(WCHAR);
 
             REGISTRY_REDIRECTION_ENTRY64 *Entry, Entries[] =
             {
@@ -204,11 +202,19 @@ NTSTATUS LeGlobalData::Initialize()
         }
         else
         {
-            *GetLePeb() = *LePeb;
-            Status = this->InitRegistryRedirection(LePeb->Leb.RegistryReplacement, LePeb->Leb.NumberOfRegistryRedirectionEntries, &LePeb->Leb);
+            Status = ValidateLeb(LePeb->Leb);
+            if (NT_SUCCESS(Status) && LePeb->Leb.NumberOfRegistryRedirectionEntries > MAXULONG_PTR / sizeof(REGISTRY_REDIRECTION_ENTRY64))
+                Status = STATUS_INTEGER_OVERFLOW;
+            if (NT_SUCCESS(Status))
+            {
+                *GetLePeb() = *LePeb;
+                Status = this->InitRegistryRedirection(LePeb->Leb.RegistryReplacement,
+                    static_cast<ULONG_PTR>(LePeb->Leb.NumberOfRegistryRedirectionEntries), &LePeb->Leb);
+            }
 
             NtClose(LePeb->Section);
             CloseLePeb(LePeb);
+            FAIL_RETURN(Status);
         }
 
         if (IsLoader)
@@ -354,7 +360,7 @@ NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_ENTRY64 Ent
     PREGISTRY_REDIRECTION_ENTRY Entry;
 
     if (Count == 0)
-        return STATUS_NO_MORE_ENTRIES;
+        return STATUS_SUCCESS;
 
     LePeb = this->GetLePeb();
 
@@ -637,7 +643,7 @@ BOOL Initialize(PVOID BaseAddress)
 
     LdrDisableThreadCalloutsForDll(BaseAddress);
 
-    GlobalData = new LeGlobalData;
+    GlobalData = new (std::nothrow) LeGlobalData;
     if (GlobalData == nullptr)
         return FALSE;
 
@@ -652,7 +658,7 @@ BOOL Initialize(PVOID BaseAddress)
     return TRUE;
 }
 
-BOOL NTAPI DllMain(PVOID BaseAddress, ULONG Reason, PVOID Reserved)
+__declspec(noinline) BOOL NTAPI DllMain(PVOID BaseAddress, ULONG Reason, PVOID Reserved)
 {
     switch (Reason)
     {
@@ -665,4 +671,14 @@ BOOL NTAPI DllMain(PVOID BaseAddress, ULONG Reason, PVOID Reserved)
     }
 
     return TRUE;
+}
+
+
+// 自定义入口必须先初始化官方 GS cookie，再进入受保护的初始化函数。
+EXTC __declspec(safebuffers) BOOL NTAPI LeDllEntry(PVOID BaseAddress, ULONG Reason, PVOID Reserved)
+{
+    if (Reason == DLL_PROCESS_ATTACH)
+        __security_init_cookie();
+
+    return DllMain(BaseAddress, Reason, Reserved);
 }

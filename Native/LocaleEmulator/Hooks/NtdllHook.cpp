@@ -76,7 +76,7 @@ NTSTATUS ReplaceMUIVersionLocaleInfo(PVOID& VersionData, ULONG& VersionSize)
     LangID = (PUSHORT)PtrAdd(Entry, ROUND_DOWN(CONST_STRSIZE(Translation) + 11, 4));
     CharsetID = LangID + 1;
 
-    *LangID = LeGetGlobalData()->GetLeb()->LocaleID;
+    *LangID = LANGIDFROMLCID(LeGetGlobalData()->GetLeb()->LocaleID);
 
     VersionData = TlbBuffer;
 
@@ -159,6 +159,7 @@ NoInline PVOID FASTCALL LoadSelfAsFirstDll(PVOID ReturnAddress)
     return BaseToFree;
 }
 
+__declspec(safebuffers)
 NTSTATUS
 NTAPI
 LoadFirstDll(
@@ -168,6 +169,9 @@ LoadFirstDll(
     PVOID*              DllHandle
 )
 {
+    // 子进程的私有映像不经过 DLL 入口，必须在调用受 GS 保护的初始化前播种。
+    __security_init_cookie();
+
     PVOID BaseToFree;
 
     // ExceptionBox(L"inject");
@@ -275,7 +279,7 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     SizeOfImage = ImageGetSizeOfImage(&__ImageBase);
 
     SelfShadow = nullptr;
-    Status = AllocVirtualMemoryEx(Process, &SelfShadow, SizeOfImage);
+    Status = AllocVirtualMemoryEx(Process, &SelfShadow, SizeOfImage, PAGE_READWRITE);
     WriteLog(L"AllocVirtualMemoryEx: %p", Status);
     if (NT_FAILED(Status))
         return Status;
@@ -283,15 +287,54 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     Status = LoadPeImage(LePeb->LeDllFullPath, &LocalSelfShadow, nullptr, 0);
     WriteLog(L"LocalSelfShadow: %p", Status);
     if (NT_FAILED(Status))
+    {
+        Mm::FreeVirtualMemory(SelfShadow, Process);
         return Status;
+    }
+
+    // 子进程尚未映射 KERNEL32；先在临时映像内运行官方熵采集，再传输已初始化的映像。
+    auto InitShadowCookie = (VOID (__cdecl*)(VOID))PtrAdd(LocalSelfShadow, PtrOffset(__security_init_cookie, &__ImageBase));
+    InitShadowCookie();
 
     RelocPeImage(LocalSelfShadow, LocalSelfShadow, nullptr, SelfShadow);
+
 
     Status = WriteMemory(Process, SelfShadow, LocalSelfShadow, SizeOfImage);
     UnloadPeImage(LocalSelfShadow);
 
     WriteLog(L"WriteMemory: %p", Status);
 
+    if (NT_FAILED(Status))
+    {
+        Mm::FreeVirtualMemory(SelfShadow, Process);
+        return Status;
+    }
+
+    // 私有映像也按 PE 节恢复权限，不能让子进程长期保留整块 RWX 映像。
+    Status = ProtectVirtualMemory(SelfShadow, SizeOfImage, PAGE_READONLY, nullptr, Process);
+    PIMAGE_NT_HEADERS Headers = ImageNtHeadersFast(&__ImageBase);
+    PIMAGE_SECTION_HEADER ImageSection = IMAGE_FIRST_SECTION(Headers);
+    for (USHORT Index = 0; NT_SUCCESS(Status) && Index < Headers->FileHeader.NumberOfSections; ++Index, ++ImageSection)
+    {
+        if (ImageSection->Misc.VirtualSize == 0)
+            continue;
+        const bool Executable = (ImageSection->Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0;
+        const bool Writable = (ImageSection->Characteristics & IMAGE_SCN_MEM_WRITE) != 0;
+        if (Executable && Writable)
+        {
+            Status = STATUS_INVALID_IMAGE_PROTECT;
+            break;
+        }
+        const ULONG Protection = Executable ? PAGE_EXECUTE_READ : (Writable ? PAGE_READWRITE : PAGE_READONLY);
+        Status = ProtectVirtualMemory(PtrAdd(SelfShadow, ImageSection->VirtualAddress),
+            ImageSection->Misc.VirtualSize, Protection, nullptr, Process);
+    }
+    if (NT_FAILED(Status))
+    {
+        Mm::FreeVirtualMemory(SelfShadow, Process);
+        return Status;
+    }
+    Status = NtFlushInstructionCache(Process, SelfShadow, SizeOfImage);
     if (NT_FAILED(Status))
     {
         Mm::FreeVirtualMemory(SelfShadow, Process);
@@ -316,29 +359,43 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     ooxxBuffer[0] = JUMP;
     *(PULONG)&ooxxBuffer[1] = Offset;
 
+    auto Rollback = [&](NTSTATUS Failure) -> NTSTATUS
+    {
+        NTSTATUS RestoreStatus = WriteProtectMemory(Process, ooxxAddress, Backup, sizeof(Backup));
+        Mm::FreeVirtualMemory(SelfShadow, Process);
+        return NT_FAILED(RestoreStatus) ? RestoreStatus : Failure;
+    };
     Status = WriteProtectMemory(Process, ooxxAddress, ooxxBuffer, 5);
     WriteLog(L"WriteProtectMemory: %p", Status);
     if (NT_FAILED(Status))
-    {
-        Mm::FreeVirtualMemory(SelfShadow, Process);
-        return Status;
-    }
+        return Rollback(Status);
 
-    ExtraSize = this->RegistryRedirectionEntry.GetSize() * sizeof(TargetLePeb->Leb.RegistryReplacement[0]);
-    if (ExtraSize != 0)
+    const ULONG_PTR Count = this->RegistryRedirectionEntry.GetSize();
+    if (Count > (MAXULONG_PTR - sizeof(LEPEB)) / sizeof(TargetLePeb->Leb.RegistryReplacement[0]))
+        return Rollback(STATUS_INTEGER_OVERFLOW);
+    ExtraSize = Count * sizeof(TargetLePeb->Leb.RegistryReplacement[0]);
+    PREGISTRY_REDIRECTION_ENTRY Entry;
+    FOR_EACH_VEC(Entry, this->RegistryRedirectionEntry)
     {
-        PREGISTRY_REDIRECTION_ENTRY Entry;
-        FOR_EACH_VEC(Entry, this->RegistryRedirectionEntry)
+        const ULONG64 StringSizes[] = { Entry->Original.SubKey.GetSize(), Entry->Redirected.SubKey.GetSize(),
+            Entry->Original.ValueName.GetSize(), Entry->Redirected.ValueName.GetSize() };
+        for (ULONG64 Bytes : StringSizes)
         {
-            ExtraSize += Entry->Original.DataSize + Entry->Redirected.DataSize;
-            ExtraSize += 2 * sizeof(WCHAR) + Entry->Original.SubKey.GetSize()    + Entry->Redirected.SubKey.GetSize();
-            ExtraSize += 2 * sizeof(WCHAR) + Entry->Original.ValueName.GetSize() + Entry->Redirected.ValueName.GetSize();
+            if (Bytes > MAX_USHORT - sizeof(WCHAR) || Bytes + sizeof(WCHAR) > MAXULONG_PTR - sizeof(LEPEB) - ExtraSize)
+                return Rollback(STATUS_INTEGER_OVERFLOW);
+            ExtraSize += static_cast<ULONG_PTR>(Bytes) + sizeof(WCHAR);
+        }
+        for (ULONG_PTR Bytes : { Entry->Original.DataSize, Entry->Redirected.DataSize })
+        {
+            if (Bytes > MAXULONG_PTR - sizeof(LEPEB) - ExtraSize)
+                return Rollback(STATUS_INTEGER_OVERFLOW);
+            ExtraSize += Bytes;
         }
     }
 
     TargetLePeb = OpenOrCreateLePeb((ULONG_PTR)Cid->UniqueProcess, TRUE, ExtraSize);
     if (TargetLePeb == nullptr)
-        return STATUS_UNSUCCESSFUL;
+        return Rollback(STATUS_UNSUCCESSFUL);
 
     Section = TargetLePeb->Section;
     *TargetLePeb = *LePeb;
@@ -361,10 +418,11 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
         {
             ULONG_PTR Length;
 
-            Length = (USHORT)str.GetSize();
+            // 上面的序列化边界检查保证字符串及终止符能放入 USHORT。
+            Length = static_cast<USHORT>(str.GetSize());
 
             ustr64.Length         = (USHORT)Length;
-            ustr64.MaximumLength  = (USHORT)Length;
+            ustr64.MaximumLength  = static_cast<USHORT>(Length + sizeof(WCHAR));
             ustr64.Dummy          = PtrOffset(Buffer, &TargetLePeb->Leb);
 
             CopyMemory(Buffer, (PWSTR)str, Length);
@@ -486,16 +544,36 @@ LeNtCreateUserProcess(
         AttributeList = LocalAttributeList;
     }
 
+    const ACCESS_MASK InternalProcessAccess = PROCESS_TERMINATE | SYNCHRONIZE | PROCESS_QUERY_INFORMATION |
+        PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE;
+    const ACCESS_MASK InternalThreadAccess = THREAD_SUSPEND_RESUME | THREAD_TERMINATE;
+    const ULONG ProcessHandleAttributes = ProcessObjectAttributes == nullptr ? 0 : ProcessObjectAttributes->Attributes & OBJ_INHERIT;
+    const ULONG ThreadHandleAttributes = ThreadObjectAttributes == nullptr ? 0 : ThreadObjectAttributes->Attributes & OBJ_INHERIT;
+    OBJECT_ATTRIBUTES LocalProcessAttributes, LocalThreadAttributes;
+    // Private operation handles must not leak their extra rights through inheritance.
+    if (ProcessObjectAttributes != nullptr)
+    {
+        LocalProcessAttributes = *ProcessObjectAttributes;
+        LocalProcessAttributes.Attributes &= ~OBJ_INHERIT;
+        ProcessObjectAttributes = &LocalProcessAttributes;
+    }
+    if (ThreadObjectAttributes != nullptr)
+    {
+        LocalThreadAttributes = *ThreadObjectAttributes;
+        LocalThreadAttributes.Attributes &= ~OBJ_INHERIT;
+        ThreadObjectAttributes = &LocalThreadAttributes;
+    }
+
     Status = HpCallSysCall(
                 NtCreateUserProcess,
                 ProcessHandle,
                 ThreadHandle,
-                ProcessDesiredAccess,
-                ThreadDesiredAccess,
+                ProcessDesiredAccess | InternalProcessAccess,
+                ThreadDesiredAccess | InternalThreadAccess,
                 ProcessObjectAttributes,
                 ThreadObjectAttributes,
                 ProcessFlags,
-                ThreadFlags,
+                ThreadFlags | THREAD_CREATE_FLAGS_CREATE_SUSPENDED,
                 ProcessParameters,
                 CreateInfo,
                 AttributeList
@@ -506,9 +584,61 @@ LeNtCreateUserProcess(
     if (NT_FAILED(Status))
         return Status;
 
+    HANDLE InternalProcess = *ProcessHandle, InternalThread = *ThreadHandle;
+    HANDLE ReturnedProcess = nullptr, ReturnedThread = nullptr;
+    *ProcessHandle = nullptr;
+    *ThreadHandle = nullptr;
+
     GlobalData = (PLeGlobalData)HpGetFilterContext();
 
-    Status2 = GlobalData->InjectSelfToChildProcess(*ProcessHandle, Cid);
+    // Cross-bitness children deliberately run without injection.
+    if (Ps::IsWow64Process(CurrentProcess) && !Ps::IsWow64Process(InternalProcess))
+        Status2 = STATUS_SUCCESS;
+    else
+        Status2 = GlobalData->InjectSelfToChildProcess(InternalProcess, Cid);
+
+    // Creation resolved MAXIMUM_ALLOWED; duplication treats it as no concrete access bits.
+    if (NT_SUCCESS(Status2))
+        Status2 = NtDuplicateObject(CurrentProcess, InternalProcess, CurrentProcess, &ReturnedProcess,
+            ProcessDesiredAccess, ProcessHandleAttributes, FLAG_ON(ProcessDesiredAccess, MAXIMUM_ALLOWED) ? DUPLICATE_SAME_ACCESS : 0);
+    if (NT_SUCCESS(Status2))
+        Status2 = NtDuplicateObject(CurrentProcess, InternalThread, CurrentProcess, &ReturnedThread,
+            ThreadDesiredAccess, ThreadHandleAttributes, FLAG_ON(ThreadDesiredAccess, MAXIMUM_ALLOWED) ? DUPLICATE_SAME_ACCESS : 0);
+
+    if (NT_SUCCESS(Status2) && FLAG_OFF(ThreadFlags, THREAD_CREATE_FLAGS_CREATE_SUSPENDED))
+        Status2 = NtResumeThread(InternalThread, nullptr);
+
+    if (NT_FAILED(Status2))
+    {
+        if (ReturnedThread != nullptr) NtClose(ReturnedThread);
+        if (ReturnedProcess != nullptr) NtClose(ReturnedProcess);
+        NTSTATUS CleanupStatus = NtTerminateProcess(InternalProcess, Status2);
+        if (NT_FAILED(CleanupStatus))
+        {
+            LARGE_INTEGER NoWait = {};
+            if (NtWaitForSingleObject(InternalProcess, FALSE, &NoWait) != STATUS_SUCCESS)
+            {
+                // Failure paths still own the only thread, which has never been resumed.
+                CleanupStatus = NtTerminateThread(InternalThread, Status2);
+                if (NT_FAILED(CleanupStatus) &&
+                    NtWaitForSingleObject(InternalProcess, FALSE, &NoWait) != STATUS_SUCCESS)
+                {
+                    // Both termination primitives failed: return the remaining cleanup capability.
+                    *ProcessHandle = InternalProcess;
+                    *ThreadHandle = InternalThread;
+                    return CleanupStatus;
+                }
+            }
+        }
+        NtClose(InternalThread);
+        NtClose(InternalProcess);
+        return Status2;
+    }
+
+    NtClose(InternalThread);
+    NtClose(InternalProcess);
+    *ProcessHandle = ReturnedProcess;
+    *ThreadHandle = ReturnedThread;
 
     WriteLog(L"inject %p", Status2);
 
@@ -651,7 +781,6 @@ LeNtQueryValueKey(
         {
             PVOID                                   Information;
             PKEY_VALUE_BASIC_INFORMATION            BasicInformation;
-            PKEY_VALUE_FULL_INFORMATION             FullInformation;
             PKEY_VALUE_PARTIAL_INFORMATION          PartialInformation;
             PKEY_VALUE_PARTIAL_INFORMATION_ALIGN64  PartialInformationAlign64;
         };
@@ -674,33 +803,39 @@ LeNtQueryValueKey(
                 goto REDIRECT_ONLY;
 
             case KeyValueFullInformationAlign64:
-                Alignment = sizeof(ULONG64);
-                NO_BREAK;
-
             case KeyValueFullInformation:
-                Alignment = sizeof(ULONG64);
+            {
+                const auto NameBytes = Entry->Redirected.ValueName.GetSize();
+                MinimumSize = FIELD_OFFSET(KEY_VALUE_FULL_INFORMATION, Name);
+                if (NameBytes > ULONG_MAX - MinimumSize - (sizeof(ULONG64) - 1))
+                    return STATUS_INTEGER_OVERFLOW;
+                const ULONG NameLength = static_cast<ULONG>(NameBytes);
+                const ULONG UnalignedOffset = MinimumSize + NameLength;
+                DataOffset = (UnalignedOffset + static_cast<ULONG>(sizeof(ULONG64) - 1)) &
+                    ~static_cast<ULONG>(sizeof(ULONG64) - 1);
+                if (DataLength > ULONG_MAX - DataOffset)
+                    return STATUS_INTEGER_OVERFLOW;
+                RequiredLength = DataOffset + DataLength;
+                if (ResultLength != nullptr)
+                    *ResultLength = static_cast<ULONG>(RequiredLength);
+                if (Length < MinimumSize)
+                    return STATUS_BUFFER_TOO_SMALL;
+                if (KeyValueInformation == nullptr)
+                    return STATUS_ACCESS_VIOLATION;
 
-                MinimumSize     = FIELD_OFFSET(KEY_VALUE_FULL_INFORMATION, Name);
-                RequiredLength  = MinimumSize + Entry->Redirected.ValueName.GetSize();
-                RequiredLength  = ROUND_UP(RequiredLength, Alignment);
-                DataOffset      = RequiredLength;
-                RequiredLength += DataLength;
-                RequiredLength  = ROUND_UP(RequiredLength, sizeof(ULONG));
-
-                if (KeyValueInformation == nullptr || Length < MinimumSize)
-                    break;
-
-                Information = Length < RequiredLength ? AllocStack(RequiredLength) : KeyValueInformation;
-
-                FullInformation->TitleIndex = 0;
-                FullInformation->Type       = Entry->Redirected.DataType;
-                FullInformation->NameLength = Entry->Redirected.ValueName.GetSize() + sizeof(WCHAR);
-                FullInformation->DataOffset = DataOffset;
-                FullInformation->DataLength = DataLength;
-
-                CopyMemory(FullInformation->Name, (PWSTR)Entry->Redirected.ValueName, FullInformation->NameLength);
-                CopyMemory(PtrAdd(FullInformation, DataOffset), Entry->Redirected.Data, DataLength);
-                break;
+                KEY_VALUE_FULL_INFORMATION Header = {};
+                Header.Type = static_cast<ULONG>(Entry->Redirected.DataType);
+                Header.NameLength = static_cast<ULONG>(NameLength);
+                Header.DataOffset = static_cast<ULONG>(DataOffset);
+                Header.DataLength = static_cast<ULONG>(DataLength);
+                CopyMemory(KeyValueInformation, &Header, MinimumSize);
+                CopyMemory(PtrAdd(KeyValueInformation, MinimumSize), (PWSTR)Entry->Redirected.ValueName,
+                    ML_MIN(NameLength, Length - MinimumSize));
+                if (Length > DataOffset)
+                    CopyMemory(PtrAdd(KeyValueInformation, DataOffset), Entry->Redirected.Data,
+                        ML_MIN(DataLength, Length - DataOffset));
+                return Length < RequiredLength ? STATUS_BUFFER_OVERFLOW : STATUS_SUCCESS;
+            }
 
             case KeyValuePartialInformationAlign64:
                 Alignment = sizeof(ULONG64);
@@ -803,7 +938,7 @@ LeNtQueryDefaultUILanguage(
 {
     HpSetFilterAction(BlockSystemCall);
 
-    *DefaultUILanguageId = ((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID;
+    *DefaultUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID);
     return STATUS_SUCCESS;
 }
 
@@ -816,7 +951,7 @@ LeNtQueryInstallUILanguage(
 {
     HpSetFilterAction(BlockSystemCall);
 
-    *InstallUILanguageId = ((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID;
+    *InstallUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID);
     return STATUS_SUCCESS;
 }
 

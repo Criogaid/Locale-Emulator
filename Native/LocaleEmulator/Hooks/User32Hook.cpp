@@ -195,34 +195,23 @@ UserMessageCall(INSTRING)
 
 UserMessageCall(INCNTOUTSTRING)
 {
-    LRESULT OutputSize, Length;
-    PWSTR   OutputBuffer;
-    PSTR    Ansi;
-
-    PMSG_INPUT_COUNT_OUPUT_STRING ParamA, ParamW;
-
-    ParamW = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
-
-    OutputSize = ParamW->BufferSize;
-    OutputBuffer = ParamW->UnicodeBuffer;
-
-    Length = OutputSize * sizeof(WCHAR);
-    Ansi = AllocAnsi(Length);
+    PMSG_INPUT_COUNT_OUPUT_STRING ParamW = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
+    const USHORT OutputSize = ParamW->BufferSize;
+    PWSTR OutputBuffer = ParamW->UnicodeBuffer;
+    const USHORT Capacity = static_cast<USHORT>(ML_MIN(static_cast<ULONG>(OutputSize) * sizeof(WCHAR), MAX_USHORT));
+    PSTR Ansi = AllocAnsi(ML_MAX(Capacity, sizeof(USHORT)));
     if (Ansi == nullptr)
         return 0;
 
-    ParamA = (PMSG_INPUT_COUNT_OUPUT_STRING)Ansi;
-    ParamA->BufferSize = Length;
-    lParam = (LPARAM)ParamA;
-
-    Length = CallUserMessageCallA();
-
-    if (Length != 0)
-        AnsiToUnicode(OutputBuffer, OutputSize, Ansi, Length, (PULONG_PTR)&Length);
-
+    ((PMSG_INPUT_COUNT_OUPUT_STRING)Ansi)->BufferSize = Capacity;
+    lParam = (LPARAM)Ansi;
+    LRESULT Length = CallUserMessageCallA();
+    ULONG Written = 0;
+    // EM_GETLINE 的首 WORD 是 TCHAR 容量，返回的数据不带终止符。
+    if (Length > 0 && static_cast<ULONG_PTR>(Length) <= Capacity)
+        RtlMultiByteToUnicodeN(OutputBuffer, OutputSize * sizeof(WCHAR), &Written, Ansi, static_cast<ULONG>(Length));
     FreeString(Ansi);
-
-    return Length / sizeof(WCHAR);
+    return Written / sizeof(WCHAR);
 }
 
 UserMessageCall(INCBOXSTRING)
@@ -249,7 +238,7 @@ UserMessageCall(OUTCBOXSTRING)
     Length = CallWindowProcA(PrevProc, Window, Message, wParam, (LPARAM)Ansi);
 
     if (Length != 0 && Length != LB_ERR)
-        AnsiToUnicode(OutputBuffer, -1, Ansi, Length, (PULONG_PTR)&Length);
+        AnsiToUnicode(OutputBuffer, OutputSize, Ansi, Length, (PULONG_PTR)&Length);
 
     FreeString(Ansi);
 
@@ -302,6 +291,52 @@ UserMessageCall(GETDBCSTEXTLENGTHS)
     return Length / sizeof(WCHAR);
 }
 
+static BOOL IsControlItemDataMessage(HWND Window, UINT Message)
+{
+    ULONG OwnerDraw, HasStrings;
+    PCWSTR ClassName;
+    BOOL ListBoxMessage;
+    WCHAR ActualClass[32];
+
+    switch (Message)
+    {
+        case CB_ADDSTRING:
+        case CB_INSERTSTRING:
+        case CB_FINDSTRING:
+        case CB_FINDSTRINGEXACT:
+        case CB_SELECTSTRING:
+        case CB_GETLBTEXT:
+        case CB_GETLBTEXTLEN:
+            OwnerDraw = CBS_OWNERDRAWFIXED | CBS_OWNERDRAWVARIABLE;
+            HasStrings = CBS_HASSTRINGS;
+            ClassName = L"ComboBox";
+            ListBoxMessage = FALSE;
+            break;
+
+        case LB_ADDSTRING:
+        case LB_INSERTSTRING:
+        case LB_FINDSTRING:
+        case LB_FINDSTRINGEXACT:
+        case LB_SELECTSTRING:
+        case LB_GETTEXT:
+        case LB_GETTEXTLEN:
+            OwnerDraw = LBS_OWNERDRAWFIXED | LBS_OWNERDRAWVARIABLE;
+            HasStrings = LBS_HASSTRINGS;
+            ClassName = L"ListBox";
+            ListBoxMessage = TRUE;
+            break;
+
+        default:
+            return FALSE;
+    }
+
+    ULONG Style = GetWindowLongPtrW(Window, GWL_STYLE);
+    return (Style & OwnerDraw) != 0 && (Style & HasStrings) == 0 &&
+        RealGetWindowClassW(Window, ActualClass, countof(ActualClass)) != 0 &&
+        (StrICompareW(ActualClass, ClassName) == 0 ||
+         (ListBoxMessage && StrICompareW(ActualClass, L"ComboLBox") == 0));
+}
+
 LRESULT NTAPI WindowProcW(HWND Window, UINT Message, WPARAM wParam, LPARAM lParam)
 {
     WNDPROC             PrevProc;
@@ -309,6 +344,9 @@ LRESULT NTAPI WindowProcW(HWND Window, UINT Message, WPARAM wParam, LPARAM lPara
     PLeGlobalData       GlobalData = LeGetGlobalData();
 
     PrevProc = (WNDPROC)GlobalData->GetWindowDataA(Window);
+
+    if (IsControlItemDataMessage(Window, Message))
+        return CallUserMessageCallA();
 
     if (Message < countof(MessageTable))
     {
@@ -483,33 +521,23 @@ KernelMessageCall(INSTRING)
 
 KernelMessageCall(INCNTOUTSTRING)
 {
-    LRESULT OutputSize, Length;
-    PSTR    OutputBuffer;
-    PWSTR   Unicode;
-
-    PMSG_INPUT_COUNT_OUPUT_STRING ParamA, ParamW;
-
-    ParamA = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
-
-    OutputSize = ParamA->BufferSize;
-    OutputBuffer = ParamA->AnsiBuffer;
-
-    Unicode = AllocUnicode(OutputSize);
+    PMSG_INPUT_COUNT_OUPUT_STRING ParamA = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
+    const USHORT OutputSize = ParamA->BufferSize;
+    PSTR OutputBuffer = ParamA->AnsiBuffer;
+    // 私有消息传输以 WORD 计字节，避免宽字符容量乘二后回绕。
+    const USHORT Capacity = static_cast<USHORT>(ML_MIN(OutputSize, MAX_USHORT / sizeof(WCHAR)));
+    PWSTR Unicode = AllocUnicode(ML_MAX(Capacity, 1));
     if (Unicode == nullptr)
         return 0;
 
-    ParamW = (PMSG_INPUT_COUNT_OUPUT_STRING)Unicode;
-    ParamW->BufferSize = OutputSize;
-    lParam = (LPARAM)ParamW;
-
-    Length = CallNtUserMessageCallW();
-
-    if (Length != 0)
-        UnicodeToAnsi(OutputBuffer, OutputSize, Unicode, Length, (PULONG_PTR)&Length);
-
+    ((PMSG_INPUT_COUNT_OUPUT_STRING)Unicode)->BufferSize = Capacity;
+    lParam = (LPARAM)Unicode;
+    LRESULT Length = CallNtUserMessageCallW();
+    ULONG Written = 0;
+    if (Length > 0 && static_cast<ULONG_PTR>(Length) <= Capacity)
+        RtlUnicodeToMultiByteN(OutputBuffer, OutputSize, &Written, Unicode, static_cast<ULONG>(Length) * sizeof(WCHAR));
     FreeString(Unicode);
-
-    return Length;
+    return Written;
 }
 
 KernelMessageCall(INCBOXSTRING)
@@ -541,7 +569,19 @@ KernelMessageCall(OUTCBOXSTRING)
     Length = GlobalData->NtUserMessageCall(Window, Message, wParam, (LPARAM)Unicode, xParam, xpfnProc, Flags);
 
     if (Length != 0 && Length != LB_ERR)
-        UnicodeToAnsi(OutputBuffer, -1, Unicode, Length, (PULONG_PTR)&Length);
+    {
+        ULONG RequiredBytes = 0;
+        if (NT_SUCCESS(RtlUnicodeToMultiByteSize(&RequiredBytes, Unicode, static_cast<ULONG>(Length) * sizeof(WCHAR))) &&
+            RequiredBytes < ULONG_MAX)
+        {
+            // LB_GETTEXT/CB_GETLBTEXT 无容量参数；调用者按 GETTEXTLEN 结果分配。
+            UnicodeToAnsi(OutputBuffer, RequiredBytes + 1, Unicode, Length, (PULONG_PTR)&Length);
+        }
+        else
+        {
+            Length = 0;
+        }
+    }
 
     FreeString(Unicode);
 
@@ -614,6 +654,9 @@ LeNtUserMessageCall(
             continue;
 
         if (!FLAG_ON(Flags, WINDOW_FLAG_ANSI))
+            break;
+
+        if (IsControlItemDataMessage(Window, Message))
             break;
 
         MessageCall = gapfnMessageCall[MessageTable[Message].Function].KernelCall;

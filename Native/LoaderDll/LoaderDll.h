@@ -3,9 +3,6 @@
 
 #include <Windows.h>
 
-// such stupid link.exe error
-extern "C" __declspec(noreturn) void __cdecl __std_terminate() {}
-
 #if !defined(ML_USER_MODE) && !defined(ML_KERNEL_MODE)
 
 #error stupid
@@ -76,23 +73,6 @@ LE_API
 NTSTATUS
 WINAPI
 LeCreateProcess(
-	PLEB                    Leb,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine = nullptr,
-	PCWSTR                  CurrentDirectory = nullptr,
-	ULONG                   CreationFlags = 0,
-	LPSTARTUPINFOW          StartupInfo = nullptr,
-	PML_PROCESS_INFORMATION ProcessInformation = nullptr,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes = nullptr,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes = nullptr,
-	PVOID                   Environment = nullptr,
-	HANDLE                  Token = nullptr
-	);
-
-LE_API
-NTSTATUS
-WINAPI
-LeCreateProcess2(
 	PLEB                    Leb,
 	PCWSTR                  ApplicationName,
 	PWSTR                   CommandLine = nullptr,

@@ -223,9 +223,10 @@ NTSTATUS LeSetupAnsiOemCodeHashNodes() {
 NTSTATUS LeGlobalData::HackAnsiOemCodeHashNodes() {
     PLeGlobalData GlobalData = LeGetGlobalData();
 
-    unsigned char* pTeb = (unsigned char*)(__readfsdword(48));
-    *(short*)(pTeb + 0x228) = GlobalData->GetLeb()->AnsiCodePage;
-    *(short*)(pTeb + 0x22a) = GlobalData->GetLeb()->OemCodePage;
+    // ValidateLeb 已检查代码页范围；这两个私有 x86 PEB 字段为 USHORT。
+    PBYTE pPeb = (PBYTE)CurrentPeb();
+    *(PUSHORT)(pPeb + 0x228) = static_cast<USHORT>(GlobalData->GetLeb()->AnsiCodePage);
+    *(PUSHORT)(pPeb + 0x22a) = static_cast<USHORT>(GlobalData->GetLeb()->OemCodePage);
 
     return LeSetupAnsiOemCodeHashNodes();
 }

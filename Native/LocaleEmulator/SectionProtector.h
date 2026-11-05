@@ -142,7 +142,7 @@ public:
 
 	PROTECT_SECTION_INLINE SectionProtector(PRTL_RESOURCE Resource, BOOL Shared = TRUE, BOOL Wait = TRUE)
 	{
-		Shared ? RtlAcquireResourceShared(Resource, Wait) : RtlAcquireResourceExclusive(Resource, Wait);
+		Shared ? RtlAcquireResourceShared(Resource, Wait != FALSE) : RtlAcquireResourceExclusive(Resource, Wait != FALSE);
 		this->Resource = Resource;
 	}
 
@@ -165,7 +165,7 @@ public:
 		m_Event = Event;
 
 		FormatTimeOut(&TimeOut, Timeout);
-		NtWaitForSingleObject(Event, Altertable, &TimeOut);
+		NtWaitForSingleObject(Event, Altertable != FALSE, &TimeOut);
 	}
 
 	~SectionProtector()

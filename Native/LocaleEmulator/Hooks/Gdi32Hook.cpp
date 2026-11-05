@@ -10,7 +10,8 @@ HFONT GetFontFromFont(PLeGlobalData GlobalData, HFONT Font)
     if (GetObjectW(Font, sizeof(LogFont), &LogFont) == 0)
         return nullptr;
 
-    LogFont.lfCharSet = GlobalData->GetLeb()->DefaultCharset;
+    // 配置入口 ValidateLeb 已拒绝无法放入 SDK BYTE 字段的字符集。
+    LogFont.lfCharSet = static_cast<BYTE>(GlobalData->GetLeb()->DefaultCharset);
     Font = CreateFontIndirectW(&LogFont);
 
     return Font;
@@ -114,7 +115,7 @@ PTEXT_METRIC_INTERNAL LeGlobalData::GetTextMetricFromCache(LPENUMLOGFONTEXW LogF
 {
     WCHAR buf[LF_FULLFACESIZE * 2];
 
-    StringUpperW(buf, swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
+    StringUpperW(buf, _snwprintf(buf, countof(buf), L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
 
     return this->TextMetricCache.Get((PWSTR)buf);
 }
@@ -123,7 +124,7 @@ VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_I
 {
     WCHAR buf[LF_FULLFACESIZE * 2];
 
-    StringUpperW(buf, swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
+    StringUpperW(buf, _snwprintf(buf, countof(buf), L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
 
     this->TextMetricCache.Add((PWSTR)buf, *TextMetric);
 }
@@ -133,7 +134,7 @@ HGDIOBJ NTAPI LeGetStockObject(LONG Object)
     PULONG_PTR      Index;
     PLeGlobalData   GlobalData = LeGetGlobalData();
 
-    static ULONG_PTR StockObjectIndex[] =
+    static const LONG StockObjectIndex[] =
     {
         ANSI_FIXED_FONT,
         ANSI_VAR_FONT,
@@ -162,7 +163,7 @@ HGDIOBJ NTAPI LeGetStockObject(LONG Object)
 
     LOOP_ONCE
     {
-        if (Object >= countof(GlobalData->HookRoutineData.Gdi32.StockObject))
+        if (Object < 0 || static_cast<ULONG>(Object) >= countof(GlobalData->HookRoutineData.Gdi32.StockObject))
             break;
 
         auto& StockObject = GlobalData->HookRoutineData.Gdi32.StockObject[Object];
@@ -288,8 +289,8 @@ GetNameRecordFromNameTable(
     FaceName = (PWSTR)PtrAdd(TableBuffer, Offset);
 
     Buffer = Name->Buffer;
-    Length = (USHORT)ML_MIN(Length, Name->MaximumLength);
-    Name->Length = Length;
+    Name->Length = static_cast<USHORT>(ML_MIN(Length, Name->MaximumLength));
+    Length = Name->Length;
 
     for (ULONG_PTR Index = 0; Index != Length / sizeof(WCHAR); ++Index)
     {
@@ -436,6 +437,15 @@ VOID ConvertUnicodeLogfontToAnsi(PLOGFONTA LogFontA, PLOGFONTW LogFontW)
     RtlUnicodeToMultiByteN(LogFontA->lfFaceName, sizeof(LogFontA->lfFaceName), nullptr, LogFontW->lfFaceName, (StrLengthW(LogFontW->lfFaceName) + 1) * sizeof(WCHAR));
 }
 
+static BYTE UnicodeMetricCharToAnsi(WCHAR Character)
+{
+    // TEXTMETRICA 只有一个字节；无法表示的字符使用 ANSI 默认替代字符。
+    BYTE Result = '?';
+    if (NT_FAILED(RtlUnicodeToMultiByteN((PCHAR)&Result, sizeof(Result), nullptr, &Character, sizeof(Character))))
+        return '?';
+    return Result;
+}
+
 VOID ConvertUnicodeTextMetricToAnsi(PTEXTMETRICA TextMetricA, CONST TEXTMETRICW *TextMetricW)
 {
     TextMetricA->tmHeight           = TextMetricW->tmHeight;
@@ -450,10 +460,10 @@ VOID ConvertUnicodeTextMetricToAnsi(PTEXTMETRICA TextMetricA, CONST TEXTMETRICW 
     TextMetricA->tmDigitizedAspectX = TextMetricW->tmDigitizedAspectX;
     TextMetricA->tmDigitizedAspectY = TextMetricW->tmDigitizedAspectY;
 
-    TextMetricA->tmFirstChar        = TextMetricW->tmStruckOut;
-    TextMetricA->tmLastChar         = ML_MIN(0xFF, TextMetricW->tmLastChar);
-    TextMetricA->tmDefaultChar      = TextMetricW->tmDefaultChar;
-    TextMetricA->tmBreakChar        = TextMetricW->tmBreakChar;
+    TextMetricA->tmFirstChar        = UnicodeMetricCharToAnsi(TextMetricW->tmFirstChar);
+    TextMetricA->tmLastChar         = static_cast<BYTE>(ML_MIN(MAXBYTE, TextMetricW->tmLastChar));
+    TextMetricA->tmDefaultChar      = UnicodeMetricCharToAnsi(TextMetricW->tmDefaultChar);
+    TextMetricA->tmBreakChar        = UnicodeMetricCharToAnsi(TextMetricW->tmBreakChar);
 
     TextMetricA->tmItalic           = TextMetricW->tmItalic;
     TextMetricA->tmUnderlined       = TextMetricW->tmUnderlined;
@@ -500,7 +510,7 @@ INT NTAPI LeEnumFontCallbackW(CONST LOGFONTW *lf, CONST TEXTMETRICW *TextMetricW
     PGDI_ENUM_FONT_PARAM    EnumParam;
     TEXT_METRIC_INTERNAL    TextMetric;
     LPENUMLOGFONTEXW        EnumLogFontEx;
-    ULONG_PTR               LogFontCharset;
+    BYTE                    LogFontCharset;
 
     EnumParam = (PGDI_ENUM_FONT_PARAM)param;
     EnumLogFontEx = (LPENUMLOGFONTEXW)lf;
@@ -537,7 +547,7 @@ INT NTAPI LeEnumFontCallbackW(CONST LOGFONTW *lf, CONST TEXTMETRICW *TextMetricW
                 break;
             }
 
-            EnumLogFontEx->elfLogFont.lfCharSet = EnumParam->GlobalData->GetLeb()->DefaultCharset;
+            EnumLogFontEx->elfLogFont.lfCharSet = static_cast<BYTE>(EnumParam->GlobalData->GetLeb()->DefaultCharset);
         }
 
         //if (wcscmp(lf->lfFaceName, L"MS Gothic") == 0) _asm int 4;
@@ -733,7 +743,7 @@ LeNtGdiHfontCreate(
 
         CopyMemory(enumlfex, EnumLogFont, SizeOfEnumLogFont);
 
-        enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet = GlobalData->GetLeb()->DefaultCharset;
+        enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet = static_cast<BYTE>(GlobalData->GetLeb()->DefaultCharset);
 
         //if (GdiGetCodePage == NULL)
         //CopyStruct(enumlfex->elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetLeb()->DefaultFaceName, LF_FACESIZE);
@@ -833,7 +843,7 @@ NTSTATUS LeGlobalData::HookGdi32Routines(PVOID Gdi32)
         if (Win32uMod == nullptr)
             return STATUS_NOT_FOUND;
         NtGdiHfontCreate = Nt_GetProcAddress(Win32uMod, "NtGdiHfontCreate");
-        if (!NtGdiGetGlyphOutline)
+        if (NtGdiHfontCreate == nullptr)
             return STATUS_NOT_FOUND;
     }
     else

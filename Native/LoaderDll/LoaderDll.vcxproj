@@ -38,7 +38,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ExceptionHandling>false</ExceptionHandling>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <StringPooling>true</StringPooling>
@@ -46,13 +46,18 @@
       <Optimization>MaxSpeed</Optimization>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
       <PreprocessorDefinitions>_NO_CRT_STDIO_INLINE;WIN32;NDEBUG;LE_LOADER_DLL=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <PrecompiledHeaderOutputFile>$(IntDir)LoaderDll.pch</PrecompiledHeaderOutputFile>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
-      <AdditionalOptions>/utf-8  /GL /GS- /arch:SSE /MP </AdditionalOptions>
+      <AdditionalOptions>/utf-8 /arch:SSE </AdditionalOptions>
       <CallingConvention>FastCall</CallingConvention>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
     <Midl>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -70,25 +75,26 @@
       <OutputFile>$(IntDir)LoaderDll.bsc</OutputFile>
     </Bscmake>
     <Link>
+      <AdditionalOptions>/GUARD:CF %(AdditionalOptions)</AdditionalOptions>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <LinkDLL>true</LinkDLL>
       <SubSystem>NotSet</SubSystem>
       <ImportLibrary>$(OutDir)LoaderDll.lib</ImportLibrary>
-      <NoEntryPoint>true</NoEntryPoint>
-      <AdditionalDependencies>$(IntDir)NativeNtdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalOptions>/ltcg</AdditionalOptions>
+      <EntryPointSymbol>LeLoaderEntry</EntryPointSymbol>
+      <AdditionalDependencies>libvcruntime.lib;$(IntDir)NativeNtdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>.\LoaderDll.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers>
+      <RandomizedBaseAddress>true</RandomizedBaseAddress>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
       <MinimumRequiredVersion />
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="LoaderDll.cpp">
-      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">/utf-8 /GL /GS- /arch:SSE /MP </AdditionalOptions>
-    </ClCompile>
+    <ClCompile Include="LoaderDll.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="LoaderDll.def" />

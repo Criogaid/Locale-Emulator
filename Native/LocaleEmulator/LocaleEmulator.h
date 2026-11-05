@@ -2,6 +2,7 @@
 #define _LOCALEEMULATOR_H_cd444a0d_c7f9_44b2_aac8_8107e9a07ca2_
 
 #include "ml.h"
+#include <limits.h>
 
 
 #define ROOTDIR_SYSTEM32            L"\\SystemRoot\\system32\\"
@@ -58,7 +59,7 @@ typedef struct THREAD_LOCAL_BUFFER : public TEB_ACTIVE_FRAME
         if (Tlb != nullptr || Allocate == FALSE)
             return Tlb;
 
-        Tlb = new THREAD_LOCAL_BUFFER;
+        Tlb = new (std::nothrow) THREAD_LOCAL_BUFFER;
         if (Tlb != nullptr)
         {
             Tlb->Push();
@@ -136,6 +137,14 @@ typedef struct
 
 } LOCALE_ENUMLATOR_ENVIRONMENT_BLOCK, *PLOCALE_ENUMLATOR_ENVIRONMENT_BLOCK, LEB, *PLEB;
 
+inline NTSTATUS ValidateLeb(const LEB& Leb)
+{
+    if (Leb.DefaultCharset > MAXBYTE || Leb.AnsiCodePage > MAX_USHORT || Leb.OemCodePage > MAX_USHORT)
+        return STATUS_INVALID_PARAMETER;
+
+    return STATUS_SUCCESS;
+}
+
 #define LDR_LOAD_DLL_BACKUP_SIZE 5
 
 #pragma warning(push)
@@ -197,10 +206,11 @@ inline
 ULONG_PTR
 GetLePebSectionName(
     PWSTR       Buffer,
+    SIZE_T      BufferCount,
     ULONG_PTR   ProcessId
 )
 {
-    return swprintf(Buffer, FORMAT_LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, ProcessId);
+    return _snwprintf(Buffer, BufferCount, FORMAT_LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, ProcessId);
 }
 
 inline NTSTATUS CloseLePeb(PLEPEB LePeb)
@@ -258,8 +268,11 @@ LeOpenDirectoryObject(
     OBJECT_ATTRIBUTES            ObjectAttributes;
     UNICODE_STRING               DirectoryName;
 
+    const SIZE_T NameBytes = wcslen(DirectoryNameBuffer) * sizeof(WCHAR);
+    if (NameBytes > USHRT_MAX)
+        return STATUS_NAME_TOO_LONG;
     DirectoryName.Buffer          = DirectoryNameBuffer;
-    DirectoryName.Length          = wcslen(DirectoryNameBuffer) * sizeof(WCHAR);
+    DirectoryName.Length          = static_cast<USHORT>(NameBytes);
     DirectoryName.MaximumLength   = DirectoryName.Length;
 
     InitializeObjectAttributes(&ObjectAttributes, &DirectoryName, OBJ_CASE_INSENSITIVE, RootHandle, nullptr);
@@ -294,21 +307,34 @@ LeFindSectionObject(
     }
     else
     {
+        const ULONG MaximumDirectoryBytes = 1024 * 1024;
         BufferSize = 0x400;
-        // XXX: Use _alloca instead of AllocStack for memory continuity
-        // XXX: Also do not use AllocateMemory
-        Buffer = (PDIRECTORY_BASIC_INFORMATION) _alloca(BufferSize);
+        PVOID Allocation = nullptr;
         do
         {
-            Buffer = (PDIRECTORY_BASIC_INFORMATION) _alloca(BufferSize);
-            BufferSize *= 2;
-            Status = NtQueryDirectoryObject(RootHandle, (PVOID)Buffer, BufferSize, FALSE, TRUE, &Context, &RetSize);
-        } while (Status == STATUS_MORE_ENTRIES || Status == STATUS_BUFFER_TOO_SMALL);
-        if (!NT_SUCCESS(Status))
+            if (Allocation != nullptr)
+                HeapFree(GetProcessHeap(), 0, Allocation);
+            Allocation = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, BufferSize);
+            if (Allocation == nullptr)
+                return FALSE;
+            Buffer = static_cast<PDIRECTORY_BASIC_INFORMATION>(Allocation);
+            Context = 0;
+            Status = NtQueryDirectoryObject(RootHandle, Buffer, BufferSize, FALSE, TRUE, &Context, &RetSize);
+            if (Status != STATUS_MORE_ENTRIES && Status != STATUS_BUFFER_TOO_SMALL && Status != STATUS_BUFFER_OVERFLOW)
+                break;
+            if (BufferSize == MaximumDirectoryBytes)
+                break;
+            BufferSize = ML_MIN(BufferSize * 2, MaximumDirectoryBytes);
+        } while (TRUE);
+        if (Status != STATUS_SUCCESS)
+        {
+            HeapFree(GetProcessHeap(), 0, Allocation);
             return FALSE;
+        }
         while ((Buffer->ObjectName.Length != 0) && (Buffer->ObjectTypeName.Length != 0))
         {
-            if (memcmp(Buffer->ObjectTypeName.Buffer, L"Directory", Buffer->ObjectTypeName.Length))
+            if (Buffer->ObjectTypeName.Length != CONST_STRSIZE(L"Directory") ||
+                memcmp(Buffer->ObjectTypeName.Buffer, L"Directory", CONST_STRSIZE(L"Directory")))
             {
                 ++Buffer;
                 continue;
@@ -322,11 +348,13 @@ LeFindSectionObject(
             }
             if(LeFindSectionObject(SectionHandle, SectionName, Depth-1, SubDirHandle)) {
                 NtClose(SubDirHandle);
+                HeapFree(GetProcessHeap(), 0, Allocation);
                 return TRUE;
             }
             NtClose(SubDirHandle);
             ++Buffer;
         }
+        HeapFree(GetProcessHeap(), 0, Allocation);
     }
     return FALSE;
 }
@@ -346,7 +374,8 @@ OpenOrCreateLePeb(
     UNICODE_STRING      SectionName;
     HANDLE              SectionHandle, RootHandle;
     PLEPEB              LePeb;
-    ULONG_PTR           ViewSize, SessionId;
+    ULONG_PTR           ViewSize;
+    ULONG               SessionId;
     LARGE_INTEGER       MaximumSize;
 
     // ExceptionBox(L"OpenOrCreateLePeb");
@@ -355,13 +384,19 @@ OpenOrCreateLePeb(
     if (SessionId == INVALID_SESSION_ID)
         return nullptr;
 
-    swprintf(RootNameBuffer, L"\\Sessions\\%d\\BaseNamedObjects", SessionId);
+    _snwprintf(RootNameBuffer, countof(RootNameBuffer), L"\\Sessions\\%d\\BaseNamedObjects", SessionId);
 
     Status = LeOpenDirectoryObject(&RootHandle, RootNameBuffer, nullptr);
     if (NT_FAILED(Status))
         return FALSE;
 
-    SectionName.Length          = (USHORT) GetLePebSectionName(SectionNameBuffer, ProcessId) * sizeof(WCHAR);
+    const ULONG_PTR SectionNameChars = GetLePebSectionName(SectionNameBuffer, countof(SectionNameBuffer), ProcessId);
+    if (SectionNameChars >= countof(SectionNameBuffer))
+    {
+        NtClose(RootHandle);
+        return nullptr;
+    }
+    SectionName.Length          = static_cast<USHORT>(SectionNameChars * sizeof(WCHAR));
     SectionName.MaximumLength   = sizeof(SectionNameBuffer);
     SectionName.Buffer          = SectionNameBuffer;
 
@@ -372,6 +407,11 @@ OpenOrCreateLePeb(
     {
         if (Create)
         {
+            if (ExtraSize > MAXULONG_PTR - sizeof(*LePeb))
+            {
+                NtClose(RootHandle);
+                return nullptr;
+            }
             MaximumSize.QuadPart = sizeof(*LePeb) + ExtraSize;
             Status = NtCreateSection(
                         &SectionHandle,
@@ -484,7 +524,7 @@ inline VOID InitLog(NtFileDisk &LogFile)
         RtlInitUnicodeString(&SelfPath, LePeb->LeDllDirPath);
     }
 
-    swprintf(LogFilePath, L"%wZ\\%wZ.%p.log.txt", &SelfPath, &Target->BaseDllName, CurrentPid());
+    _snwprintf(LogFilePath, countof(LogFilePath), L"%wZ\\%wZ.%p.log.txt", &SelfPath, &Target->BaseDllName, CurrentPid());
 
     if (LePeb != nullptr)
     {
@@ -655,7 +695,12 @@ public:
         DC = HookStub.StubGetDC == nullptr ? ::GetDC(nullptr) : this->GetDC(nullptr);
         GetLePeb()->OriginalCharset = GetTextCharset(DC);
 
-        lf.lfCharSet = GetLeb()->DefaultCharset;
+        if (GetLeb()->DefaultCharset > MAXBYTE)
+        {
+            ReleaseDC(nullptr, DC);
+            return;
+        }
+        lf.lfCharSet = static_cast<BYTE>(GetLeb()->DefaultCharset);
         lf.lfFaceName[0] = 0;
 
         auto EnumFontCallback = [] (CONST LOGFONTW *lf, CONST TEXTMETRICW *, DWORD, LPARAM Param)
@@ -879,6 +924,8 @@ public:
         return HookStub.StubEnumFontFamiliesExW(hdc, lpLogfont, lpProc, lParam, dwFlags);
     }
 };
+
+EXTC VOID __cdecl __security_init_cookie(VOID);
 
 ForceInline PLeGlobalData LeGetGlobalData()
 {

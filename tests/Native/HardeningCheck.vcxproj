@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations"><ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration></ItemGroup>
+  <PropertyGroup Label="Globals"><ProjectGuid>{6CC83CC2-E029-4157-BA3E-98F2F590A456}</ProjectGuid></PropertyGroup>
+  <Import Project="$(ProjectDir)..\..\Native\Toolchain.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><CharacterSet>Unicode</CharacterSet></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup><OutDir>$(ProjectDir)..\..\Build\Release\</OutDir><IntDir>$(ProjectDir)..\..\Build\obj\HardeningCheck\</IntDir></PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile><WarningLevel>Level4</WarningLevel><TreatWarningAsError>true</TreatWarningAsError><FunctionLevelLinking>true</FunctionLevelLinking><AdditionalIncludeDirectories>$(ProjectDir)..\..\Native\LocaleEmulator</AdditionalIncludeDirectories><RuntimeLibrary>MultiThreaded</RuntimeLibrary><BufferSecurityCheck>true</BufferSecurityCheck><ControlFlowGuard>Guard</ControlFlowGuard><Optimization>MaxSpeed</Optimization><InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion><ExceptionHandling>false</ExceptionHandling><CallingConvention>FastCall</CallingConvention><PreprocessorDefinitions>_NO_CRT_STDIO_INLINE;USE_NT_VER=1;%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions></ClCompile>
+    <Link><SubSystem>Console</SubSystem><AdditionalOptions>/GUARD:CF %(AdditionalOptions)</AdditionalOptions><OptimizeReferences>true</OptimizeReferences><TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors><ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers><RandomizedBaseAddress>true</RandomizedBaseAddress><DataExecutionPrevention>true</DataExecutionPrevention><AdditionalDependencies>libvcruntime.lib;$(IntDir)NativeNtdll.lib;ntdll.lib;shlwapi.lib;dbghelp.lib;user32.lib;gdi32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="HardeningCheck.cpp" /></ItemGroup>
+  <Import Project="$(ProjectDir)..\..\Native\OfficialToolchain.targets" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
