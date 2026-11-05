@@ -9955,7 +9955,7 @@ long            __cdecl _InterlockedDecrement(long volatile * lpAddend);
 long            __cdecl _InterlockedCompareExchange(long volatile * Destination, long Exchange, long Comperand);
 long            __cdecl _InterlockedExchangeAdd(long volatile * Addend, long Value);
 long            __cdecl _InterlockedExchange(volatile long * Target, long Value);
-char            __cdecl _InterlockedExchange8(char volatile *Destination, char ExChange);
+
 
 long            _InterlockedAnd(long volatile *Destination, long Value);
 long            _InterlockedOr(long volatile *Destination, long Value);
@@ -9988,7 +9988,7 @@ long            __cdecl _InterlockedCompareExchange_rel(long volatile * Destinat
 short                   _InterlockedCompareExchange16(short volatile * Destination, short Exchange, short Comperand);
 short           __cdecl _InterlockedCompareExchange16_acq(short volatile * Destination, short Exchange, short Comperand);
 short           __cdecl _InterlockedCompareExchange16_rel(short volatile * Destination, short Exchange, short Comperand);
-__int64         __cdecl _InterlockedCompareExchange64(__int64 volatile * Destination, __int64 Exchange, __int64 Comperand);
+
 __int64         __cdecl _InterlockedCompareExchange64_acq(__int64 volatile * Destination, __int64 Exchange, __int64 Comperand);
 __int64         __cdecl _InterlockedCompareExchange64_rel(__int64 volatile * Destination, __int64 Exchange, __int64 Comperand);
 unsigned char   __cdecl _InterlockedCompareExchange128(__int64 volatile * Destination, __int64 ExchangeHigh, __int64 ExchangeLow, __int64 * Comparand);
@@ -10981,9 +10981,7 @@ EXTCPP
     _RTL_CONSTANT_STRING_remove_const_macro(s) \
 }
 
-#if 0
-
-#pragma pack(4)
+#pragma pack(push, 4)
 
 #define MAXIMUM_LEADBYTES   12
 
@@ -11009,8 +11007,10 @@ typedef struct _NLSTABLEINFO {
     PUSHORT     LowerCaseTable;             // 844 format lower case table
 } NLSTABLEINFO, *PNLSTABLEINFO;
 
-#pragma pack()
+#pragma pack(pop)
 
+#if ML_X86
+static_assert(sizeof(CPTABLEINFO) == 44 && sizeof(NLSTABLEINFO) == 96, "Win32 NLS ABI");
 #endif
 
 /************************************************************************/
@@ -12440,7 +12440,7 @@ KiUserExceptionDispatcher(
 );
 
 NATIVE_API
-NTSTATUS
+VOID
 NTAPI
 RtlRaiseException(
     PEXCEPTION_RECORD ExceptionRecord
@@ -21291,7 +21291,7 @@ RtlCaptureStackBackTrace(
 #ifndef _NTNLS_H_66774c20_dc28_4a7e_9714_c1f39fdb5d5f_
 #define _NTNLS_H_66774c20_dc28_4a7e_9714_c1f39fdb5d5f_
 
-#include <ntnls.h>
+// NLS structures are declared above; no private WDK header is required.
 
 NATIVE_API
 VOID
@@ -21369,8 +21369,6 @@ NtQueryInstallUILanguage(
 
 
 #if defined(_INC_SDKDDKVER) && _WIN32_WINNT_WIN7 >= 0x600
-
-#include <ntnls.h>
 
 NATIVE_API
 VOID
@@ -21853,7 +21851,6 @@ _ML_C_TAIL_
 #ifndef _UNDOCUMENTEDAPI_H_b221130a_bdd5_4b40_9da0_d44c29e1d279
 #define _UNDOCUMENTEDAPI_H_b221130a_bdd5_4b40_9da0_d44c29e1d279
 
-#pragma INCLUDE_LIB(undoc_k32.lib)
 
 #if !MY_NT_DDK
 
@@ -23831,9 +23828,6 @@ _ML_C_TAIL_
 
 #if MY_OS_WIN32
 
-#if !ML_AMD64
-    #pragma INCLUDE_LIB(ucidec.lib)
-#endif
 
     EXTC_IMPORT int STDCALL UCIDecode(const void *src, int srclen, void** dst, int* stride, int* w, int* h, int* bpp);
     EXTC_IMPORT int STDCALL UCIFree(void* p);
@@ -24330,9 +24324,6 @@ InitWaveHeader(
 
 #if MY_OS_WIN32
 
-#if !ML_AMD64
-    #pragma INCLUDE_LIB(ucadec.lib)
-#endif
 
 EXTC_IMPORT int STDCALL UCADecode(const void *src, int srclen, void** dst, int* dstlen);
 EXTC_IMPORT int STDCALL UCADecode2(const void *src, int srclen, void** dst, int* dstlen, int sample);
@@ -24382,7 +24373,6 @@ _ML_C_TAIL_
 #define _APPHELP_H_982410c2_a553_457c_990e_c996cff3e025
 
 
-#pragma INCLUDE_LIB(undoc_apphelp.lib)
 
 _ML_C_HEAD_
 

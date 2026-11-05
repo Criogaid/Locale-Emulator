@@ -39,14 +39,15 @@
     <SccProjectName />
     <SccLocalPath />
     <ProjectGuid>{B8B77FAC-92E4-4F3C-9A4E-11BE704B01EC}</ProjectGuid>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+
   </PropertyGroup>
+  <Import Project="$(ProjectDir)..\Toolchain.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -57,13 +58,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>.\Release\</OutDir>
-    <IntDir>.\Release\</IntDir>
+    <OutDir>$(ProjectDir)..\..\Build\Release\</OutDir>
+    <IntDir>$(ProjectDir)..\..\Build\obj\LocaleEmulator\</IntDir>
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>..\_Libs;..\_WDK\WIN7\lib\win7\i386;..\_WDK\WIN7\lib\Crt\i386</LibraryPath>
-    <ExecutablePath>..\_Compilers;$(VC_ExecutablePath_x86);$(WindowsSDK_ExecutablePath);$(VS_ExecutablePath);$(MSBuild_ExecutablePath);$(PATH)</ExecutablePath>
     <GenerateManifest>false</GenerateManifest>
-    <IncludePath>..\_WDK\WIN8\Include\shared;..\_WDK\WIN8\Include\um;..\_WDK\WIN8\Include\km;..\_WDK\WIN7\inc\api;..\_WDK\WIN7\inc\crt;..\_WDK\WIN7\inc\api\crt\stl60;..\_Headers;$(ProjectDir)</IncludePath>
+    <IncludePath>$(ProjectDir)..\LocaleEmulator;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -74,12 +73,12 @@
       <Optimization>MaxSpeed</Optimization>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <WarningLevel>Level4</WarningLevel>
-      <PreprocessorDefinitions>WIN32;NDEBUG;USE_NT_VER=1</PreprocessorDefinitions>
-      <AssemblerListingLocation>.\Release\</AssemblerListingLocation>
-      <PrecompiledHeaderOutputFile>.\Release\LocaleEmulator.pch</PrecompiledHeaderOutputFile>
-      <ObjectFileName>.\Release\</ObjectFileName>
-      <ProgramDataBaseFileName>.\Release\</ProgramDataBaseFileName>
-      <AdditionalOptions>/arch:SSE </AdditionalOptions>
+      <PreprocessorDefinitions>_NO_CRT_STDIO_INLINE;WIN32;NDEBUG;USE_NT_VER=1</PreprocessorDefinitions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <PrecompiledHeaderOutputFile>$(IntDir)LocaleEmulator.pch</PrecompiledHeaderOutputFile>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
+      <AdditionalOptions>/utf-8 /we4715 /arch:SSE </AdditionalOptions>
       <CallingConvention>FastCall</CallingConvention>
       <ExceptionHandling>false</ExceptionHandling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
@@ -89,7 +88,7 @@
     <Midl>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <TypeLibraryName>.\Release\LocaleEmulator.tlb</TypeLibraryName>
+      <TypeLibraryName>$(IntDir)LocaleEmulator.tlb</TypeLibraryName>
       <MkTypLibCompatible>true</MkTypLibCompatible>
       <TargetEnvironment>Win32</TargetEnvironment>
     </Midl>
@@ -99,19 +98,18 @@
     </ResourceCompile>
     <Bscmake>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <OutputFile>.\Release\LocaleEmulator.bsc</OutputFile>
+      <OutputFile>$(IntDir)LocaleEmulator.bsc</OutputFile>
     </Bscmake>
     <Link>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <LinkDLL>true</LinkDLL>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>NotSet</SubSystem>
-      <OutputFile>.\Release\LocaleEmulator.dll</OutputFile>
-      <ImportLibrary>.\Release\LocaleEmulator.lib</ImportLibrary>
+      <OutputFile>$(OutDir)LocaleEmulator.dll</OutputFile>
+      <ImportLibrary>$(OutDir)LocaleEmulator.lib</ImportLibrary>
       <DelayLoadDLLs>USER32.dll;DBGHELP.dll;GDI32.dll;KERNEL32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
-      <AdditionalDependencies>MyLib.lib;undoc_ntdll.lib;undoc_k32.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalOptions>
-      </AdditionalOptions>
+      <AdditionalDependencies>libvcruntime.lib;$(IntDir)NativeNtdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalOptions />
       <OptimizeReferences>true</OptimizeReferences>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
@@ -120,6 +118,7 @@
       <MinimumRequiredVersion />
     </Link>
   </ItemDefinitionGroup>
+  <Import Project="$(ProjectDir)..\OfficialToolchain.targets" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

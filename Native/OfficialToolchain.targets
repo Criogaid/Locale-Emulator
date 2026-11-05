@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- 仅补充系统 DLL 已导出但 SDK 导入库未列出的符号，不引入第三方运行库。 -->
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalOptions>/alternatename:__imp__LdrInitializeThunk@8=__imp__LdrInitializeThunk /alternatename:__imp__LdrRegisterDllNotification@16=__imp__LdrRegisterDllNotification /alternatename:__imp__LdrUnregisterDllNotification@4=__imp__LdrUnregisterDllNotification %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <Target Name="GenerateNativeImports" BeforeTargets="Link" Inputs="$(MSBuildThisFileDirectory)NativeNtdll.def" Outputs="$(IntDir)NativeNtdll.lib">
+    <Exec Command="&quot;$(VCToolsInstallDir)bin\HostX86\x86\lib.exe&quot; /nologo /machine:x86 /def:&quot;$(MSBuildThisFileDirectory)NativeNtdll.def&quot; /out:&quot;$(IntDir)NativeNtdll.lib&quot;" />
+  </Target>
+</Project>

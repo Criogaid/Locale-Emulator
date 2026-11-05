@@ -10,12 +10,13 @@
     <SccProjectName />
     <SccLocalPath />
     <ProjectGuid>{7015572F-2B06-48AF-8CEA-340ACE68D25A}</ProjectGuid>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+
   </PropertyGroup>
+  <Import Project="$(ProjectDir)..\Toolchain.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v141_xp</PlatformToolset>
+
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -28,36 +29,35 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>.\Release\</OutDir>
-    <IntDir>.\Release\</IntDir>
+    <OutDir>$(ProjectDir)..\..\Build\Release\</OutDir>
+    <IntDir>$(ProjectDir)..\..\Build\obj\LoaderDll\</IntDir>
     <LinkIncremental>false</LinkIncremental>
-    <ExecutablePath>..\_Compilers;$(ExecutablePath)</ExecutablePath>
-    <LibraryPath>..\_Libs;..\_WDK\WIN7\lib\win7\i386;..\_WDK\WIN7\lib\Mfc\i386;..\_WDK\WIN7\lib\Crt\i386;..\_WDK\WIN7\lib\ATL\i386</LibraryPath>
-    <IncludePath>..\_WDK\WIN8\Include\shared;..\_WDK\WIN8\Include\um;..\_WDK\WIN8\Include\km;..\_WDK\WIN7\inc\api;..\_WDK\WIN7\inc\crt;..\_WDK\WIN7\inc\ddk;..\_WDK\WIN7\inc\mfc42;..\_WDK\WIN7\inc\atl71;..\_WDK\WIN7\inc\api\crt\stl60;..\_Headers;..\LocaleEmulator</IncludePath>
+    <IncludePath>$(ProjectDir)..\LocaleEmulator;$(IncludePath)</IncludePath>
     <GenerateManifest>false</GenerateManifest>
     <ReferencePath>$(VC_ReferencesPath_x86)</ReferencePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <Optimization>MaxSpeed</Optimization>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <WarningLevel>Level4</WarningLevel>
-      <PreprocessorDefinitions>WIN32;NDEBUG;LE_LOADER_DLL=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AssemblerListingLocation>.\Release\</AssemblerListingLocation>
-      <PrecompiledHeaderOutputFile>.\Release\LoaderDll.pch</PrecompiledHeaderOutputFile>
-      <ObjectFileName>.\Release\</ObjectFileName>
-      <ProgramDataBaseFileName>.\Release\</ProgramDataBaseFileName>
-      <AdditionalOptions> /GL /GS- /arch:SSE /MP </AdditionalOptions>
+      <PreprocessorDefinitions>_NO_CRT_STDIO_INLINE;WIN32;NDEBUG;LE_LOADER_DLL=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <PrecompiledHeaderOutputFile>$(IntDir)LoaderDll.pch</PrecompiledHeaderOutputFile>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
+      <AdditionalOptions>/utf-8  /GL /GS- /arch:SSE /MP </AdditionalOptions>
       <CallingConvention>FastCall</CallingConvention>
     </ClCompile>
     <Midl>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <TypeLibraryName>.\Release\LoaderDll.tlb</TypeLibraryName>
+      <TypeLibraryName>$(IntDir)LoaderDll.tlb</TypeLibraryName>
       <MkTypLibCompatible>true</MkTypLibCompatible>
       <TargetEnvironment>Win32</TargetEnvironment>
     </Midl>
@@ -67,16 +67,16 @@
     </ResourceCompile>
     <Bscmake>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <OutputFile>.\Release\LoaderDll.bsc</OutputFile>
+      <OutputFile>$(IntDir)LoaderDll.bsc</OutputFile>
     </Bscmake>
     <Link>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <LinkDLL>true</LinkDLL>
       <SubSystem>NotSet</SubSystem>
-      <ImportLibrary>.\Release\LoaderDll.lib</ImportLibrary>
+      <ImportLibrary>$(OutDir)LoaderDll.lib</ImportLibrary>
       <NoEntryPoint>true</NoEntryPoint>
-      <AdditionalDependencies>undoc_ntdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalOptions> /ltcg</AdditionalOptions>
+      <AdditionalDependencies>$(IntDir)NativeNtdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalOptions>/ltcg</AdditionalOptions>
       <ModuleDefinitionFile>.\LoaderDll.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
@@ -87,7 +87,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="LoaderDll.cpp">
-      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"> /GL /GS- /arch:SSE /MP   /GL /GS- /arch:SSE /MP </AdditionalOptions>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">/utf-8 /GL /GS- /arch:SSE /MP </AdditionalOptions>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -96,6 +96,7 @@
   <ItemGroup>
     <ClInclude Include="LoaderDll.h" />
   </ItemGroup>
+  <Import Project="$(ProjectDir)..\OfficialToolchain.targets" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

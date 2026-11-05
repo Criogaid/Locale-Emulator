@@ -217,6 +217,7 @@ NTSTATUS LeSetupAnsiOemCodeHashNodes() {
     WriteLog(L"SetupAnsiOemCodeHashNodes: %p\n", the_func);
 
     the_func();
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS LeGlobalData::HackAnsiOemCodeHashNodes() {

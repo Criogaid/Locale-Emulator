@@ -1,5 +1,11 @@
 ﻿#include "ml.h"
 
+// UCRT vswprintf adds a buffer count; ntdll exposes the legacy bounded formatter.
+extern "C" int __cdecl vswprintf(wchar_t* buffer, size_t count, const wchar_t* format, va_list args)
+{
+    return _vsnwprintf(buffer, count, format, args);
+}
+
 #if ML_KERNEL_MODE
 
 
@@ -1523,7 +1529,12 @@ Nt_CreateProcess(
 
 #else
 
-    Result = CreateProcessInternalW(
+    auto createProcessInternal = reinterpret_cast<API_POINTER(CreateProcessInternalW)>(
+        LookupExportTable(GetKernel32Handle(), KERNEL32_CreateProcessInternalW));
+    if (createProcessInternal == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    Result = createProcessInternal(
                     Token,
                     ApplicationName,
                     CommandLine,
@@ -11076,7 +11087,12 @@ CreateProcess(
     if (ProcessInformation == NULL)
         ProcessInformation = &DefaultProcessInformation;
 
-    Result = CreateProcessInternalW(
+    auto createProcessInternal = reinterpret_cast<API_POINTER(CreateProcessInternalW)>(
+        LookupExportTable(GetKernel32Handle(), KERNEL32_CreateProcessInternalW));
+    if (createProcessInternal == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    Result = createProcessInternal(
                     Token,
                     ApplicationName,
                     CommandLine,
@@ -12781,7 +12797,8 @@ NTSTATUS OpenPredefinedKeyHandle(PHANDLE KeyHandle, HANDLE PredefinedKey, ACCESS
             NO_BREAK;
 
         case KEY_INDEX(HKEY_MACHINE_CLASS):
-            InitializeObjectAttributes(&ObjectAttributes, PUSTR(L"\\Registry\\Machine\\Software\\Classes"), OBJ_CASE_INSENSITIVE, NULL, NULL);
+            KeyPath = USTR(L"\\Registry\\Machine\\Software\\Classes");
+            InitializeObjectAttributes(&ObjectAttributes, &KeyPath, OBJ_CASE_INSENSITIVE, NULL, NULL);
             Status = XOpenKey(KeyHandle, DesiredAccess, &ObjectAttributes);
             break;
 
@@ -12794,12 +12811,14 @@ NTSTATUS OpenPredefinedKeyHandle(PHANDLE KeyHandle, HANDLE PredefinedKey, ACCESS
 #endif // r3
 
         case KEY_INDEX(HKEY_LOCAL_MACHINE):
-            InitializeObjectAttributes(&ObjectAttributes, PUSTR(L"\\Registry\\Machine"), OBJ_CASE_INSENSITIVE, NULL, NULL);
+            KeyPath = USTR(L"\\Registry\\Machine");
+            InitializeObjectAttributes(&ObjectAttributes, &KeyPath, OBJ_CASE_INSENSITIVE, NULL, NULL);
             Status = XOpenKey(KeyHandle, DesiredAccess, &ObjectAttributes);
             break;
 
         case KEY_INDEX(HKEY_USERS):
-            InitializeObjectAttributes(&ObjectAttributes, PUSTR(L"\\Registry\\User"), OBJ_CASE_INSENSITIVE, NULL, NULL);
+            KeyPath = USTR(L"\\Registry\\User");
+            InitializeObjectAttributes(&ObjectAttributes, &KeyPath, OBJ_CASE_INSENSITIVE, NULL, NULL);
             Status = XOpenKey(KeyHandle, DesiredAccess, &ObjectAttributes);
             break;
 
@@ -12811,7 +12830,8 @@ NTSTATUS OpenPredefinedKeyHandle(PHANDLE KeyHandle, HANDLE PredefinedKey, ACCESS
             break;
 
         case KEY_INDEX(HKEY_CURRENT_CONFIG):
-            InitializeObjectAttributes(&ObjectAttributes, PUSTR(L"\\Registry\\Machine\\System\\CurrentControlSet\\Hardware Profiles\\Current"), OBJ_CASE_INSENSITIVE, NULL, NULL);
+            KeyPath = USTR(L"\\Registry\\Machine\\System\\CurrentControlSet\\Hardware Profiles\\Current");
+            InitializeObjectAttributes(&ObjectAttributes, &KeyPath, OBJ_CASE_INSENSITIVE, NULL, NULL);
             Status = XOpenKey(KeyHandle, DesiredAccess, &ObjectAttributes);
             break;
 
@@ -13633,7 +13653,7 @@ Connect(
 #endif // r3
 
 ML_NAMESPACE_END_(Lpc);
-#include <mountmgr.h>
+#include "MountManager.h"
 
 ML_NAMESPACE_BEGIN(Io);
 

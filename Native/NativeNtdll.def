@@ -1,0 +1,12 @@
+LIBRARY ntdll.dll
+EXPORTS
+    LdrInitializeThunk
+    LdrRegisterDllNotification
+    LdrUnregisterDllNotification
+    _except_handler4_common
+    _stricmp
+    _wcsicmp
+    wcsstr
+    _vsnprintf
+    _vsnwprintf
+    _vscwprintf
