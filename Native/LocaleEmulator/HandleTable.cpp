@@ -13,7 +13,7 @@
 
 PML_HANDLE_TABLE CreateHandleTable()
 {
-    PML_HANDLE_TABLE HandleTable = new ML_HANDLE_TABLE[HIGH_LEVEL_ENTRIES];
+    PML_HANDLE_TABLE HandleTable = new (std::nothrow) ML_HANDLE_TABLE[HIGH_LEVEL_ENTRIES];
 
     if (HandleTable != NULL)
         ZeroMemory(HandleTable, sizeof(*HandleTable) * HIGH_LEVEL_ENTRIES);
@@ -36,7 +36,7 @@ PML_HANDLE_TABLE_ENTRY CreateHandle(PML_HANDLE_TABLE HandleTable, HANDLE Handle)
     MidLevel  = HighLevel[HighIndex].NextLevel;
     if (MidLevel == NULL)
     {
-        MidLevel = new ML_HANDLE_TABLE[MID_LEVEL_ENTRIES];
+        MidLevel = new (std::nothrow) ML_HANDLE_TABLE[MID_LEVEL_ENTRIES];
         if (MidLevel == NULL)
             return NULL;
 
@@ -49,7 +49,7 @@ PML_HANDLE_TABLE_ENTRY CreateHandle(PML_HANDLE_TABLE HandleTable, HANDLE Handle)
     LowLevel = MidLevel->Entries;
     if (LowLevel == NULL)
     {
-        LowLevel = new ML_HANDLE_TABLE_ENTRY[MID_LEVEL_ENTRIES];
+        LowLevel = new (std::nothrow) ML_HANDLE_TABLE_ENTRY[MID_LEVEL_ENTRIES];
         if (LowLevel == NULL)
             return NULL;
 

@@ -210,7 +210,7 @@ GetLePebSectionName(
     ULONG_PTR   ProcessId
 )
 {
-    return _snwprintf(Buffer, BufferCount, FORMAT_LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, ProcessId);
+    return _snwprintf(Buffer, BufferCount, FORMAT_LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, reinterpret_cast<PVOID>(ProcessId));
 }
 
 inline NTSTATUS CloseLePeb(PLEPEB LePeb)
@@ -524,11 +524,16 @@ inline VOID InitLog(NtFileDisk &LogFile)
         RtlInitUnicodeString(&SelfPath, LePeb->LeDllDirPath);
     }
 
-    _snwprintf(LogFilePath, countof(LogFilePath), L"%wZ\\%wZ.%p.log.txt", &SelfPath, &Target->BaseDllName, CurrentPid());
+    const int PathLength = _snwprintf(LogFilePath, countof(LogFilePath), L"%wZ\\%wZ.%p.log.txt", &SelfPath, &Target->BaseDllName, reinterpret_cast<PVOID>(CurrentPid()));
 
     if (LePeb != nullptr)
     {
         CloseLePeb(LePeb);
+    }
+    if (PathLength < 0 || static_cast<SIZE_T>(PathLength) >= countof(LogFilePath))
+    {
+        LogFile = 0;
+        return;
     }
 
     ULONG BOM = BOM_UTF16_LE;

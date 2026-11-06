@@ -2191,7 +2191,7 @@ InstallHookPort(
 
     GlobalInfo->Kernel.NtKrnlModule = SysCallModule;
 
-    GlobalInfo->Kernel.DispatcherInfo.Table = new MlHandleTable;
+    GlobalInfo->Kernel.DispatcherInfo.Table = new (std::nothrow) MlHandleTable;
     if (GlobalInfo->Kernel.DispatcherInfo.Table == NULL)
     {
         Status = STATUS_NO_MEMORY;

@@ -8,5 +8,6 @@ EXPORTS
     _wcsicmp
     wcsstr
     _vsnprintf
+    _snwprintf
     _vsnwprintf
     _vscwprintf

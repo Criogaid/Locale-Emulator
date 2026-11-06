@@ -49,6 +49,24 @@ static bool CheckLineThunks() {
     return true;
 }
 
+static bool CheckBoundedFormatting()
+{
+    WCHAR section[MAX_NTPATH];
+    const ULONG_PTR length = GetLePebSectionName(section, countof(section), 0x2A);
+    const WCHAR expected[] = L"Local\\LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK_SECTION_0000002A";
+    if (length != countof(expected) - 1 || wcscmp(section, expected) != 0) return false;
+    WCHAR buffer[4] = {L'?', L'?', L'?', L'!'};
+    if (_snwprintf(buffer, 3, L"%s", L"ABCDE") != -1 ||
+        buffer[0] != L'A' || buffer[1] != L'B' || buffer[2] != L'C' || buffer[3] != L'!') return false;
+    if (_snwprintf(buffer, 3, L"%s", L"ABC") != 3 || buffer[3] != L'!') return false;
+    if (_snwprintf(buffer, countof(buffer), L"%s", L"ABC") != 3 || buffer[3] != 0) return false;
+    WCHAR name[] = {L'A', L'B', L'X'};
+    UNICODE_STRING counted = {2 * sizeof(WCHAR), sizeof(name), name};
+    if (_snwprintf(buffer, countof(buffer), L"%wZ", &counted) != 2 ||
+        buffer[0] != L'A' || buffer[1] != L'B' || buffer[2] != 0) return false;
+    return GetLePebSectionName(buffer, countof(buffer), 0x2A) >= countof(buffer);
+}
+
 int __cdecl main()
 {
     if (Original(4) != 19) return 1;
@@ -101,6 +119,8 @@ int __cdecl main()
     ConvertUnicodeTextMetricToAnsi(&metricA, &metricW);
     if (metricA.tmFirstChar != 'A' || metricA.tmLastChar != 255 || metricA.tmDefaultChar != '?' || metricA.tmBreakChar != ' ') return 20;
     if (!CheckLineThunks()) return 21;
+    if (!CheckBoundedFormatting()) return 22;
+    puts("bounded_format_count_terminator_truncation_and_nt_unicode=ok");
     puts("getline_thunk_word_bounds_and_no_terminator=ok");
     puts("leb_bounds=ok large_string_bounds=ok explicit_length_guard_pages=ok textmetric_first_char=ok");
     puts("patch=ok trampoline=RX source=RX restore=ok freed=ok unicode_length=ok");

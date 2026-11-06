@@ -2050,8 +2050,10 @@ NTSTATUS CreateMiniDump(PEXCEPTION_POINTERS ExceptionPointers)
 
     Nt_GetModuleFileName(NULL, MiniDumpFile, countof(MiniDumpFile));
     PWSTR Extension = findextw(MiniDumpFile);
-    if (_snwprintf(Extension, countof(MiniDumpFile) - (Extension - MiniDumpFile),
-            L".%I64X.crash.dmp", Times.CreationTime.QuadPart) < 0)
+    const SIZE_T ExtensionCapacity = countof(MiniDumpFile) - (Extension - MiniDumpFile);
+    const int ExtensionLength = _snwprintf(Extension, ExtensionCapacity,
+            L".%I64X.crash.dmp", Times.CreationTime.QuadPart);
+    if (ExtensionLength < 0 || static_cast<SIZE_T>(ExtensionLength) >= ExtensionCapacity)
         return STATUS_NAME_TOO_LONG;
 
     Status = File.Create(MiniDumpFile);

@@ -993,10 +993,12 @@ ForceInline int CDECL _purecall()
 
 
 #define ML_OVERLOAD_NEW \
+            _Ret_maybenull_ _Success_(return != NULL) _Post_writable_byte_size_(Size) _VCRT_ALLOCATOR \
             PVoid CDECL operator new[](size_t Size, const std::nothrow_t&) noexcept \
             { \
                 return AllocateMemoryP(Size); \
             } \
+            _Ret_maybenull_ _Success_(return != NULL) _Post_writable_byte_size_(Size) _VCRT_ALLOCATOR \
             PVoid CDECL operator new(size_t Size, const std::nothrow_t& Tag) noexcept \
             { \
                 return operator new[](Size, Tag); \
