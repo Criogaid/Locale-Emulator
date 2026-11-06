@@ -145,6 +145,7 @@ namespace ManagedRegression
         {
             var form = Activator.CreateInstance(formType, new object[] { 0 });
             string handler = Path.Combine(directory, "LEContextMenuHandler.dll");
+            var handlerBytes = File.ReadAllBytes(handler);
             File.Delete(handler);
             try
             {
@@ -169,6 +170,28 @@ namespace ManagedRegression
                     using (var key = Registry.ClassesRoot.OpenSubKey(machineInterface))
                         Check(key != null, "HKCR override remained active after registration failure.");
                 }
+                File.WriteAllBytes(handler, handlerBytes);
+                var manager = formType.Assembly.GetType("LEInstaller.ShellExtensionManager", true);
+                var keyName = manager.GetField("keyName", BindingFlags.Static | BindingFlags.NonPublic);
+                var originalKeyName = (string)keyName.GetValue(null);
+                const string clsidPath = @"Software\Classes\CLSID\{C52B9871-E5E9-41FD-B84D-C5ACADBEC7AE}\InprocServer32";
+                var shellBefore = (bool)manager.GetMethod("IsInstalled").Invoke(null, new object[] { false });
+                bool comBefore;
+                using (var comKey = Registry.CurrentUser.OpenSubKey(clsidPath)) comBefore = comKey != null;
+                try
+                {
+                    keyName.SetValue(null, null);
+                    Check(!(bool)Invoke(form, "DoRegister", false),
+                        "A Shell registration failure was reported as success.");
+                }
+                finally
+                {
+                    keyName.SetValue(null, originalKeyName);
+                }
+                Check((bool)manager.GetMethod("IsInstalled").Invoke(null, new object[] { false }) == shellBefore,
+                    "A failed registration changed the Shell registration state.");
+                using (var comKey = Registry.CurrentUser.OpenSubKey(clsidPath))
+                    Check((comKey != null) == comBefore, "A failed registration changed the COM registration state.");
             }
             finally
             {

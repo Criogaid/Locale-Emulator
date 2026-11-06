@@ -268,20 +268,65 @@ namespace LEInstaller
                 var assembly = Assembly.LoadFrom(Path.Combine(crtDir, "LEContextMenuHandler.dll"));
                 if (allUsers && !IsAdministrator())
                     throw new UnauthorizedAccessException("Administrator privileges are required for all users.");
+                var rs = new RegistrationServices();
+                var assemblyTouched = false;
+                var shellTouched = false;
                 try
                 {
                     if (!allUsers)
                         OverrideHKCR();
-                    var rs = new RegistrationServices();
-                    bool changed = register
-                        ? rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase)
-                        : rs.UnregisterAssembly(assembly);
-                    if (!changed)
-                        throw new InvalidOperationException("The assembly contains no registerable COM types.");
-                    if (register)
-                        ShellExtensionManager.RegisterShellExtContextMenuHandler(allUsers);
-                    else
-                        ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
+                    try
+                    {
+                        if (register)
+                        {
+                            assemblyTouched = true;
+                            if (!rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase))
+                                throw new InvalidOperationException("The assembly contains no registerable COM types.");
+                            shellTouched = true;
+                            ShellExtensionManager.RegisterShellExtContextMenuHandler(allUsers);
+                        }
+                        else
+                        {
+                            shellTouched = true;
+                            ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
+                            assemblyTouched = true;
+                            if (!rs.UnregisterAssembly(assembly))
+                                throw new InvalidOperationException("The assembly contains no registerable COM types.");
+                        }
+                    }
+                    catch (Exception error)
+                    {
+                        var rollbackErrors = new List<Exception>();
+                        if (register)
+                        {
+                            if (shellTouched)
+                            {
+                                try { ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers); }
+                                catch (Exception rollbackError) { rollbackErrors.Add(rollbackError); }
+                            }
+                            if (assemblyTouched)
+                            {
+                                try { rs.UnregisterAssembly(assembly); }
+                                catch (Exception rollbackError) { rollbackErrors.Add(rollbackError); }
+                            }
+                        }
+                        else
+                        {
+                            if (assemblyTouched)
+                            {
+                                try { rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase); }
+                                catch (Exception rollbackError) { rollbackErrors.Add(rollbackError); }
+                            }
+                            if (shellTouched)
+                            {
+                                try { ShellExtensionManager.RegisterShellExtContextMenuHandler(allUsers); }
+                                catch (Exception rollbackError) { rollbackErrors.Add(rollbackError); }
+                            }
+                        }
+                        if (rollbackErrors.Count != 0)
+                            throw new AggregateException(new[] { error }.Concat(rollbackErrors));
+                        throw;
+                    }
                 }
                 finally
                 {
