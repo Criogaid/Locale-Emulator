@@ -18,5 +18,7 @@
 | [ParkSnoopy/LocaleEmulator](https://github.com/ParkSnoopy/LocaleEmulator/commit/ce5d6dcca23e728b4c100029d95ce3cbd8e65b8f) | Framework 4.8 迁移方向；本项目以统一 props、官方 reference assemblies 和派生配置实现，冷缓存完整产品与 ZIP 回归通过 | 前端保留 LGPL-3.0，Shell 原有 MS-PL 边界不变 |
 | [Cliff-Yang/Locale-Emulator-Core](https://github.com/Cliff-Yang/Locale-Emulator-Core/commit/889fbda1d78e680f50285b8cccff7b44b08630e5) | owner-draw 崩溃线索；原补丁缺少控件类型、HASSTRINGS 与完整消息区分。本项目按 SDK 消息契约重新实现，含 superclass、ComboLBox 与自定义窗口边界，218 项真实控件组合验证 | Core LGPL-3.0 |
 | [SashiRin/Locale-Emulator](https://github.com/SashiRin/Locale-Emulator/commit/9fbf4847688a720b9f2277f68dbb8ca8664b8cdb)，复核快照 `f553456bd902098cfa13a992905ed7532a6cf733` | 只适配 DaylightName 使用实际夏令时名称的修正；保留原有标准时及不自动应用 DST 的产品契约，名称按 SDK WCHAR[32] 边界序列化 | 前端 LGPL-3.0 |
+| [julixian/LocaleEmulatorPlus-Core](https://github.com/julixian/LocaleEmulatorPlus-Core/commit/536f3604ca72e0c9d3537d008873b7e811e810ee) | x64 Core、Loader 和 support 目录的移植参考；本项目按官方 MSVC/SDK 头文件、导入库和 `/GS`、ASLR、DEP 约束重新构建，并修复字体 name 表的堆分配边界。Fork 中关闭 GS、关闭 ASLR、合并可写可执行节等不安全链接选项均拒绝采用；缺少 WDK 的 ntnls/mountmgr 声明保留为本地兼容头 | LGPL-3.0 |
+
 
 上述改动保留原作者、源码与许可归属。dual1208 的必需文件校验和自动汇总经验已经由本项目完整产品打包与实际 ZIP 复测覆盖；未带入其 MSIX 身份及机器专用路径。KidiXDev 的 Core 最终 tree 与原版相同，不制造无净变化的移植。SashiRin Core `72a03dcc368a87dab2e77a1671493247083ea29a` 的旧版 Windows 字体 hook 和前端 MUI 名称分支没有当前目标上的故障证据，暂不带入；Locale Remulator 的 x64 路线与 ARM64 实验不混入当前 x86 产品。

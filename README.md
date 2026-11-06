@@ -2,7 +2,7 @@
 
 在一个仓库中维护 Locale Emulator 的 C# 前端和原生 Core，统一构建、验证及打包。现有配置界面和传统右键菜单继续沿用。
 
-当前维护范围是 **Windows 11 x64 主机运行 x86 目标程序**。x64 目标程序及 ARM64 主机需要独立的兼容性工作。
+当前维护范围是 **Windows 11 x64 主机运行 x86 或 x64 目标程序**。默认 `build.ps1` 生成 x86 包；`build-dual.ps1` 在同一官方工具链上额外生成独立的 x64 包，ARM64 主机仍需要独立的兼容性工作。
 
 ## 构建
 
@@ -20,20 +20,31 @@ pwsh -NoProfile -File ./build.ps1
 
 该入口会编译五个托管项目和两个原生 DLL，构建回归程序，运行测试，收集完整发行文件，再从 ZIP 解包复测。遇到构建、测试或文件校验失败会停止，不产生成功标记。
 
+需要同时生成两个架构包时运行：
+
+```powershell
+pwsh -NoProfile -File ./build-dual.ps1
+```
+
+该入口先完成 x86 的完整构建和回归，再用 Hostx86\x64 官方编译器构建 x64 原生 Core、Loader 和 x64 LEProc，分别装配 ZIP；两包会解包复核 SHA256，并对 x64 Loader 执行目标进程启动烟测。
+
+
 原生构建使用官方编译器、Windows SDK 及系统 DLL 导出生成的导入库，不依赖 `_Compilers`、旧 WDK 或预编译 MyLib 库。相关旧文件保留在上游提交历史中。
 
 主要输出：
 
 | 位置 | 内容 |
 | --- | --- |
-| `Build/Release/` | 前端、原生 DLL 和测试程序 |
-| `artifacts/Locale.Emulator.<版本>.zip` | 完整便携发行包 |
-| `artifacts/package/Locale.Emulator.<版本>/` | 打包目录、构建提交信息与 SHA256SUMS |
+| `Build/Release/` | x86 前端、原生 DLL 和测试程序 |
+| `Build/Dual/x64/` | x64 原生与托管构建中间产物 |
+| `artifacts/Locale.Emulator.<版本>.zip` | 默认 x86 完整便携发行包 |
+| `artifacts/package-dual/Locale.Emulator.<版本>-x86|x64.zip` | x86 与 x64 双架构便携发行包 |
+| `artifacts/package/Locale.Emulator.<版本>/` | 默认包的打包目录、构建提交信息与 SHA256SUMS |
 | `artifacts/logs/` | 各工程构建日志 |
 | `artifacts/tests/source/` | 源码构建产物的运行报告 |
 | `artifacts/tests/package/` | 实际 ZIP 解包后的运行报告 |
 
-Visual Studio 可打开 `LocaleEmulator.sln` 构建完整产品。原生工程目前只有 Release/Win32 配置；解决方案的 Debug 配置也映射到原生 Release。发布和回归以根构建脚本的 Release 配置为准。
+Visual Studio 可打开 `LocaleEmulator.sln` 构建默认 x86 产品；x64 原生与 LEProc 的发布配置由 `build-dual.ps1` 调用官方 Hostx86\x64 工具链完成。发布和回归以构建脚本的 Release 配置为准。
 
 ## 使用
 

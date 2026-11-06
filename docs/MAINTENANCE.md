@@ -2,11 +2,11 @@
 
 ## 当前目标与实现
 
-本轮完成前端与 Core 的历史合并、统一构建与发行、托管及原生回归，以及官方原生工具链迁移。维护范围为 Windows 11 x64 主机上的 x86 目标程序；保留原有界面和传统右键菜单。
+本轮完成前端与 Core 的历史合并、统一构建与发行、托管及原生回归，以及官方原生工具链迁移。维护范围为 Windows 11 x64 主机上的 x86 与 x64 目标程序；默认包保持 x86，双包入口额外生成隔离的 x64 LEProc、Loader 和 Core，界面与 Shell 托管程序集保持 AnyCPU。
 
 合仓提交为 `8d41af63e4a1b163da2a2f654b6a83b33d58e060`，父提交分别是前端 `2f3f30dc5169b3cf051af389ec1dcc52f167a93d` 和 Core `ae7160dc5deb97947396abcd784f9b98b6ee38b3`。Core 的 31 个原始提交均保留；导入时 Native tree 与原始 Core tree 相同。来源和许可见 [SOURCES.md](SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-`build.ps1` 是完整产品构建入口，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。完整入口先完成全部项目的 Clean，再 Build，随后构建测试宿主；安装器按项目引用内嵌实际 DLL，不向源码目录复制二进制，也不重复认领 GUI/启动器的输出。脚本自动收集前端、Core DLL、语言资源、许可、来源、构建提交与文件哈希，并验证实际 ZIP 解包产物。包内保留工具链元数据，解包后检查随包文档的相对链接。
+`build.ps1` 是 x86 完整产品构建入口，`build-dual.ps1` 在其通过后追加 x64 原生与托管构建并装配两个架构包，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。完整入口先完成全部项目的 Clean，再 Build，随后构建测试宿主；安装器按项目引用内嵌实际 DLL，不向源码目录复制二进制，也不重复认领 GUI/启动器的输出。脚本自动收集前端、Core DLL、语言资源、许可、来源、构建提交与文件哈希，并验证实际 ZIP 解包产物。包内保留工具链元数据，解包后检查随包文档的相对链接。
 
 ## 原版行为基线与工具链迁移
 
@@ -54,6 +54,8 @@
 | 发行包复测 | 从实际 ZIP 解包，逐文件 SHA256 验证，再通过相同产品运行回归 |
 | 干净检出集成 | 在没有 Build、bin 或 artifacts 的独立工作树运行完整构建及发行包复测 |
 
+双包入口的 x64 验收还检查 `LEProc.exe`、`LoaderDll.dll` 和 `LocaleEmulator.dll` 的 PE machine、ASLR/NX 属性，并在解包后的 x64 包中用私有临时副本启动 `cmd.exe`。GUI、安装器和 Shell 托管程序集是 AnyCPU 且关闭 Prefer32Bit，由 x86 或 x64 宿主按包运行；x64 包的进程注入链只使用 x64 LEProc 与原生 DLL。
+
 本机运行报告位于 `artifacts/tests/`：`environment.json` 记录环境和产品哈希；`managed.log`、`shell64.log` 记录双架构检查；`native-contracts.log`、`native-directory.log`、`hardening-check.log` 和 `hardening-*.txt` 记录边界及防护；`native-932.txt`/`native-936.txt` 与 `.child` 记录父子结果；`ui-smoke.json` 记录窗口。`result.json` 仅在整轮成功后生成。包内 `build-info.json` 区分提交构建与有未提交修改的开发构建。
 
 测试覆盖具体 API 行为及基本启动，不代表实际游戏的完整渲染、IME、保护程序、交互式 UAC 或所有 Windows 累积更新兼容性。新式 Win11 一级菜单作为后续独立模块，当前使用传统菜单。
@@ -73,8 +75,9 @@
 | KidiXDev 的 CLI 发布与 Core 子模块 | 不带入只覆盖 CLI 的裁剪；本项目统一构建完整产品，Core 原本没有净修复可移植 |
 | Cliff-Yang 的 owner-draw 消息修补 | 真实控件复现后按消息、实际系统类和 HASSTRINGS 语义重写，并覆盖 superclass；不复制原补丁过宽的样式判断 |
 | SashiRin 的字体 hook 与 MUI 时区名 | 采用独立 DaylightName 的明确修正；保留标准时契约并验证 SDK 名称边界。字体 hook 和 MUI 分支仍等待当前目标的具体故障证据 |
+| julixian 的 LocaleEmulatorPlus-Core x64 迁移 | 采用其 x64 源码布局作为移植参考，改用官方 SDK/MSVC 导入库、兼容声明和安全链接选项；修复字体 name 表的堆分配边界。Fork 的 `/GS-`、关闭 ASLR 和 ERW 节合并均拒绝采用，完整决定与 LGPL-3.0 来源见 [SOURCES.md](SOURCES.md) |
 | luojunyuan 的 URI/ARM64 路线 | 不纳入当前 x64 主机上的 x86 基线 |
-| Locale Remulator 与 LE Plus | 保留为后续 x64 路线参考，未复制其实现或混入额外后端 |
+| Locale Remulator 与 ARM64 实验 | 保留为后续 ARM64 路线参考；本轮先完成 x86/x64 双包，未把 ARM64 代码或额外后端混入产品 |
 
 历史调查原件在同级工作区 `Locale-Emulator-comparison`；采用来源的完整 SHA、许可和逐项决定见 [SOURCES.md](SOURCES.md)。仅在新增复现或来源变化时重新评估，避免整体带入 Fork 的机器路径、无净变化提交和未验证功能。
 
