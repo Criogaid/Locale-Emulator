@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals"><ProjectGuid>{CB7C3179-21BA-43E8-AE36-861DAAA5206C}</ProjectGuid></PropertyGroup>
+  <Import Project="..\..\Native\Toolchain.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>DynamicLibrary</ConfigurationType><CharacterSet>Unicode</CharacterSet></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <TargetName>LoaderDll</TargetName>
+    <OutDir>$(ProjectDir)..\..\Build\tests\LoaderInterop\</OutDir>
+    <IntDir>$(ProjectDir)..\..\artifacts\obj\LoaderInteropStub\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile><WarningLevel>Level4</WarningLevel><TreatWarningAsError>true</TreatWarningAsError><RuntimeLibrary>MultiThreaded</RuntimeLibrary><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions></ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="LoaderInteropStub.cpp" /></ItemGroup>
+  <Target Name="CheckLoaderInteropOutput" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Platform)' != 'Win32'" Text="LoaderInteropStub requires Win32." />
+    <PropertyGroup>
+      <LoaderInteropExpectedOutput>$([System.IO.Path]::GetFullPath('$(ProjectDir)..\..\Build\tests\LoaderInterop\'))</LoaderInteropExpectedOutput>
+      <LoaderInteropActualOutput>$([System.IO.Path]::GetFullPath('$(OutDir)'))</LoaderInteropActualOutput>
+    </PropertyGroup>
+    <Error Condition="'$(LoaderInteropActualOutput)' != '$(LoaderInteropExpectedOutput)' Or '$(TargetName)' != 'LoaderDll'" Text="LoaderInteropStub output must remain Build/tests/LoaderInterop/LoaderDll.dll." />
+  </Target>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

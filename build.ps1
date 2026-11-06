@@ -27,10 +27,19 @@ function Invoke-Build {
 
 Invoke-Build 'LocaleEmulator.sln' 'Any CPU' 'product-restore.log' 'Restore'
 Invoke-Build 'tests/Managed/ManagedRegression.csproj' 'AnyCPU' 'managed-restore.log' 'Restore'
-Invoke-Build 'LocaleEmulator.sln' 'Any CPU' 'product-build.log' 'Rebuild'
+Invoke-Build 'tests/Managed/ShellRegressionHost.csproj' 'AnyCPU' 'shell64-restore.log' 'Restore'
+Invoke-Build 'LocaleEmulator.sln' 'Any CPU' 'product-clean.log' 'Clean'
+Invoke-Build 'LocaleEmulator.sln' 'Any CPU' 'product-build.log' 'Build'
 Invoke-Build 'tests/Managed/ManagedRegression.csproj' 'AnyCPU' 'managed-build.log' 'Build'
+Invoke-Build 'tests/Managed/ShellRegressionHost.csproj' 'AnyCPU' 'shell64-build.log' 'Build'
 Invoke-Build 'tests/Native/NativeProbe.vcxproj' 'Win32' 'probe-build.log' 'Build'
 Invoke-Build 'tests/Native/NativeLaunch.vcxproj' 'Win32' 'native-launch-build.log' 'Build'
+Invoke-Build 'tests/Native/NativeContracts.vcxproj' 'Win32' 'native-contracts-build.log' 'Build'
+Invoke-Build 'tests/Native/NativeDirectoryContracts.vcxproj' 'Win32' 'native-directory-build.log' 'Build'
+Invoke-Build 'tests/Native/LoaderInteropStub.vcxproj' 'Win32' 'loader-interop-build.log' 'Build'
+Invoke-Build 'tests/Native/HardeningCheck.vcxproj' 'Win32' 'hardening-check-build.log' 'Build'
+Invoke-Build 'tests/Native/HardeningMessages.vcxproj' 'Win32' 'hardening-messages-build.log' 'Build'
+Invoke-Build 'tests/Native/AllocationContracts.vcxproj' 'Win32' 'allocation-contracts-build.log' 'Build'
 
 $buildDirectory = Join-Path $repository 'Build/Release'
 & (Join-Path $repository 'Scripts/Test.ps1') -BuildDirectory $buildDirectory -ResultsDirectory (Join-Path $artifacts 'tests/source')

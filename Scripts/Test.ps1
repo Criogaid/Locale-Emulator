@@ -22,14 +22,28 @@ New-Item -ItemType Directory -Path $product -Force | Out-Null
 Copy-Item -Path (Join-Path $BuildDirectory '*') -Destination $product -Recurse -Force
 $globalConfiguration = Join-Path $product 'LEConfig.xml'
 if (Test-Path -LiteralPath $globalConfiguration) { Remove-Item -LiteralPath $globalConfiguration }
-foreach ($name in @('ManagedRegression.exe', 'NativeLaunch.exe')) {
-    $source = if ($name -eq 'ManagedRegression.exe') { Join-Path $repository "tests/Managed/bin/Release/$name" } else { Join-Path $repository "Build/Release/$name" }
-    Copy-Item -LiteralPath $source -Destination $product -Force
+foreach ($relative in @(
+    'tests/Managed/bin/Release/ManagedRegression.exe',
+    'tests/Managed/bin/Release/ManagedRegression.exe.config',
+    'tests/Managed/bin/Shell64/Release/ShellRegressionHost.exe',
+    'tests/Managed/bin/Shell64/Release/ShellRegressionHost.exe.config',
+    'Build/Release/NativeLaunch.exe',
+    'Build/Release/NativeContracts.exe',
+    'Build/Release/NativeDirectoryContracts.exe',
+    'Build/Release/HardeningCheck.exe',
+    'Build/Release/HardeningMessages.exe',
+    'Build/Release/AllocationContracts.exe'
+)) {
+    Copy-Item -LiteralPath (Join-Path $repository $relative) -Destination $product -Force
 }
-Copy-Item -LiteralPath (Join-Path $repository 'tests/Managed/bin/Release/ManagedRegression.exe.config') -Destination $product -Force
+$interop = Join-Path $product 'LoaderInterop'
+New-Item -ItemType Directory -Path $interop -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $repository 'Build/tests/LoaderInterop/LoaderDll.dll') -Destination $interop -Force
 $os = Get-ItemProperty -LiteralPath 'HKLM:/SOFTWARE/Microsoft/Windows NT/CurrentVersion'
 $environment = [ordered]@{
     captured_at = (Get-Date).ToUniversalTime().ToString('o')
+    caption = (Get-CimInstance Win32_OperatingSystem).Caption
+    edition = $os.EditionID
     display_version = $os.DisplayVersion
     build = $os.CurrentBuild
     ubr = $os.UBR
@@ -40,6 +54,8 @@ $environment = [ordered]@{
         common = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LECommonLibrary.dll')).Hash
         launcher = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LEProc.exe')).Hash
         gui = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LEGUI.exe')).Hash
+        installer = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LEInstaller.exe')).Hash
+        shell = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LEContextMenuHandler.dll')).Hash
     }
     core_sha256 = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LocaleEmulator.dll')).Hash
     loader_sha256 = (Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'LoaderDll.dll')).Hash
@@ -92,6 +108,11 @@ function Assert-NativeReport {
 }
 
 Invoke-RegressionProcess (Join-Path $product 'ManagedRegression.exe') @() 'managed.log'
+Invoke-RegressionProcess (Join-Path $product 'ShellRegressionHost.exe') @() 'shell64.log'
+Invoke-RegressionProcess (Join-Path $product 'NativeContracts.exe') @() 'native-contracts.log'
+Invoke-RegressionProcess (Join-Path $product 'NativeDirectoryContracts.exe') @() 'native-directory.log'
+Invoke-RegressionProcess (Join-Path $product 'HardeningCheck.exe') @() 'hardening-check.log'
+Invoke-RegressionProcess (Join-Path $product 'AllocationContracts.exe') @() 'allocation-contracts.log'
 $probe = Join-Path $repository 'Build/Release/NativeProbe.exe'
 $targetDirectory = Join-Path $ResultsDirectory 'target with spaces 日本語'
 New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
@@ -127,6 +148,10 @@ try {
         Assert-NativeReport $report $codePage
         if (Test-Path -LiteralPath $globalConfiguration) { throw '独立配置启动创建了无关的全局配置。' }
         Write-Host "PASS NativeCodePage$codePage (conversion, font enumeration, working directory, child)"
+        $hardeningReport = Join-Path $ResultsDirectory "hardening-$codePage.txt"
+        if (Test-Path -LiteralPath $hardeningReport) { Remove-Item -LiteralPath $hardeningReport }
+        Invoke-RegressionProcess (Join-Path $product 'NativeLaunch.exe') @($product, (Join-Path $product 'HardeningMessages.exe'), $hardeningReport, "$codePage", $product) "hardening-$codePage-launch.log"
+        Write-Host "PASS NativeHardening$codePage (EDIT messages, private image permissions, security cookie, CFG host)"
     }
     Write-Host 'PASS ReadOnlyLauncherDirectory'
     $rootDirectory = [IO.Path]::GetPathRoot($targetDirectory)

@@ -6,7 +6,7 @@
 
 合仓提交为 `8d41af63e4a1b163da2a2f654b6a83b33d58e060`，父提交分别是前端 `2f3f30dc5169b3cf051af389ec1dcc52f167a93d` 和 Core `ae7160dc5deb97947396abcd784f9b98b6ee38b3`。Core 的 31 个原始提交均保留；导入时 Native tree 与原始 Core tree 相同。来源和许可见 [SOURCES.md](SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-`build.ps1` 是完整产品构建入口，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。构建脚本自动收集前端、Core DLL、语言资源、许可、来源记录、构建提交与文件哈希，并验证实际 ZIP 解包产物。包内保留工具链元数据，解包后检查随包文档的相对链接，避免来源链接指向缺失文件。
+`build.ps1` 是完整产品构建入口，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。完整入口先完成全部项目的 Clean，再 Build，随后构建测试宿主；安装器按项目引用内嵌实际 DLL，不向源码目录复制二进制，也不重复认领 GUI/启动器的输出。脚本自动收集前端、Core DLL、语言资源、许可、来源、构建提交与文件哈希，并验证实际 ZIP 解包产物。包内保留工具链元数据，解包后检查随包文档的相对链接。
 
 ## 原版行为基线与工具链迁移
 
@@ -28,7 +28,7 @@
 - 对旧式宽字符格式化调用提供有界适配，避免现代声明与旧系统导出调用约定错配；运行时解析 CreateProcessInternalW。
 - 补全 `LeSetupAnsiOemCodeHashNodes` 成功路径返回值，并将缺失返回的 C4715 作为构建错误。
 
-迁移后 Core 由于官方 SEH/延迟加载支持增加直接 KERNEL32 导入，没有 UCRT 或 VC runtime DLL 依赖。在本机早期注入及行为回归通过；其他系统版本仍需相同验证，不能由一次成功推定。
+迁移后 Core 由于官方 SEH/GS 支持增加直接 KERNEL32 导入，没有 UCRT 或 VC runtime DLL 依赖。当前两产品启用 W4/WX、GS、ASLR、DEP 和 SafeSEH，正常及私有映像入口均使用官方 cookie 初始化，代码与数据分节、跳板发布为 RX；Loader 另启用 CFG。核心完整 CFG 的实际失败与私有 NLS 依赖见 [QUALITY.md](QUALITY.md)。本机早期注入及行为回归通过，其他系统版本需相同验证。
 
 ## 已复现并修复的托管问题
 
@@ -40,20 +40,21 @@
 
 ## 实际验证
 
-测试主机：Windows 11 IoT 企业版 LTSC / 24H2 / x64 / **26100.9168**；VS2019 Build Tools 16.11、MSVC 14.29.30133。每轮回归重新读取系统注册表的 DisplayVersion、build、UBR，并记录两个 DLL 哈希。
+测试主机：Windows 11 IoT 企业版 LTSC / 24H2 / x64 / **26100.9168**；VS2019 Build Tools 16.11、MSVC 14.29.30133。每轮回归重新记录 CIM Caption、系统 Edition、DisplayVersion、build、UBR 和实际产品哈希，避免注册表 ProductName 的历史字符串把 Windows 11 误标为 Windows 10。
 
 | 检查 | 实际验证内容 |
 | --- | --- |
 | 完整源码构建 | 五个托管工程与 LoaderDll、LocaleEmulator 两个原生 DLL |
-| 托管回归 | Windows 参数解析往返、真实子进程参数与工作目录、XML 完整读写/默认值/损坏配置、原子保存与非法输入保护、不可用选择与只读翻译、真实 WPF 保存和重试时的状态一致性 |
-| CP932 与 CP936 原生回归 | 真实 LEProc 注入；默认双向转换、显式 932/1252/UTF-8 转换、字体枚举字符集、带空格/Unicode 目标路径、工作目录、子进程继承 |
-| 原生负向检查 | 未注入却期望 CP932 时失败；无效参数返回非零；父进程同时检查子进程退出结果 |
+| 托管回归 | Windows 参数往返、提权/关联参数和真实子进程工作目录、XML 换行与字段读写、原子保存、WPF 状态与只读翻译、时区名称/标准时、语言规则、P/Invoke 可写缓冲区与异常资源回收 |
+| CP932 与 CP936 原生回归 | 真实 LEProc 注入；默认/显式转换、字体字符集、Unicode 路径、目录、子进程继承；218 项 owner-draw 控件组合与自定义类边界，明确记录原生 thunk 跳过数 |
+| 原生 ABI 与防护 | LEB 保护页/溢出、注册表短缓冲区/名称/canary、目录扩容、真实失败注入和回滚；RX 跳板、显式长度保护页、字体指标、EDIT 消息尾部、私有映像权限和 GS cookie、CFG 宿主 |
+| 安装与 Shell | x86/x64 受控宿主验证 DLL 锁定/回滚、内嵌实际产品一致性、注册失败和映射恢复、命令 ID 预算/插入位置/占用数、GDI 与注册表句柄回收 |
 | 只读目录与根目录 | 对隔离产品副本拒绝文件创建，验证独立配置启动无需写安装目录；原生辅助器验证盘符根目录中的父子进程工作目录 |
 | 主窗口启动 | GUI 与安装器实际创建对应框架主窗口并正常关闭；没有点击安装按钮或注册扩展 |
 | 发行包复测 | 从实际 ZIP 解包，逐文件 SHA256 验证，再通过相同产品运行回归 |
 | 干净检出集成 | 在没有 Build、bin 或 artifacts 的独立工作树运行完整构建及发行包复测 |
 
-本机运行报告位于 `artifacts/tests/`，其中 `environment.json` 记录环境、`native-932.txt`/`native-936.txt` 及 `.child` 记录父子结果，`ui-smoke.json` 记录窗口检查，`result.json` 仅在整轮成功后生成。包内的 `build-info.json` 区分正式提交构建与有未提交修改的开发构建。
+本机运行报告位于 `artifacts/tests/`：`environment.json` 记录环境和产品哈希；`managed.log`、`shell64.log` 记录双架构检查；`native-contracts.log`、`native-directory.log`、`hardening-check.log` 和 `hardening-*.txt` 记录边界及防护；`native-932.txt`/`native-936.txt` 与 `.child` 记录父子结果；`ui-smoke.json` 记录窗口。`result.json` 仅在整轮成功后生成。包内 `build-info.json` 区分提交构建与有未提交修改的开发构建。
 
 测试覆盖具体 API 行为及基本启动，不代表实际游戏的完整渲染、IME、保护程序、交互式 UAC 或所有 Windows 累积更新兼容性。新式 Win11 一级菜单作为后续独立模块，当前使用传统菜单。
 
@@ -70,12 +71,12 @@
 | ParkSnoopy 的框架/工具链升级 | 适配到统一 Framework 4.8 目标、官方构建期 reference assemblies 和按目标生成的运行时配置；保留旧项目结构和 x86 边界 |
 | dual1208 的打包/LocalState/静态菜单 | 采用自动汇总完整发行文件的方向；保留当前便携配置位置，未引入新的安装模式和发行身份 |
 | KidiXDev 的 CLI 发布与 Core 子模块 | 不带入只覆盖 CLI 的裁剪；本项目统一构建完整产品，Core 原本没有净修复可移植 |
-| Cliff-Yang 的 owner-draw 消息修补 | 等对应控件故障有本地复现后适配，避免原补丁缺少 HASSTRINGS/消息类型区分的问题 |
-| SashiRin 的字体 hook 与 MUI 时区名 | 等具体软件复现后适配，同时检查 hook 安装/卸载对称性 |
+| Cliff-Yang 的 owner-draw 消息修补 | 真实控件复现后按消息、实际系统类和 HASSTRINGS 语义重写，并覆盖 superclass；不复制原补丁过宽的样式判断 |
+| SashiRin 的字体 hook 与 MUI 时区名 | 采用独立 DaylightName 的明确修正；保留标准时契约并验证 SDK 名称边界。字体 hook 和 MUI 分支仍等待当前目标的具体故障证据 |
 | luojunyuan 的 URI/ARM64 路线 | 不纳入当前 x64 主机上的 x86 基线 |
 | Locale Remulator 与 LE Plus | 保留为后续 x64 路线参考，未复制其实现或混入额外后端 |
 
-历史调查原件在同级工作区 `Locale-Emulator-comparison`；本文件保留实施所需的固定决定，后续仅在新增复现或来源变化时重新评估。
+历史调查原件在同级工作区 `Locale-Emulator-comparison`；采用来源的完整 SHA、许可和逐项决定见 [SOURCES.md](SOURCES.md)。仅在新增复现或来源变化时重新评估，避免整体带入 Fork 的机器路径、无净变化提交和未验证功能。
 
 ## 循环审查与构建依赖整理
 

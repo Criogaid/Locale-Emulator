@@ -11,4 +11,12 @@
 
 前端保留根目录 `COPYING` 和 `COPYING.LESSER`；Shell 示例代码另有 Microsoft Public License，图标来源见上游前端历史。Core 保留 `Native/LICENSE-GPL.txt` 与 `Native/LICENSE-LGPL.txt`。原始 Core README 明确将 `Loader`、`LoaderDll`、`LocaleEmulator` 三目录源码以 LGPL-3.0 授权；Microsoft 工具链、SDK/WDK 等依赖的授权另行适用。
 
-前期调查固定于 2026-11-05：不整体采用其他 Fork。ParkSnoopy 的托管构建升级、dual1208 的打包和用户配置思路作为参考；KidiXDev 的 Core 虽增加 5 个提交，最终 tree 与原版一致。Cliff-Yang 的 owner-draw 修补和 SashiRin 的字体 hook 只在相应问题被复现并有回归验证后考虑适配。Locale Remulator 的 x64 路线和 ARM64 实验不混入本次 Win11 x64 主机上的 x86 维护范围。
+前期调查固定于 2026-11-05，比较基线是前端 `2f3f30dc5169b3cf051af389ec1dcc52f167a93d` 与 Core `ae7160dc5deb97947396abcd784f9b98b6ee38b3`。本轮逐项复现后适配有效改动，不整体合并 Fork；原始比较仓库保存在同级 `Locale-Emulator-comparison`。采用记录如下：
+
+| 来源与固定提交 | 适配内容与依据 | 许可 |
+| --- | --- | --- |
+| [ParkSnoopy/LocaleEmulator](https://github.com/ParkSnoopy/LocaleEmulator/commit/ce5d6dcca23e728b4c100029d95ce3cbd8e65b8f) | Framework 4.8 迁移方向；本项目以统一 props、官方 reference assemblies 和派生配置实现，冷缓存完整产品与 ZIP 回归通过 | 前端保留 LGPL-3.0，Shell 原有 MS-PL 边界不变 |
+| [Cliff-Yang/Locale-Emulator-Core](https://github.com/Cliff-Yang/Locale-Emulator-Core/commit/889fbda1d78e680f50285b8cccff7b44b08630e5) | owner-draw 崩溃线索；原补丁缺少控件类型、HASSTRINGS 与完整消息区分。本项目按 SDK 消息契约重新实现，含 superclass、ComboLBox 与自定义窗口边界，218 项真实控件组合验证 | Core LGPL-3.0 |
+| [SashiRin/Locale-Emulator](https://github.com/SashiRin/Locale-Emulator/commit/9fbf4847688a720b9f2277f68dbb8ca8664b8cdb)，复核快照 `f553456bd902098cfa13a992905ed7532a6cf733` | 只适配 DaylightName 使用实际夏令时名称的修正；保留原有标准时及不自动应用 DST 的产品契约，名称按 SDK WCHAR[32] 边界序列化 | 前端 LGPL-3.0 |
+
+上述改动保留原作者、源码与许可归属。dual1208 的必需文件校验和自动汇总经验已经由本项目完整产品打包与实际 ZIP 复测覆盖；未带入其 MSIX 身份及机器专用路径。KidiXDev 的 Core 最终 tree 与原版相同，不制造无净变化的移植。SashiRin Core `72a03dcc368a87dab2e77a1671493247083ea29a` 的旧版 Windows 字体 hook 和前端 MUI 名称分支没有当前目标上的故障证据，暂不带入；Locale Remulator 的 x64 路线与 ARM64 实验不混入当前 x86 产品。

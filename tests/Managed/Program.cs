@@ -18,6 +18,9 @@ namespace ManagedRegression
         private static int Main(string[] args)
         {
             Console.OutputEncoding = new UTF8Encoding(false);
+            int childExitCode;
+            if (LaunchInteropRegression.TryRunChild(args, out childExitCode))
+                return childExitCode;
             if (args.Length > 0 && args[0] == "--child")
             {
                 Console.WriteLine(Encode(Environment.CurrentDirectory));
@@ -53,12 +56,22 @@ namespace ManagedRegression
                 GlobalConfigCreationPreservesExistingFile,
                 SaveFailureIsObservable,
                 SerializationFailurePreservesExistingConfig,
+                LaunchRegression.ElevationRequestPreservesRelativePathsAndArguments,
+                LaunchRegression.AssociationArgumentsReachChild,
+                LaunchRegression.SerializedLanguageRulesUseWindowsLanguageKey,
+                LaunchRegression.TimezoneNamesAndStandardTimeContract,
+                LaunchRegression.LongValidTimezoneIdIsAccepted,
+                LaunchRegression.TimezoneNamesAreBoundedAndTerminated,
+                LaunchInteropRegression.LoaderSdkBoundaryAndHandleCleanup,
+                LaunchInteropRegression.LoaderMissingDllReleasesAllocation
+            }.Concat(ShellRegression.Tests).Concat(new Action[]
+            {
                 WpfRegression.AppConfigSaveFailureDoesNotLaunchOrShutdown,
                 WpfRegression.GlobalSaveFailureKeepsSelectedProfile,
                 WpfRegression.GlobalSaveAsFailureKeepsProfiles,
                 WpfRegression.UnavailableProfileSelectionPreservesConfiguration,
                 WpfRegression.ReadOnlyLanguageLoadsAndReleasesFile
-            };
+            }).ToArray();
             var failures = 0;
             foreach (var test in tests)
             {
@@ -208,7 +221,7 @@ namespace ManagedRegression
             {
                 var path = Path.Combine(directory, "application.le.config");
                 var profile = new LEProfile("日本語 & <profile> \"name\"", Guid.NewGuid().ToString(), true,
-                    "--title \"A & B <C>\" \"\" C:\\folder with space\\", "ja-JP", "Tokyo Standard Time",
+                    "--title \"A & B <C>\" \"\" C:\\folder with space\\ \"first\rsecond\r\nthird\nfourth\t日本語\"", "ja-JP", "Tokyo Standard Time",
                     true, false, true, true);
                 LEConfig.SaveApplicationConfigFile(path, profile);
                 var loaded = LEConfig.GetProfiles(path);

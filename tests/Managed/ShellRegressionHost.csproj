@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>obj\Shell64\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{9F07B391-7CDB-4CF1-A9DB-FB7FC50CEEBE}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ManagedRegression</RootNamespace>
+    <AssemblyName>ShellRegressionHost</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <OutputPath>bin\Shell64\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Compile Include="ShellRegression.cs" />
+    <Compile Include="ShellRegressionHost.cs" />
+    <ProjectReference Include="..\..\LECommonLibrary\LECommonLibrary.csproj">
+      <Project>{C4DEF32B-8FBB-41B6-80DC-C60339402323}</Project>
+      <Name>LECommonLibrary</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\LEContextMenuHandler\LEContextMenuHandler.csproj">
+      <Project>{0041073D-2FA7-4B35-B904-9C606C89C8CD}</Project>
+      <Name>LEContextMenuHandler</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\LEInstaller\LEInstaller.csproj">
+      <Project>{E218923D-59A4-4FA5-B4BC-E540290DA3F8}</Project>
+      <Name>LEInstaller</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

@@ -24,6 +24,9 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="System.Xaml" />
     <Compile Include="WpfRegression.cs" />
+    <Compile Include="ShellRegression.cs" />
+    <Compile Include="LaunchRegression.cs" />
+    <Compile Include="LaunchInteropRegression.cs" />
     <Compile Include="Program.cs" />
     <ProjectReference Include="..\..\LECommonLibrary\LECommonLibrary.csproj">
       <Project>{C4DEF32B-8FBB-41B6-80DC-C60339402323}</Project>
@@ -36,6 +39,11 @@
     <ProjectReference Include="..\..\LEGUI\LEGUI.csproj">
       <Project>{33B8F5CA-34A7-4826-BAD9-7CEC63DF4D0C}</Project>
       <Name>LEGUI</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\LEInstaller\LEInstaller.csproj">
+      <Project>{E218923D-59A4-4FA5-B4BC-E540290DA3F8}</Project>
+      <Name>LEInstaller</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
