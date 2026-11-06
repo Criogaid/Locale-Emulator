@@ -38,7 +38,8 @@ pwsh -NoProfile -File ./build-dual.ps1
 | `Build/Release/` | x86 前端、原生 DLL 和测试程序 |
 | `Build/Dual/x64/` | x64 原生与托管构建中间产物 |
 | `artifacts/Locale.Emulator.<版本>.zip` | 默认 x86 完整便携发行包 |
-| `artifacts/package-dual/Locale.Emulator.<版本>-x86|x64.zip` | x86 与 x64 双架构便携发行包 |
+| `artifacts/package-dual/Locale.Emulator.<版本>-x86.zip` | x86 双架构发行入口生成的 x86 便携包 |
+| `artifacts/package-dual/Locale.Emulator.<版本>-x64.zip` | x86 双架构发行入口生成的 x64 便携包 |
 | `artifacts/package/Locale.Emulator.<版本>/` | 默认包的打包目录、构建提交信息与 SHA256SUMS |
 | `artifacts/logs/` | 各工程构建日志 |
 | `artifacts/tests/source/` | 源码构建产物的运行报告 |
