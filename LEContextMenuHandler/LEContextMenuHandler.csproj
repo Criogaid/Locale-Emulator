@@ -36,9 +36,6 @@
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
-  <PropertyGroup>
-    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
-  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Configuration.Install" />
@@ -86,9 +83,9 @@
     <Content Include="Resources\purple.bmp" />
     <None Include="Resources\yellow%40200.bmp" />
     <Content Include="Resources\yellow.bmp" />
-    <None Include="Lang\DefaultLanguage.xml">
-      <SubType>Designer</SubType>
-    </None>
+    <Content Include="Lang\*.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LECommonLibrary\LECommonLibrary.csproj">
@@ -97,21 +94,4 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PostBuildEvent>mkdir "$(TargetDir)Lang\"
-copy /Y "$(ProjectDir)Lang\*.xml" "$(TargetDir)Lang\"
-copy /Y "$(TargetPath)" "$(SolutionDir)LEInstaller\Resources\"
-</PostBuildEvent>
-  </PropertyGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
 </Project>

@@ -122,6 +122,17 @@ namespace LECommonLibrary
         /// <param name="args"></param>
         public static void RunWithElevatedProcess(string executable, string[] args)
         {
+            var shExecInfo = CreateElevationRequest(executable, args);
+
+            if (ShellExecuteEx(ref shExecInfo) == false)
+            {
+                throw new Exception("Error when run with elevated LE.\r\n" + $"Executable: {executable}\r\n"
+                                    + $"Arguments: {shExecInfo.lpParameters}");
+            }
+        }
+
+        private static SHELLEXECUTEINFO CreateElevationRequest(string executable, string[] args)
+        {
             var arg = args == null ? string.Empty : WindowsCommandLine.JoinArguments(args);
 
             var shExecInfo = new SHELLEXECUTEINFO();
@@ -133,15 +144,8 @@ namespace LECommonLibrary
             shExecInfo.lpVerb = "runas";
             shExecInfo.lpFile = executable;
             shExecInfo.lpParameters = arg;
-            shExecInfo.lpDirectory = Path.GetDirectoryName(executable);
-
-            ;
-
-            if (ShellExecuteEx(ref shExecInfo) == false)
-            {
-                throw new Exception("Error when run with elevated LE.\r\n" + $"Executable: {executable}\r\n"
-                                    + $"Arguments: {arg}");
-            }
+            shExecInfo.lpDirectory = Environment.CurrentDirectory;
+            return shExecInfo;
         }
 
         [DllImport("shell32.dll", CharSet = CharSet.Auto)]

@@ -19,7 +19,9 @@ namespace LEInstaller
 
             using (var key = rootName.CreateSubKey(keyName))
             {
-                key?.SetValue(null, friendlyName);
+                if (key == null)
+                    throw new InvalidOperationException("Cannot create the context menu registry key.");
+                key.SetValue(null, friendlyName);
             }
         }
 
@@ -34,7 +36,10 @@ namespace LEInstaller
         {
             var rootName = allUsers ? Registry.LocalMachine : Registry.CurrentUser;
 
-            return rootName.OpenSubKey(keyName, false) != null;
+            using (var key = rootName.OpenSubKey(keyName, false))
+            {
+                return key != null;
+            }
         }
     }
 }

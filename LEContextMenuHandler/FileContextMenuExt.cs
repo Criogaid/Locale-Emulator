@@ -38,8 +38,8 @@ namespace LEContextMenuHandler
     public class FileContextMenuExt : IShellExtInit, IContextMenu
     {
         // The name of the selected file.
-        private readonly IntPtr _menuBmpBlue = IntPtr.Zero;
-        private readonly IntPtr _menuBmpYellow = IntPtr.Zero;
+        private IntPtr _menuBmpBlue = IntPtr.Zero;
+        private IntPtr _menuBmpYellow = IntPtr.Zero;
         private readonly List<LEMenuItem> menuItems = new List<LEMenuItem>();
         private IntPtr _menuBmpGray = IntPtr.Zero;
         private IntPtr _menuBmpPink = IntPtr.Zero;
@@ -56,10 +56,10 @@ namespace LEContextMenuHandler
             _menuBmpYellow = is4K ? Resource.yellow_200.GetHbitmap() : Resource.yellow.GetHbitmap();
 
             //Load default items.
-            menuItems.Add(new LEMenuItem(I18n.GetString("Submenu"), true, null, _menuBmpYellow, ""));
-            menuItems.Add(new LEMenuItem(I18n.GetString("RunDefault"), true, null, _menuBmpYellow, "-run \"%APP%\""));
-            menuItems.Add(new LEMenuItem(I18n.GetString("ManageApp"), true, null, _menuBmpGray, "-manage \"%APP%\""));
-            menuItems.Add(new LEMenuItem(I18n.GetString("ManageAll"), true, null, _menuBmpBlue, "-global"));
+            menuItems.Add(new LEMenuItem(I18n.GetString("Submenu"), null, _menuBmpYellow, ""));
+            menuItems.Add(new LEMenuItem(I18n.GetString("RunDefault"), null, _menuBmpYellow, "-run \"%APP%\""));
+            menuItems.Add(new LEMenuItem(I18n.GetString("ManageApp"), null, _menuBmpGray, "-manage \"%APP%\""));
+            menuItems.Add(new LEMenuItem(I18n.GetString("ManageAll"), null, _menuBmpBlue, "-global"));
 
             //If global config does not exist, create a new one.
             LEConfig.CheckGlobalConfigFile(true);
@@ -68,7 +68,6 @@ namespace LEContextMenuHandler
             Array.ForEach(LEConfig.GetProfiles(),
                           p =>
                           menuItems.Add(new LEMenuItem(p.Name,
-                                                       true,
                                                        p.ShowInMainMenu,
                                                        _menuBmpPink,
                                                        $"-runas \"{p.Guid}\" \"%APP%\"")));
@@ -185,16 +184,17 @@ namespace LEContextMenuHandler
 
         ~FileContextMenuExt()
         {
-            if (_menuBmpPink != IntPtr.Zero)
-            {
-                NativeMethods.DeleteObject(_menuBmpPink);
-                _menuBmpPink = IntPtr.Zero;
-            }
-            if (_menuBmpGray != IntPtr.Zero)
-            {
-                NativeMethods.DeleteObject(_menuBmpGray);
-                _menuBmpGray = IntPtr.Zero;
-            }
+            ReleaseBitmap(ref _menuBmpPink);
+            ReleaseBitmap(ref _menuBmpGray);
+            ReleaseBitmap(ref _menuBmpBlue);
+            ReleaseBitmap(ref _menuBmpYellow);
+        }
+
+        private static void ReleaseBitmap(ref IntPtr bitmap)
+        {
+            var handle = System.Threading.Interlocked.Exchange(ref bitmap, IntPtr.Zero);
+            if (handle != IntPtr.Zero)
+                NativeMethods.DeleteObject(handle);
         }
 
         private void OnVerbDisplayFileName(string cmd)
@@ -206,7 +206,6 @@ namespace LEContextMenuHandler
         private int RegisterMenuItem(uint id,
                                      uint idCmdFirst,
                                      string text,
-                                     bool enabled,
                                      IntPtr bitmap,
                                      IntPtr subMenu,
                                      uint position,
@@ -226,7 +225,7 @@ namespace LEContextMenuHandler
             sub.fType = MFT.MFT_STRING;
             sub.dwTypeData = text;
             sub.hSubMenu = subMenu;
-            sub.fState = enabled ? MFS.MFS_ENABLED : MFS.MFS_DISABLED;
+            sub.fState = MFS.MFS_ENABLED;
             sub.hbmpItem = bitmap;
 
             if (!NativeMethods.InsertMenuItem(registerTo, position, true, ref sub))
@@ -278,73 +277,93 @@ namespace LEContextMenuHandler
             uint idCmdLast,
             uint uFlags)
         {
-            // If uFlags include CMF_DEFAULTONLY then we should not do anything.
-            if (((uint)CMF.CMF_DEFAULTONLY & uFlags) != 0)
-            {
-                return WinError.MAKE_HRESULT(WinError.SEVERITY_SUCCESS, 0, 0);
-            }
+            if (((uint)CMF.CMF_DEFAULTONLY & uFlags) != 0 || idCmdLast < idCmdFirst)
+                return 0;
 
-            // Add a separator.
-            var sep = new MENUITEMINFO();
-            sep.cbSize = (uint)Marshal.SizeOf(sep);
-            sep.fMask = MIIM.MIIM_TYPE;
-            sep.fType = MFT.MFT_SEPARATOR;
-            if (!NativeMethods.InsertMenuItem(hMenu, 0, true, ref sep))
+            // Keep offsets equal to menuItems indices for InvokeCommand.
+            int count = (int)Math.Min((ulong)menuItems.Count,
+                Math.Min((ulong)idCmdLast - idCmdFirst + 1, (ulong)ushort.MaxValue));
+            if (count < 2)
+                return 0;
+
+            var subMenu = NativeMethods.CreatePopupMenu();
+            if (subMenu == IntPtr.Zero)
                 return Marshal.GetHRForLastWin32Error();
-
-            // Register item 0: Submenu
-            var hSubMenu = NativeMethods.CreatePopupMenu();
-            var item = menuItems[0];
-            RegisterMenuItem(0, idCmdFirst, item.Text, true, item.Bitmap, hSubMenu, 1, hMenu);
-
-            // Register item 1: RunDefault
-            item = menuItems[1];
-            RegisterMenuItem(1, idCmdFirst, item.Text, true, item.Bitmap, IntPtr.Zero, 0, hSubMenu);
-
-            // Add a separator.
-            sep = new MENUITEMINFO();
-            sep.cbSize = (uint)Marshal.SizeOf(sep);
-            sep.fMask = MIIM.MIIM_TYPE;
-            sep.fType = MFT.MFT_SEPARATOR;
-            NativeMethods.InsertMenuItem(hSubMenu, 1, true, ref sep);
-
-            // Register item 2 (Submenu->ManageApp).
-            item = menuItems[2];
-            RegisterMenuItem(2, idCmdFirst, item.Text, true, item.Bitmap, IntPtr.Zero, 2, hSubMenu);
-
-            // Register item 3 (Submenu->ManageAll).
-            item = menuItems[3];
-            RegisterMenuItem(3, idCmdFirst, item.Text, true, item.Bitmap, IntPtr.Zero, 3, hSubMenu);
-
-            //Register user-defined profiles.
-            //We should count down to 4.
-            for (var i = menuItems.Count - 1; i > 3; i--)
+            uint inserted = 0;
+            bool attached = false;
+            try
             {
-                item = menuItems[i];
-                if (item.ShowInMainMenu == true)
+                uint position = 0;
+                for (int i = 4; i < count; i++)
                 {
-                    RegisterMenuItem((uint)i, idCmdFirst, item.Text, item.Enabled, item.Bitmap, IntPtr.Zero, 1, hMenu);
+                    var profile = menuItems[i];
+                    if (profile.ShowInMainMenu != true)
+                        Marshal.ThrowExceptionForHR(RegisterMenuItem((uint)i, idCmdFirst, profile.Text,
+                            profile.Bitmap, IntPtr.Zero, position++, subMenu));
                 }
-                else
+                if (position > 0)
+                    InsertSeparator(subMenu, position++);
+                var item = menuItems[1];
+                Marshal.ThrowExceptionForHR(RegisterMenuItem(1, idCmdFirst, item.Text,
+                    item.Bitmap, IntPtr.Zero, position++, subMenu));
+                if (count > 2)
+                    InsertSeparator(subMenu, position++);
+                for (int i = 2; i < Math.Min(count, 4); i++)
                 {
-                    RegisterMenuItem((uint)i, idCmdFirst, item.Text, item.Enabled, item.Bitmap, IntPtr.Zero, 0, hSubMenu);
+                    item = menuItems[i];
+                    Marshal.ThrowExceptionForHR(RegisterMenuItem((uint)i, idCmdFirst, item.Text,
+                        item.Bitmap, IntPtr.Zero, position++, subMenu));
                 }
+
+                InsertSeparator(hMenu, iMenu);
+                inserted++;
+                for (int i = 4; i < count; i++)
+                {
+                    item = menuItems[i];
+                    if (item.ShowInMainMenu == true)
+                    {
+                        Marshal.ThrowExceptionForHR(RegisterMenuItem((uint)i, idCmdFirst, item.Text,
+                            item.Bitmap, IntPtr.Zero, iMenu + inserted, hMenu));
+                        inserted++;
+                    }
+                }
+                item = menuItems[0];
+                Marshal.ThrowExceptionForHR(RegisterMenuItem(0, idCmdFirst, item.Text,
+                    item.Bitmap, subMenu, iMenu + inserted, hMenu));
+                attached = true;
+                return count;
             }
-
-            // Add a separator.
-            sep = new MENUITEMINFO();
-            sep.cbSize = (uint)Marshal.SizeOf(sep);
-            sep.fMask = MIIM.MIIM_TYPE;
-            sep.fType = MFT.MFT_SEPARATOR;
-            NativeMethods.InsertMenuItem(hSubMenu,
-                                         (uint)menuItems.FindAll(t => t.ShowInMainMenu != true).Count - 4,
-                                         true,
-                                         ref sep);
-
-            // Return an HRESULT value with the severity set to SEVERITY_SUCCESS. 
-            // Set the code value to the total number of items added.
-            return WinError.MAKE_HRESULT(WinError.SEVERITY_SUCCESS, 0, 3 + (uint)menuItems.Count);
+            catch (Exception e)
+            {
+                while (inserted > 0)
+                {
+                    RemoveMenu(hMenu, iMenu, 0x400); // MF_BYPOSITION
+                    inserted--;
+                }
+                return Marshal.GetHRForException(e);
+            }
+            finally
+            {
+                if (!attached)
+                    DestroyMenu(subMenu);
+            }
         }
+
+        private static void InsertSeparator(IntPtr menu, uint position)
+        {
+            var separator = new MENUITEMINFO();
+            separator.cbSize = (uint)Marshal.SizeOf(separator);
+            separator.fMask = MIIM.MIIM_FTYPE;
+            separator.fType = MFT.MFT_SEPARATOR;
+            if (!NativeMethods.InsertMenuItem(menu, position, true, ref separator))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool DestroyMenu(IntPtr menu);
+
+        [DllImport("user32.dll")]
+        private static extern bool RemoveMenu(IntPtr menu, uint position, uint flags);
 
         /// <summary>
         ///     Carry out the command associated with a shortcut menu item.

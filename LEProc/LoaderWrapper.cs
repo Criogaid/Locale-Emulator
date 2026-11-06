@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using Amemiya.Extensions;
@@ -12,7 +11,6 @@ namespace LEProc
     {
         private const uint CREATE_NORMAL = 0x00000000;
         private const uint CREATE_SUSPENDED = 0x00000004;
-        private byte[] _defaultFaceName = new byte[64];
         private LEB _leb;
         private LERegistryRedirector _registry = new LERegistryRedirector(0);
 
@@ -120,24 +118,15 @@ namespace LEProc
             get { return _leb.Timezone.GetStandardName(); }
             set
             {
-                if (value.Length > 32)
-                    throw new Exception("String too long.");
-
-                if (false == Enumerable.Any(TimeZoneInfo.GetSystemTimeZones(), item => item.Id == value))
-                    throw new Exception($"Timezone \"{value}\" not found in your system.");
-
                 var tzi = TimeZoneInfo.FindSystemTimeZoneById(value);
                 _leb.Timezone.SetStandardName(tzi.StandardName);
-                _leb.Timezone.SetDaylightName(tzi.StandardName);
+                _leb.Timezone.SetDaylightName(tzi.DaylightName);
 
                 var tzi2 = ReadTZIFromRegistry(value);
                 _leb.Timezone.Bias = tzi2.Bias;
                 _leb.Timezone.StandardBias = tzi2.StandardBias;
-                _leb.Timezone.DaylightBias = 0; //tzi2.DaylightBias;
-
-                //SYSTEMTIME is not the same with TIME_FIELDS (from RTL)
-                //_leb.Timezone.StandardDate = SYSTEMTIME_To_TIME_FIELDS(tzi2.StandardDate);
-                //_leb.Timezone.DaylightDate = SYSTEMTIME_To_TIME_FIELDS(tzi2.DaylightDate);
+                // Persisted profiles have always used standard time without DST transitions.
+                _leb.Timezone.DaylightBias = 0;
             }
         }
 
@@ -177,46 +166,46 @@ namespace LEProc
             newLEB = newLEB.CombineWith(_registry.GetBinaryData());
 
             var locLEB = Marshal.AllocHGlobal(newLEB.Length);
-            Marshal.Copy(newLEB, 0, locLEB, newLEB.Length);
-
-            AttachConsole(ATTACH_PARENT_PROCESS);
-
-            var startupInfo = new STARTUPINFO();
             var processInformation = new PROCESS_INFORMATION();
-
-            var ret = LeCreateProcess(locLEB,
-                                   ApplicationName,
-                                   CommandLine,
-                                   CurrentDirectory,
-                                   DebugMode ? CREATE_SUSPENDED : CREATE_NORMAL,
-                                   ref startupInfo,
-                                   out processInformation,
-                                   IntPtr.Zero,
-                                   IntPtr.Zero,
-                                   IntPtr.Zero,
-                                   IntPtr.Zero);
-
-            Marshal.FreeHGlobal(locLEB);
-
-            if (ret == 0)
+            try
             {
-                WaitForSingleObject(processInformation.hProcess, INFINITE);
-                CloseHandle(processInformation.hProcess);
-                CloseHandle(processInformation.hThread);
+                Marshal.Copy(newLEB, 0, locLEB, newLEB.Length);
+                AttachConsole(ATTACH_PARENT_PROCESS);
+                var startupInfo = new STARTUPINFO { cb = Marshal.SizeOf(typeof(STARTUPINFO)) };
+                var commandLine = CommandLine == null ? null : new StringBuilder(CommandLine);
+                var ret = LeCreateProcess(locLEB, ApplicationName, commandLine, CurrentDirectory,
+                    DebugMode ? CREATE_SUSPENDED : CREATE_NORMAL, ref startupInfo, out processInformation,
+                    IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                if (ret == 0)
+                {
+                    var waitResult = WaitForSingleObject(processInformation.hProcess, INFINITE);
+                    if (waitResult == INFINITE)
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if (waitResult != 0)
+                        throw new InvalidOperationException("等待进程返回了意外状态：" + waitResult);
+                }
+                return ret;
             }
-
-            return ret;
+            finally
+            {
+                if (processInformation.hThread != IntPtr.Zero)
+                    CloseHandle(processInformation.hThread);
+                if (processInformation.hProcess != IntPtr.Zero)
+                    CloseHandle(processInformation.hProcess);
+                Marshal.FreeHGlobal(locLEB);
+            }
         }
 
-        private static byte[] SetBytes(byte[] bytesInput, IEnumerable<byte> bytesValue)
+        private static byte[] EncodeTimezoneName(string name)
         {
-            var i = 0;
-            foreach (var byteChar in bytesValue)
-            {
-                bytesInput[i] = byteChar;
-                i++;
-            }
-            return bytesInput;
+            // WCHAR[32] includes the terminator; registry IDs have no such limit.
+            const int maxNameLength = 31;
+            var length = Math.Min(name.Length, maxNameLength);
+            if (length > 0 && char.IsHighSurrogate(name[length - 1]))
+                length--;
+            var result = new byte[64];
+            Encoding.Unicode.GetBytes(name, 0, length, result, 0);
+            return result;
         }
 
         public static T BytesToStruct<T>(byte[] bytes)
@@ -232,21 +221,6 @@ namespace LEProc
             {
                 Marshal.FreeHGlobal(buffer);
             }
-        }
-
-        private TIME_FIELDS SYSTEMTIME_To_TIME_FIELDS(_SYSTEMTIME st)
-        {
-            return new TIME_FIELDS
-                   {
-                       Year = st.wYear,
-                       Month = st.wMonth,
-                       Day = st.wDay,
-                       Hour = st.wHour,
-                       Minute = st.wMinute,
-                       Second = st.wSecond,
-                       Milliseconds = st.wMilliseconds,
-                       Weekday = st.wDayOfWeek
-                   };
         }
 
         private _REG_TZI_FORMAT ReadTZIFromRegistry(string id)
@@ -270,7 +244,7 @@ namespace LEProc
             public uint dwThreadId;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct STARTUPINFO
         {
             public int cb;
@@ -296,7 +270,7 @@ namespace LEProc
         [DllImport("LoaderDll.dll", CharSet = CharSet.Unicode)]
         public static extern uint LeCreateProcess(IntPtr leb,
                                                   [MarshalAs(UnmanagedType.LPWStr), In] string applicationName,
-                                                  [MarshalAs(UnmanagedType.LPWStr), In] string commandLine,
+                                                  [In, Out] StringBuilder commandLine,
                                                   [MarshalAs(UnmanagedType.LPWStr), In] string currentDirectory,
                                                   uint creationFlags,
                                                   ref STARTUPINFO startupInfo,
@@ -332,16 +306,6 @@ namespace LEProc
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal struct PML_PROCESS_INFORMATION
-        {
-            internal IntPtr hProcess;
-            internal IntPtr hThread;
-            internal uint dwProcessId;
-            internal uint dwThreadId;
-            internal IntPtr FirstCallLdrLoadDll;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
         internal struct RTL_TIME_ZONE_INFORMATION
         {
             internal int Bias;
@@ -365,7 +329,7 @@ namespace LEProc
 
             public void SetStandardName(string name)
             {
-                StandardName = SetBytes(new byte[64], Encoding.Unicode.GetBytes(name));
+                StandardName = EncodeTimezoneName(name);
             }
 
             public string GetDaylightName()
@@ -375,10 +339,11 @@ namespace LEProc
 
             public void SetDaylightName(string name)
             {
-                DaylightName = SetBytes(new byte[64], Encoding.Unicode.GetBytes(name));
+                DaylightName = EncodeTimezoneName(name);
             }
         }
 
+        [StructLayout(LayoutKind.Sequential)]
         private struct _REG_TZI_FORMAT
         {
             internal int Bias;

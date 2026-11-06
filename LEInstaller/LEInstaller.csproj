@@ -45,10 +45,6 @@
     <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="LECommonLibrary, Version=0.0.0.0, Culture=neutral, PublicKeyToken=a5ce8326c28d7c91, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\LECommonLibrary\bin\Release\LECommonLibrary.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration.Install" />
     <Reference Include="System.Core" />
@@ -73,22 +69,12 @@
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <SubType>Designer</SubType>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
     <None Include="app.manifest" />
     <None Include="key.snk" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
@@ -97,21 +83,32 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="icon.ico" />
-    <None Include="Resources\LECommonLibrary.dll" />
-    <None Include="Resources\LEContextMenuHandler.dll" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\LECommonLibrary\LECommonLibrary.csproj">
+      <Project>{C4DEF32B-8FBB-41B6-80DC-C60339402323}</Project>
+      <Name>LECommonLibrary</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
     <ProjectReference Include="..\LEContextMenuHandler\LEContextMenuHandler.csproj">
       <Project>{0041073D-2FA7-4B35-B904-9C606C89C8CD}</Project>
       <Name>LEContextMenuHandler</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
+  <Target Name="EmbedShellPayloads" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="@(ProjectReference)" Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration);Platform=$(Platform)">
+      <Output TaskParameter="TargetOutputs" ItemName="_InstallerPayload" />
+    </MSBuild>
+    <ItemGroup>
+      <EmbeddedResource Include="@(_InstallerPayload)">
+        <LogicalName>%(Filename)%(Extension)</LogicalName>
+        <WithCulture>false</WithCulture>
+      </EmbeddedResource>
+    </ItemGroup>
   </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
 </Project>

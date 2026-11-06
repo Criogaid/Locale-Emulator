@@ -20,16 +20,32 @@ namespace LEProc
             if (!File.Exists(absolutePath))
                 throw new FileNotFoundException("找不到目标程序。", absolutePath);
 
-            // 配置参数已经是完整命令行，不再分词或转义。
-            var parameters = string.IsNullOrEmpty(rawParameters)
-                ? WindowsCommandLine.JoinArguments(arguments)
-                : rawParameters;
+            var parameters = GetParameters(rawParameters, arguments);
             return new LaunchPlan
             {
                 ApplicationName = absolutePath,
                 CommandLine = WindowsCommandLine.QuoteArgument(absolutePath) + " " + parameters,
                 CurrentDirectory = Path.GetDirectoryName(absolutePath)
             };
+        }
+
+        internal static LaunchPlan CreateAssociated(string path, string applicationName, string template,
+            string rawParameters, IEnumerable<string> arguments)
+        {
+            var plan = Create(path, rawParameters, arguments);
+            plan.ApplicationName = applicationName.Trim('"');
+            plan.CommandLine = WindowsCommandLine.QuoteArgument(plan.ApplicationName) + " "
+                + template.Replace("%1", Path.GetFullPath(path))
+                    .Replace("%*", GetParameters(rawParameters, arguments));
+            return plan;
+        }
+
+        private static string GetParameters(string rawParameters, IEnumerable<string> arguments)
+        {
+            // 配置参数已经是完整命令行，不再分词或转义。
+            return string.IsNullOrEmpty(rawParameters)
+                ? WindowsCommandLine.JoinArguments(arguments)
+                : rawParameters;
         }
     }
 }

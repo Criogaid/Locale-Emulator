@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -8,7 +9,6 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using System.Xml.Linq;
-using LEInstaller.Properties;
 using System.Security.Principal;
 
 namespace LEInstaller
@@ -17,6 +17,7 @@ namespace LEInstaller
     {
         private int cmdMode = 0;
         private readonly string crtDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        private Exception operationError;
         
         public Form1(int CmdMode=0)
         {
@@ -83,7 +84,13 @@ namespace LEInstaller
             }
 
             DeleteOldFiles();
-            ReplaceDll();
+            if (!ReplaceDll())
+            {
+                buttonInstall.Enabled = false;
+                buttonInstallAllUsers.Enabled = false;
+                ShowOperationError();
+                return;
+            }
 
             AddShieldToButton(buttonInstallAllUsers);
             AddShieldToButton(buttonUninstallAllUsers);
@@ -107,7 +114,11 @@ namespace LEInstaller
 
         private void buttonInstall_Click(object sender, EventArgs e)
         {
-            DoRegister(false);
+            if (!DoRegister(false))
+            {
+                ShowOperationError();
+                return;
+            }
 
             NotifyShell();
 
@@ -135,7 +146,11 @@ namespace LEInstaller
                 return;
             }
 
-            DoRegister(true);
+            if (!DoRegister(true))
+            {
+                ShowOperationError();
+                return;
+            }
 
             NotifyShell();
 
@@ -173,7 +188,11 @@ namespace LEInstaller
 
         private void buttonUninstall_Click(object sender, EventArgs e)
         {
-            DoUnRegister(false);
+            if (!DoUnRegister(false))
+            {
+                ShowOperationError();
+                return;
+            }
 
             NotifyShell();
 
@@ -201,7 +220,11 @@ namespace LEInstaller
                 return;
             }
 
-            DoUnRegister(true);
+            if (!DoUnRegister(true))
+            {
+                ShowOperationError();
+                return;
+            }
 
             NotifyShell();
 
@@ -220,59 +243,93 @@ namespace LEInstaller
             Environment.Exit(0);
         }
 
-        private void DoRegister(bool allUsers)
+        private bool DoRegister(bool allUsers)
         {
-            try
-            {
-                if (!allUsers)
-                    OverrideHKCR();
-
-                var rs = new RegistrationServices();
-                rs.RegisterAssembly(Assembly.LoadFrom(Path.Combine(crtDir, @"LEContextMenuHandler.dll")),
-                    AssemblyRegistrationFlags.SetCodeBase);
-
-                ShellExtensionManager.RegisterShellExtContextMenuHandler(allUsers);
-
-                if (!allUsers)
-                    OverrideHKCR(true);
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(this, e.Message + "\r\n\r\n" + e.StackTrace);
-            }
+            return ChangeRegistration(allUsers, true);
         }
 
-        private void DoUnRegister(bool allUsers)
+        private bool DoUnRegister(bool allUsers)
         {
+            return ChangeRegistration(allUsers, false);
+        }
+
+        private void ShowOperationError()
+        {
+            MessageBox.Show(this, operationError.Message, "LE Context Menu Installer",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private bool ChangeRegistration(bool allUsers, bool register)
+        {
+            operationError = null;
             try
             {
-                if (!allUsers)
-                    OverrideHKCR();
-
-                var rs = new RegistrationServices();
-                rs.UnregisterAssembly(Assembly.LoadFrom(Path.Combine(crtDir, @"LEContextMenuHandler.dll")));
-
-                ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
-
-                if (!allUsers)
-                    OverrideHKCR(true);
+                // Load before overriding HKCR so missing payloads have no registry side effects.
+                var assembly = Assembly.LoadFrom(Path.Combine(crtDir, "LEContextMenuHandler.dll"));
+                if (allUsers && !IsAdministrator())
+                    throw new UnauthorizedAccessException("Administrator privileges are required for all users.");
+                try
+                {
+                    if (!allUsers)
+                        OverrideHKCR();
+                    var rs = new RegistrationServices();
+                    bool changed = register
+                        ? rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase)
+                        : rs.UnregisterAssembly(assembly);
+                    if (!changed)
+                        throw new InvalidOperationException("The assembly contains no registerable COM types.");
+                    if (register)
+                        ShellExtensionManager.RegisterShellExtContextMenuHandler(allUsers);
+                    else
+                        ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
+                }
+                finally
+                {
+                    if (!allUsers)
+                        OverrideHKCR(true);
+                }
+                return true;
             }
             catch (Exception e)
             {
-                MessageBox.Show(this, e.Message + "\r\n\r\n" + e.StackTrace);
+                operationError = e;
+                return false;
             }
         }
 
         private void OverrideHKCR(bool restore = false)
         {
-            UIntPtr HKEY_CLASSES_ROOT = Is64BitOS() ? new UIntPtr(0xFFFFFFFF80000000) : new UIntPtr(0x80000000);
-            UIntPtr HKEY_CURRENT_USER = Is64BitOS() ? new UIntPtr(0xFFFFFFFF80000001) : new UIntPtr(0x80000001);
+            UIntPtr classesRoot = UIntPtr.Size == 8 ? new UIntPtr(0xFFFFFFFF80000000) : new UIntPtr(0x80000000);
+            if (restore)
+            {
+                CheckRegistryStatus(RegOverridePredefKey(classesRoot, UIntPtr.Zero));
+                return;
+            }
 
-            // 0xF003F = KEY_ALL_ACCESS
-            UIntPtr key = UIntPtr.Zero;
+            // A fresh Windows profile may not have Software\Classes yet.
+            using (var classes = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"))
+            {
+                if (classes == null)
+                    throw new InvalidOperationException("Cannot open the current user's Classes key.");
+            }
+            UIntPtr currentUser = UIntPtr.Size == 8 ? new UIntPtr(0xFFFFFFFF80000001) : new UIntPtr(0x80000001);
+            UIntPtr key;
+            const uint keyReadWrite = 0x2001F;
+            CheckRegistryStatus(RegOpenKeyEx(currentUser, @"Software\Classes", 0, keyReadWrite, out key));
+            try
+            {
+                CheckRegistryStatus(RegOverridePredefKey(classesRoot, key));
+            }
+            finally
+            {
+                CheckRegistryStatus(RegCloseKey(key));
+            }
+        }
 
-            RegOpenKeyEx(HKEY_CURRENT_USER, @"Software\Classes", 0, 0xF003F, out key);
-            RegOverridePredefKey(HKEY_CLASSES_ROOT, restore ? UIntPtr.Zero : key);
+        private static void CheckRegistryStatus(int status)
+        {
+            if (status != 0)
+                throw new Win32Exception(status);
         }
 
         private void DeleteOldFiles()
@@ -289,42 +346,67 @@ namespace LEInstaller
             }
         }
 
+        private static byte[] ReadEmbeddedPayload(string fileName)
+        {
+            using (var source = Assembly.GetExecutingAssembly().GetManifestResourceStream(fileName))
+            using (var buffer = new MemoryStream())
+            {
+                if (source == null)
+                    throw new FileNotFoundException("安装器缺少内嵌组件。", fileName);
+                source.CopyTo(buffer);
+                return buffer.ToArray();
+            }
+        }
+
         private bool ReplaceDll()
         {
-            var dllPath1 = Path.Combine(crtDir, @"LEContextMenuHandler.dll");
-            var dllPath2 = Path.Combine(crtDir, @"LECommonLibrary.dll");
-
-            // try delete old files. If failed, rename them
+            operationError = null;
+            var applied = new List<KeyValuePair<string, string>>();
             try
             {
-                File.Delete(dllPath1);
-                File.Delete(dllPath2);
-            }
-            catch (Exception)
-            {
-                try
+                var names = new[] { "LEContextMenuHandler.dll", "LECommonLibrary.dll" };
+                var contents = names.Select(ReadEmbeddedPayload).ToArray();
+                for (int i = 0; i < names.Length; i++)
                 {
-                    File.Move(dllPath1, $"{Guid.NewGuid()}.installer.bak");
-                    File.Move(dllPath2, $"{Guid.NewGuid()}.installer.bak");
+                    var path = Path.Combine(crtDir, names[i]);
+                    if (File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(contents[i]))
+                        continue;
+                    var staged = Path.Combine(crtDir, Guid.NewGuid() + ".installer.tmp");
+                    var backup = File.Exists(path) ? Path.Combine(crtDir, Guid.NewGuid() + ".installer.bak") : null;
+                    try
+                    {
+                        File.WriteAllBytes(staged, contents[i]);
+                        if (backup == null)
+                            File.Move(staged, path);
+                        else
+                            File.Replace(staged, path, backup);
+                        applied.Add(new KeyValuePair<string, string>(path, backup));
+                    }
+                    finally
+                    {
+                        if (File.Exists(staged))
+                            File.Delete(staged);
+                    }
                 }
-                catch (Exception ee)
-                {
-                    MessageBox.Show(this, ee.Message + "\r\nPlease try rebooting your PC.");
-                    return false;
-                }
-            }
-
-            // Write new files
-            try
-            {
-                File.WriteAllBytes(dllPath1, Resources.LEContextMenuHandler);
-                File.WriteAllBytes(dllPath2, Resources.LECommonLibrary);
-
                 return true;
             }
             catch (Exception e)
             {
-                MessageBox.Show(this, e.Message + "\r\nPlease try install/uninstall again.");
+                operationError = e;
+                for (int i = applied.Count - 1; i >= 0; i--)
+                {
+                    try
+                    {
+                        if (applied[i].Value == null)
+                            File.Delete(applied[i].Key);
+                        else
+                            File.Replace(applied[i].Value, applied[i].Key, null);
+                    }
+                    catch (Exception rollbackError)
+                    {
+                        operationError = new AggregateException(operationError, rollbackError);
+                    }
+                }
                 return false;
             }
         }
@@ -372,32 +454,6 @@ namespace LEInstaller
             return wp.IsInRole(WindowsBuiltInRole.Administrator);
         }
 
-        private static bool Is64BitOS()
-        {
-            //The code below is from http://1code.codeplex.com/SourceControl/changeset/view/39074#842775
-            //which is under the Microsoft Public License: http://www.microsoft.com/opensource/licenses.mspx#Ms-PL.
-
-            if (UIntPtr.Size == 8) // 64-bit programs run only on Win64
-            {
-                return true;
-            }
-            // Detect whether the current process is a 32-bit process 
-            // running on a 64-bit system.
-            bool flag;
-            return DoesWin32MethodExist("kernel32.dll", "IsWow64Process") &&
-                   IsWow64Process(GetCurrentProcess(), out flag) && flag;
-        }
-
-        private static bool DoesWin32MethodExist(string moduleName, string methodName)
-        {
-            var moduleHandle = GetModuleHandle(moduleName);
-            if (moduleHandle == UIntPtr.Zero)
-            {
-                return false;
-            }
-            return GetProcAddress(moduleHandle, methodName) != UIntPtr.Zero;
-        }
-
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern int DeleteFile(string name);
 
@@ -406,19 +462,6 @@ namespace LEInstaller
 
         [DllImport("shell32.dll", SetLastError = true)]
         private static extern void SHChangeNotify(uint wEventId, ushort uFlags, IntPtr dwItem1, IntPtr dwItem2);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern UIntPtr GetCurrentProcess();
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        private static extern UIntPtr GetModuleHandle(string moduleName);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern UIntPtr GetProcAddress(UIntPtr hModule, [MarshalAs(UnmanagedType.LPStr)] string procName);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool IsWow64Process(UIntPtr hProcess, out bool wow64Process);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
         private static extern int RegOpenKeyEx(UIntPtr hKey, string subKey, int ulOptions, uint samDesired,

@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace LECommonLibrary
@@ -150,7 +151,15 @@ namespace LECommonLibrary
                 using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     created = true;
-                    try { tree.Save(stream); }
+                    try
+                    {
+                        using (var writer = XmlWriter.Create(stream, new XmlWriterSettings
+                        {
+                            Indent = true,
+                            NewLineHandling = NewLineHandling.Entitize
+                        }))
+                            tree.Save(writer);
+                    }
                     catch (ArgumentException error)
                     {
                         throw new InvalidDataException("配置包含 XML 不允许的字符，请检查名称和参数。", error);

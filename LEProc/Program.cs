@@ -213,12 +213,11 @@ namespace LEProc
                     if (jb == null)
                         return;
 
-                    applicationName = jb[0];
-
-                    commandLine = jb[0].StartsWith("\"")
-                        ? $"{jb[0]} "
-                        : $"\"{jb[0]}\" ";
-                    commandLine += jb[1].Replace("%1", absPath).Replace("%*", profile.Parameter);
+                    var plan = LaunchPlan.CreateAssociated(absPath, jb[0], jb[1],
+                        profile.Parameter, Args.Skip(argumentsStart));
+                    applicationName = plan.ApplicationName;
+                    commandLine = plan.CommandLine;
+                    currentDirectory = plan.CurrentDirectory;
                 }
 
                 var ansiCodePage = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.ANSICodePage;
@@ -295,24 +294,16 @@ namespace LEProc
         private static int GetCharsetFromANSICodepage(int ansicp)
         {
             const int ANSI_CHARSET = 0;
-            const int DEFAULT_CHARSET = 1;
-            const int SYMBOL_CHARSET = 2;
             const int SHIFTJIS_CHARSET = 128;
             const int HANGEUL_CHARSET = 129;
-            const int HANGUL_CHARSET = 129;
             const int GB2312_CHARSET = 134;
             const int CHINESEBIG5_CHARSET = 136;
-            const int OEM_CHARSET = 255;
-            const int JOHAB_CHARSET = 130;
             const int HEBREW_CHARSET = 177;
             const int ARABIC_CHARSET = 178;
             const int GREEK_CHARSET = 161;
             const int TURKISH_CHARSET = 162;
-            const int VIETNAMESE_CHARSET = 163;
-            const int THAI_CHARSET = 222;
             const int EASTEUROPE_CHARSET = 238;
             const int RUSSIAN_CHARSET = 204;
-            const int MAC_CHARSET = 77;
             const int BALTIC_CHARSET = 186;
 
             var charset = ANSI_CHARSET;

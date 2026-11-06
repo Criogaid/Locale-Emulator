@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using LECommonLibrary;
+﻿using System.Linq;
 using System.Globalization;
 
 namespace LEProc
@@ -16,8 +12,8 @@ namespace LEProc
         {
             entries = new[]
             {
-                new RegistryEntry("HKEY_LOCAL_MACHINE", @"System\CurrentControlSet\Control\Nls\CodePage", "InstallLanguage", "REG_SZ", culture => culture.TextInfo.LCID.ToString()),
-                new RegistryEntry("HKEY_LOCAL_MACHINE", @"System\CurrentControlSet\Control\Nls\CodePage", "Default", "REG_SZ", culture => culture.TextInfo.LCID.ToString()),
+                new RegistryEntry("HKEY_LOCAL_MACHINE", @"System\CurrentControlSet\Control\Nls\Language", "InstallLanguage", "REG_SZ", GetLanguageId),
+                new RegistryEntry("HKEY_LOCAL_MACHINE", @"System\CurrentControlSet\Control\Nls\Language", "Default", "REG_SZ", GetLanguageId),
                 new RegistryEntry("HKEY_LOCAL_MACHINE", @"System\CurrentControlSet\Control\Nls\CodePage", "OEMCP", "REG_SZ", culture => culture.TextInfo.OEMCodePage.ToString()),
                 new RegistryEntry("HKEY_LOCAL_MACHINE", @"System\CurrentControlSet\Control\Nls\CodePage", "ACP", "REG_SZ", culture => culture.TextInfo.ANSICodePage.ToString())
 
@@ -39,6 +35,9 @@ namespace LEProc
             return isAdvanced ? entriesIncludingAdvanced : entries;
         }
 
-
+        private static string GetLanguageId(CultureInfo culture)
+        {
+            return (culture.LCID & 0xffff).ToString("X4", CultureInfo.InvariantCulture);
+        }
     }
 }
