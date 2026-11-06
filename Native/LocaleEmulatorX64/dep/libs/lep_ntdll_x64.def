@@ -1,0 +1,11 @@
+LIBRARY ntdll.dll
+EXPORTS
+    LdrInitializeThunk
+    LdrRegisterDllNotification
+    LdrUnregisterDllNotification
+    _stricmp
+    _vscwprintf
+    _vsnprintf
+    _vsnwprintf
+    strcmp
+    wcsncmp

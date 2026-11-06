@@ -1,0 +1,117 @@
+#ifndef _SECTIONPROTECTOR_H_00185e71_a85a_4b7a_bc62_08ac6375404c_
+#define _SECTIONPROTECTOR_H_00185e71_a85a_4b7a_bc62_08ac6375404c_
+
+#include "support/Support.h"
+
+#if SUPPORT_VA_ARGS_MACRO
+
+//#define PROTECT_SECTION_(Type, Ptr, ...) for (SectionProtector<Type> _cc(Ptr, __VA_ARGS__); _cc ; )
+
+
+#define PROTECT_SECTION_WORKER(Type, Ptr, Name, ...) \
+            for (SectionProtector<Type> _cc(Ptr, __VA_ARGS__); _cc.__Condition; _cc.__Condition = FALSE)
+
+
+#define PROTECT_SECTION__(Type, Ptr, Name, ...) PROTECT_SECTION_WORKER(Type, Ptr, Name, __VA_ARGS__)
+#define PROTECT_SECTION_(Type, Ptr, ...) PROTECT_SECTION__(Type, Ptr, MAKE_UNIQUE_NAME(__LINE__), __VA_ARGS__)
+#define PROTECT_SECTION(LockPtr, ...) PROTECT_SECTION_(TYPE_OF(LockPtr), LockPtr, __VA_ARGS__)
+
+#else // no va args
+
+#define PROTECT_SECTION_(Type, Ptr) for (SectionProtector<Type> _cc(Ptr); _cc.__Number != 0 ; --_cc.__Number)
+#define PROTECT_SECTION(LockPtr) PROTECT_SECTION_(TYPE_OF(LockPtr), LockPtr)
+
+#endif // SUPPORT_VA_ARGS_MACRO
+
+#define PROTECT_SECTION_INLINE ForceInline
+
+ML_NAMESPACE_BEGIN(SectionProtectorTypes)
+
+enum
+{
+	SharedLock,
+	ExclusiveLock,
+};
+
+ML_NAMESPACE_END_(SectionProtectorTypes);
+
+class SectionProtectorBase
+{
+public:
+	BOOL __Condition;
+
+	PROTECT_SECTION_INLINE SectionProtectorBase()
+	{
+		__Condition = TRUE;
+	}
+};
+
+template<class LockType>
+class SectionProtector : public SectionProtectorBase
+{
+private:
+	SectionProtector(LockType *Lock) {}
+};
+
+
+
+template<>
+class SectionProtector<PRTL_CRITICAL_SECTION> : public SectionProtectorBase
+{
+public:
+	PRTL_CRITICAL_SECTION CriticalSection;
+
+	SectionProtector(PRTL_CRITICAL_SECTION CriticalSection)
+	{
+		this->CriticalSection = CriticalSection;
+		RtlEnterCriticalSection(CriticalSection);
+	}
+
+	~SectionProtector()
+	{
+		RtlLeaveCriticalSection(this->CriticalSection);
+	}
+};
+
+template <>
+class SectionProtector<PRTL_RESOURCE> : public SectionProtectorBase
+{
+public:
+	PRTL_RESOURCE Resource;
+
+	PROTECT_SECTION_INLINE SectionProtector(PRTL_RESOURCE Resource, BOOL Shared = TRUE, BOOL Wait = TRUE)
+	{
+		Shared ? RtlAcquireResourceShared(Resource, (BOOLEAN)Wait) : RtlAcquireResourceExclusive(Resource, (BOOLEAN)Wait);
+		this->Resource = Resource;
+	}
+
+	PROTECT_SECTION_INLINE ~SectionProtector()
+	{
+		RtlReleaseResource(Resource);
+	}
+};
+
+template<>
+class SectionProtector<HANDLE> : public SectionProtectorBase
+{
+public:
+	HANDLE m_Event;
+
+	SectionProtector(HANDLE Event, ULONG_PTR Timeout = INFINITE, BOOL Altertable = FALSE)
+	{
+		LARGE_INTEGER TimeOut;
+
+		m_Event = Event;
+
+		FormatTimeOut(&TimeOut, (ULONG)Timeout);
+		NtWaitForSingleObject(Event, (BOOLEAN)Altertable, &TimeOut);
+	}
+
+	~SectionProtector()
+	{
+		NtSetEvent(m_Event, NULL);
+	}
+};
+
+
+#endif // _SECTIONPROTECTOR_H_00185e71_a85a_4b7a_bc62_08ac6375404c_

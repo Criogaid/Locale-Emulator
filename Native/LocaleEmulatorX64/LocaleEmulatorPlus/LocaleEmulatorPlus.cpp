@@ -1,0 +1,1012 @@
+﻿#include "stdafx.h"
+#include <new>
+
+void* operator new(std::size_t Size)
+{
+    return AllocateMemoryP(Size == 0 ? 1 : Size);
+}
+
+void* operator new[](std::size_t Size)
+{
+    return AllocateMemoryP(Size == 0 ? 1 : Size);
+}
+
+void* operator new(std::size_t Size, const std::nothrow_t&) noexcept
+{
+    return AllocateMemoryP(Size == 0 ? 1 : Size);
+}
+
+void* operator new[](std::size_t Size, const std::nothrow_t&) noexcept
+{
+    return AllocateMemoryP(Size == 0 ? 1 : Size);
+}
+
+void operator delete(void* Buffer) noexcept
+{
+    if (Buffer != nullptr)
+        FreeMemoryP(Buffer);
+}
+
+void operator delete[](void* Buffer) noexcept
+{
+    operator delete(Buffer);
+}
+
+void operator delete(void* Buffer, std::size_t) noexcept
+{
+    operator delete(Buffer);
+}
+
+void operator delete[](void* Buffer, std::size_t) noexcept
+{
+    operator delete(Buffer);
+}
+
+void operator delete(void* Buffer, const std::nothrow_t&) noexcept
+{
+    operator delete(Buffer);
+}
+
+void operator delete[](void* Buffer, const std::nothrow_t&) noexcept
+{
+    operator delete(Buffer);
+}
+
+
+
+#pragma comment(linker, "/ENTRY:DllMain")
+#if ML_AMD64
+    #pragma comment(linker, "/EXPORT:GetFileAttributesA=FuckStupid2DJGame")
+#else
+    #pragma comment(linker, "/EXPORT:GetFileAttributesA=_FuckStupid2DJGame@4")
+#endif
+
+EXTC ULONG NTAPI FuckStupid2DJGame(PCSTR FileName)
+{
+    return FILE_ATTRIBUTE_NORMAL;
+/*
+    PVOID Rubbish;
+    PLDR_MODULE Garbage;
+
+    Garbage = FindLdrModuleByHandle(nullptr);
+    Rubbish = _ReturnAddress();
+
+    if (PtrOffset(Rubbish, Garbage->EntryPoint) < 100 && StrCompareA(FileName, "2djgame.txt") == 0)
+        return FILE_ATTRIBUTE_NORMAL;
+
+    return Io::QueryFileAttributes(lep::String::Decode(FileName, StrLengthA(FileName), CP_ACP));
+*/
+}
+
+PLepGlobalData g_GlobalData;
+
+VOID LepSyncNtdllNlsGlobals(USHORT AnsiCodePage, BOOLEAN AnsiDbcsCodePage, BOOLEAN OemDbcsCodePage)
+{
+    NlsAnsiCodePage = AnsiCodePage;
+    NlsMbCodePageTag = AnsiDbcsCodePage;
+    NlsMbOemCodePageTag = OemDbcsCodePage;
+}
+
+#if LEP_DIAG_INIT
+
+static VOID LepDiagStatus(PCWSTR Stage, NTSTATUS Status)
+{
+    static const WCHAR Hex[] = L"0123456789ABCDEF";
+    WCHAR Buffer[128];
+    PWSTR p = Buffer;
+
+    while (*Stage != 0 && p < Buffer + countof(Buffer) - 16)
+        *p++ = *Stage++;
+
+    *p++ = L':';
+    *p++ = L' ';
+    *p++ = L'0';
+    *p++ = L'x';
+
+    for (LONG_PTR Shift = 28; Shift >= 0; Shift -= 4)
+        *p++ = Hex[((ULONG)Status >> Shift) & 0xF];
+
+    *p = 0;
+
+    ExceptionBox(Buffer, L"LEP modern init diag");
+}
+
+#define LEP_DIAG_HERE(_stage) ExceptionBox(_stage, L"LEP modern init diag")
+#define LEP_DIAG_HERE_IF(_condition, _stage) \
+    do { if (_condition) ExceptionBox(_stage, L"LEP modern init diag"); } while (0)
+#define LEP_DIAG_FAIL_RETURN(_stage, _expr) \
+    do { Status = (_expr); if (NT_FAILED(Status)) { LepDiagStatus(_stage, Status); return Status; } } while (0)
+
+#else
+
+#define LEP_DIAG_HERE(_stage)
+#define LEP_DIAG_HERE_IF(_condition, _stage)
+#define LEP_DIAG_FAIL_RETURN(_stage, _expr) \
+    do { Status = (_expr); FAIL_RETURN(Status); } while (0)
+
+#endif
+
+ForceInline VOID LepSetGlobalData(PLepGlobalData GlobalData)
+{
+    g_GlobalData = GlobalData;
+}
+
+ForceInline VOID LepReleaseGlobalData()
+{
+    SafeDeleteT(g_GlobalData);
+}
+
+BOOL NTAPI DelayInitDllEntry(PVOID BaseAddress, ULONG Reason, PVOID Reserved)
+{
+    BOOL Success;
+    PLDR_MODULE Module = FindLdrModuleByHandle(BaseAddress);
+    PIMAGE_NT_HEADERS NtHeaders;
+
+    NtHeaders = PtrAdd((PIMAGE_NT_HEADERS)BaseAddress, ((PIMAGE_DOS_HEADER)BaseAddress)->e_lfanew);
+    Module->EntryPoint = PtrAdd(BaseAddress, NtHeaders->OptionalHeader.AddressOfEntryPoint);
+
+    Success = ((API_POINTER(DelayInitDllEntry))Module->EntryPoint)(BaseAddress, Reason, Reserved);
+
+    if (Reason == DLL_PROCESS_ATTACH && !Success)
+        return Success;
+
+    switch (Reason)
+    {
+        case DLL_PROCESS_ATTACH:
+            if (!Success)
+                return Success;
+        case DLL_PROCESS_DETACH:
+            break;
+
+        default:
+            return Success;
+    }
+
+    LepGetGlobalData()->HookModule(BaseAddress, &Module->BaseDllName, Reason == DLL_PROCESS_ATTACH);
+
+    return Success;
+}
+
+NTSTATUS GetNlsFile(PUNICODE_STRING NlsFile, ULONG NlsIndex, PCWSTR SubKey)
+{
+    BOOL        Success;
+    WCHAR       NlsIndexBuffer[16];
+    NTSTATUS    Status;
+    PKEY_VALUE_PARTIAL_INFORMATION FileName;
+
+    FormatLepUIntDecimal(NlsIndexBuffer, NlsIndex);
+
+    Status = GetKeyValue(REGKEY_ROOT, SubKey, NlsIndexBuffer, &FileName);
+    FAIL_RETURN(Status);
+
+    Success = RtlCreateUnicodeString(NlsFile, (PWSTR)FileName->Data);
+    FreeMemoryP(FileName);
+
+    return Success ? STATUS_SUCCESS : STATUS_NO_MEMORY;
+}
+
+NTSTATUS GetLangFile(PUNICODE_STRING LangFile, ULONG LangIndex, PCWSTR SubKey)
+{
+    BOOL        Success;
+    WCHAR       LangIndexBuffer[16];
+    NTSTATUS    Status;
+    PKEY_VALUE_PARTIAL_INFORMATION FileName;
+
+    FormatLepUIntHex4(LangIndexBuffer, LangIndex);
+
+    Status = GetKeyValue(REGKEY_ROOT, SubKey, LangIndexBuffer, &FileName);
+    FAIL_RETURN(Status);
+
+    Success = RtlCreateUnicodeString(LangFile, (PWSTR)FileName->Data);
+    FreeMemoryP(FileName);
+
+    return Success ? STATUS_SUCCESS : STATUS_NO_MEMORY;
+}
+
+NTSTATUS ReadFileInSystemDirectory(MemoryFile &File, PUNICODE_STRING Path)
+{
+    PWSTR       Buffer;
+    ULONG_PTR   Length;
+    NTSTATUS    Status;
+
+    Length = sizeof(ROOTDIR_SYSTEM32) + Path->Length + sizeof(WCHAR);
+    Buffer = (PWSTR)AllocateMemoryP(Length);
+    if (Buffer == nullptr)
+        return STATUS_NO_MEMORY;
+
+    Length = CONST_STRLEN(ROOTDIR_SYSTEM32);
+    CopyMemory(Buffer, ROOTDIR_SYSTEM32, Length * sizeof(WCHAR));
+    CopyMemory(Buffer + Length, Path->Buffer, Path->Length);
+    Buffer[Length + Path->Length / sizeof(WCHAR)] = 0;
+
+    Status = File.Open(Buffer, NFD_NOT_RESOLVE_PATH);
+
+    FreeMemoryP(Buffer);
+
+    return Status;
+}
+
+NTSTATUS LepGlobalData::Initialize(PLEP_BOOTSTRAP_PAYLOAD Payload, BOOL OwnPayload)
+{
+    BOOL            IsLoader;
+    PLDR_MODULE     Ntdll;
+    PPEB_BASE       ProcessEnvironment;
+    NTSTATUS        Status;
+    BOOL            DiagVerbose;
+    NLSTABLEINFO    NlsTableInfo;
+    UNICODE_STRING  SystemDirectory, NlsFileName, OemNlsFileName, LangFileName, Win32U;
+    PKEY_VALUE_PARTIAL_INFORMATION IndexValue;
+
+#if ML_AMD64 && defined(LEP_X64_CRASH_PROBE)
+    if (LEP_X64_CRASH_PROBE == 0)
+        return STATUS_DLL_INIT_FAILED;
+#endif
+
+    IsLoader = IsLepLoader();
+    DiagVerbose = !IsLoader;
+    if (!LepValidateBootstrapPayload(Payload))
+        return STATUS_INVALID_PARAMETER;
+
+    this->BootstrapPayload = Payload;
+    this->OwnBootstrapPayload = (BOOLEAN)OwnPayload;
+    LEP_DIAG_HERE_IF(DiagVerbose, L"LepGlobalData::Initialize entry");
+#if ML_AMD64 && defined(LEP_X64_ATTACH_WAIT)
+    if (!IsLoader)
+    {
+        WCHAR Buffer[0x100];
+        PWSTR BufferEnd;
+
+        static const WCHAR Prefix[] = L"Attach x64dbg to PID 0x";
+        static const WCHAR Suffix[] = L", then press OK.";
+
+        CopyMemory(Buffer, Prefix, sizeof(Prefix) - sizeof(WCHAR));
+        BufferEnd = Buffer + CONST_STRLEN(Prefix);
+        BufferEnd += FormatLepUIntHex(BufferEnd, CurrentPid());
+        CopyMemory(BufferEnd, Suffix, sizeof(Suffix));
+
+        ExceptionBox(Buffer, L"LEP x64 attach wait");
+    }
+#endif
+#if ML_AMD64 && defined(LEP_X64_CRASH_PROBE)
+    if (LEP_X64_CRASH_PROBE == 10 && IsLoader)
+        return STATUS_DLL_INIT_FAILED;
+    if (LEP_X64_CRASH_PROBE == 11 && !IsLoader)
+        return STATUS_DLL_INIT_FAILED;
+#endif
+    LEP_DIAG_HERE_IF(DiagVerbose, IsLoader ? L"IsLepLoader: true" : L"IsLepLoader: false");
+
+    Wow64 = Ps::IsWow64Process();
+    LEP_DIAG_HERE_IF(DiagVerbose, Wow64 ? L"Ps::IsWow64Process: true" : L"Ps::IsWow64Process: false");
+
+    Ntdll = GetNtdllLdrModule();
+    if (Ntdll == nullptr)
+    {
+#if LEP_DIAG_INIT
+        LepDiagStatus(L"GetNtdllLdrModule", STATUS_DLL_INIT_FAILED);
+#endif
+        return STATUS_DLL_INIT_FAILED;
+    }
+    RuntimeState.LdrLoadDllAddress = EATLookupRoutineByHashPNoFix(Ntdll->DllBase, lep::HashExportName("LdrLoadDll"));
+    if (RuntimeState.LdrLoadDllAddress == nullptr)
+        return STATUS_ENTRYPOINT_NOT_FOUND;
+    LEP_DIAG_HERE_IF(DiagVerbose, L"GetNtdllLdrModule ok");
+
+    LOOP_ONCE
+    {
+        PCLEP_RUNTIME_ENVIRONMENT Environment = GetEnvironment();
+        WriteLog(L"init stage bootstrap payload size=%u environment=%u registryMode=%u",
+                 Payload->TotalSize, Payload->EnvironmentSize,
+                 Environment->RegistryRedirectionMode);
+        Status = this->InitRegistryRedirectionMode(Environment->RegistryRedirectionMode);
+        WriteLog(L"init stage InitRegistryRedirectionMode end status=%08X entries=%p",
+                 Status, this->RegistryRedirectionEntry.GetSize());
+        FAIL_RETURN(Status);
+#if ML_AMD64 && defined(LEP_X64_CRASH_PROBE)
+        if (LEP_X64_CRASH_PROBE == 20 && this->RegistryRedirectionEntry.GetSize() == 0)
+            return STATUS_DLL_INIT_FAILED;
+        if (LEP_X64_CRASH_PROBE == 21 && this->RegistryRedirectionEntry.GetSize() != 0)
+            return STATUS_DLL_INIT_FAILED;
+#endif
+
+        WriteLog(L"init stage TextMetricCache.Initialize begin");
+        LEP_DIAG_FAIL_RETURN(L"TextMetricCache.Initialize", this->TextMetricCache.Initialize());
+        WriteLog(L"init stage TextMetricCache.Initialize end");
+
+        PVOID           NlsBaseAddress;
+        LCID            DefaultLocaleId;
+        LARGE_INTEGER   DefaultCasingTableSize;
+
+        WriteLog(L"init stage NtInitializeNlsFiles begin");
+        LEP_DIAG_FAIL_RETURN(L"NtInitializeNlsFiles", NtInitializeNlsFiles(&NlsBaseAddress, &DefaultLocaleId, &DefaultCasingTableSize));
+        WriteLog(L"init stage NtInitializeNlsFiles end locale=%u", DefaultLocaleId);
+
+        this->GetRuntimeState()->OriginalLocaleId = DefaultLocaleId;
+
+        NtUnmapViewOfSection(CurrentProcess, NlsBaseAddress);
+
+        WriteLog(L"init LEPB %ws", GetLepDllFullPath());
+        WriteLog(L"LEP image base: %p", &__ImageBase);
+
+        SystemDirectory = Ntdll->FullDllName;
+        SystemDirectory.Length -= Ntdll->BaseDllName.Length;
+
+        WriteLog(L"init stage RtlDuplicateUnicodeString begin");
+        LEP_DIAG_FAIL_RETURN(L"RtlDuplicateUnicodeString(SystemDirectory)", RtlDuplicateUnicodeString(RTL_DUPSTR_ADD_NULL, &SystemDirectory, &this->SystemDirectory));
+        WriteLog(L"init stage RtlDuplicateUnicodeString end");
+
+        lep::String Win32U_Path(SystemDirectory);
+        Win32U_Path += L"\\win32u.dll";
+        this->HasWin32U = Nt_GetFileAttributes(Win32U_Path.GetBuffer()) != INVALID_FILE_ATTRIBUTES;
+        WriteLog(L"win32u: %ws, has:%d", Win32U_Path.GetBuffer(), this->HasWin32U);
+
+        RtlInitEmptyString(&NlsFileName, nullptr, 0);
+        RtlInitEmptyString(&OemNlsFileName, nullptr, 0);
+        RtlInitEmptyString(&LangFileName, nullptr, 0);
+
+        SCOPE_EXIT
+        {
+            RtlFreeUnicodeString(&NlsFileName);
+            RtlFreeUnicodeString(&OemNlsFileName);
+            RtlFreeUnicodeString(&LangFileName);
+        }
+        SCOPE_EXIT_END;
+
+        WriteLog(L"init stage GetNlsFile ACP begin cp=%u", GetEnvironment()->AnsiCodePage);
+        LEP_DIAG_FAIL_RETURN(L"GetNlsFile(ACP)", GetNlsFile(&NlsFileName, GetEnvironment()->AnsiCodePage, REGPATH_CODEPAGE));
+        WriteLog(L"init stage GetNlsFile ACP end path=%ws", NlsFileName.Buffer);
+
+        WriteLog(L"init stage GetNlsFile OEM begin cp=%u", GetEnvironment()->OemCodePage);
+        LEP_DIAG_FAIL_RETURN(L"GetNlsFile(OEMCP)", GetNlsFile(&OemNlsFileName, GetEnvironment()->OemCodePage, REGPATH_CODEPAGE));
+        WriteLog(L"init stage GetNlsFile OEM end path=%ws", OemNlsFileName.Buffer);
+
+        // Windows 10 1803 removed all keys under "HKLM\SYSTEM\CurrentControlSet\Control\Nls\Language".
+        // Since the value of all keys are "l_intl.nls" since Windows XP,
+        // we suppose that MS is not going to change it in the near future.
+        //
+        //Status = GetLangFile(&LangFileName, GetEnvironment()->LocaleId, REGPATH_LANGUAGE);
+        //FAIL_RETURN(Status);
+        RtlCreateUnicodeString(&LangFileName, L"l_intl.nls");
+
+        MemoryFile AnsiFile, OemFile, LangFile;
+
+        WriteLog(L"init stage ReadFileInSystemDirectory ACP begin");
+        LEP_DIAG_FAIL_RETURN(L"ReadFileInSystemDirectory(ACP)", ReadFileInSystemDirectory(AnsiFile, &NlsFileName));
+        WriteLog(L"init stage ReadFileInSystemDirectory ACP end size=%p", AnsiFile.GetSize32());
+
+        WriteLog(L"init stage ReadFileInSystemDirectory OEM begin");
+        LEP_DIAG_FAIL_RETURN(L"ReadFileInSystemDirectory(OEMCP)", ReadFileInSystemDirectory(OemFile, &OemNlsFileName));
+        WriteLog(L"init stage ReadFileInSystemDirectory OEM end size=%p", OemFile.GetSize32());
+
+        WriteLog(L"init stage ReadFileInSystemDirectory Lang begin");
+        LEP_DIAG_FAIL_RETURN(L"ReadFileInSystemDirectory(Lang)", ReadFileInSystemDirectory(LangFile, &LangFileName));
+        WriteLog(L"init stage ReadFileInSystemDirectory Lang end size=%p", LangFile.GetSize32());
+
+        AnsiCodePageOffset      = 0;
+        OemCodePageOffset       = ROUND_UP(AnsiFile.GetSize32(), 16);
+        UnicodeCaseTableOffset  = OemCodePageOffset + ROUND_UP(OemFile.GetSize32(), 16);
+
+        WriteLog(L"init stage AllocVirtualMemory CodePageMapView begin size=%p", UnicodeCaseTableOffset + LangFile.GetSize32());
+        LEP_DIAG_FAIL_RETURN(L"AllocVirtualMemory(CodePageMapView)", AllocVirtualMemory(&CodePageMapView, UnicodeCaseTableOffset + LangFile.GetSize32(), PAGE_READWRITE, MEM_COMMIT | MEM_TOP_DOWN));
+        WriteLog(L"init stage AllocVirtualMemory CodePageMapView end base=%p", CodePageMapView);
+
+        CopyMemory(PtrAdd(CodePageMapView, AnsiCodePageOffset),     AnsiFile.GetBuffer(),   AnsiFile.GetSize32());
+        CopyMemory(PtrAdd(CodePageMapView, OemCodePageOffset),      OemFile.GetBuffer(),    OemFile.GetSize32());
+        CopyMemory(PtrAdd(CodePageMapView, UnicodeCaseTableOffset), LangFile.GetBuffer(),   LangFile.GetSize32());
+
+        ProtectVirtualMemory(CodePageMapView, UnicodeCaseTableOffset + LangFile.GetSize32(), PAGE_READONLY);
+
+        RtlInitNlsTables(
+            (PUSHORT)PtrAdd(CodePageMapView, AnsiCodePageOffset),
+            (PUSHORT)PtrAdd(CodePageMapView, OemCodePageOffset),
+            (PUSHORT)PtrAdd(CodePageMapView, UnicodeCaseTableOffset),
+            &NlsTableInfo
+        );
+
+#if !LEP_DIAG_SKIP_NLS_APPLY
+        RtlResetRtlTranslations(&NlsTableInfo);
+
+        LepSyncNtdllNlsGlobals(
+            (USHORT)GetEnvironment()->AnsiCodePage,
+            (BOOLEAN)(NlsTableInfo.AnsiTableInfo.DBCSCodePage != 0),
+            (BOOLEAN)(NlsTableInfo.OemTableInfo.DBCSCodePage != 0));
+        WriteLog(L"reset nls acp=%u ntdll=%u mb=%u oemmb=%u table=%u/%u",
+            GetEnvironment()->AnsiCodePage,
+            NlsAnsiCodePage,
+            NlsMbCodePageTag,
+            NlsMbOemCodePageTag,
+            NlsTableInfo.AnsiTableInfo.CodePage,
+            NlsTableInfo.OemTableInfo.CodePage);
+
+        ProcessEnvironment = LepCurrentPeb();
+
+        ProcessEnvironment->AnsiCodePageData       = (PUSHORT)PtrAdd(CodePageMapView, AnsiCodePageOffset);
+        ProcessEnvironment->OemCodePageData        = (PUSHORT)PtrAdd(CodePageMapView, OemCodePageOffset);
+        ProcessEnvironment->UnicodeCaseTableData   = (PUSHORT)PtrAdd(CodePageMapView, UnicodeCaseTableOffset);
+#else
+        WriteLog(L"NLS apply disabled: RtlResetRtlTranslations, Ntdll NLS globals and PEB NLS pointers unchanged");
+#endif
+
+        // LdrInitShimEngineDynamic(&__ImageBase);
+
+#if !LEP_DIAG_PROCESS_ONLY
+        LdrRegisterDllNotification(0,
+            [] (ULONG NotificationReason, PCLDR_DLL_NOTIFICATION_DATA NotificationData, PVOID Context)
+            {
+                return ((PLepGlobalData)Context)->DllNotification(NotificationReason, NotificationData);
+            },
+            this,
+            &DllNotificationCookie
+        );
+#endif
+    }
+
+    WriteLog(L"init stage InstallHookPort begin");
+    Status = InstallHookPort();
+    WriteLog(L"inst hp: %08X", Status);
+    LEP_DIAG_FAIL_RETURN(L"InstallHookPort", Status);
+
+    WriteLog(L"init stage HookNtdllRoutines begin");
+    Status = HookNtdllRoutines(Ntdll->DllBase);
+#if ML_AMD64 && defined(LEP_X64_CRASH_PROBE)
+        if (LEP_X64_CRASH_PROBE == 13)
+            return STATUS_DLL_INIT_FAILED;
+#endif
+
+    WriteLog(L"hook ntdll: %08X", Status);
+    LEP_DIAG_FAIL_RETURN(L"HookNtdllRoutines", Status);
+
+#if !LEP_DIAG_PROCESS_ONLY
+    HackAnsiOemCodeHashNodes();
+
+    PLDR_MODULE Kernel32Ldr;
+
+    Kernel32Ldr = FindLdrModuleByName(&USTR(L"KERNELBASE.dll"));
+    if (Kernel32Ldr != nullptr)
+    {
+        if (FLAG_ON(Kernel32Ldr->Flags, LDRP_PROCESS_ATTACH_CALLED))
+            HookKernel32Routines(Kernel32Ldr->DllBase);
+        else
+            Kernel32Ldr->EntryPoint = DelayInitDllEntry;
+    }
+
+    Kernel32Ldr = GetKernel32Ldr();
+    if (Kernel32Ldr != nullptr)
+    {
+        if (FLAG_ON(Kernel32Ldr->Flags, LDRP_PROCESS_ATTACH_CALLED))
+            HookKernel32Routines(Kernel32Ldr->DllBase);
+        else
+            Kernel32Ldr->EntryPoint = DelayInitDllEntry;
+    }
+
+#else
+    WriteLog(L"process-only: nlsApply=%u; DLL notifications, module entry replacement and non-process hooks disabled",
+             (ULONG)!LEP_DIAG_SKIP_NLS_APPLY);
+#endif
+
+    WriteLog(L"init %p", Status);
+
+    return Status;
+}
+
+NTSTATUS LepGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_CONFIG Config, ULONG_PTR Count)
+{
+    NTSTATUS    Status;
+    PREGISTRY_REDIRECTION_ENTRY Entry;
+
+    if (Count == 0)
+        return STATUS_NO_MORE_ENTRIES;
+
+    REGISTRY_REDIRECTION_ENTRY LocalEntry;
+
+    FOR_EACH(Config, Config, Count)
+    {
+        ULONG_PTR       LastIndex;
+        HANDLE          OriginalKey, RedirectedKey;
+        UNICODE_STRING  KeyFullPath;
+
+        OriginalKey     = nullptr;
+        RedirectedKey   = nullptr;
+
+        Status = Reg::OpenKey(&OriginalKey, Config->Original.Root, KEY_QUERY_VALUE, Config->Original.SubKey);
+        FAIL_CONTINUE(Status);
+
+        if (Config->Redirected.Root != NULL)
+        {
+            Status = Reg::OpenKey(&RedirectedKey, Config->Redirected.Root, KEY_QUERY_VALUE, Config->Redirected.SubKey);
+            if (NT_FAILED(Status))
+            {
+                Reg::CloseKeyHandle(OriginalKey);
+                continue;
+            }
+        }
+
+        this->RegistryRedirectionEntry.Add(LocalEntry);
+        LastIndex = this->RegistryRedirectionEntry.GetSize() - 1;
+        Entry = &this->RegistryRedirectionEntry[LastIndex];
+
+        Status = QueryRegKeyFullPath(OriginalKey, &KeyFullPath);
+        Reg::CloseKeyHandle(OriginalKey);
+        if (NT_FAILED(Status))
+        {
+            Reg::CloseKeyHandle(RedirectedKey);
+            this->RegistryRedirectionEntry.Remove(LastIndex);
+            continue;
+        }
+
+        Entry->Original.FullPath = KeyFullPath;
+        RtlFreeUnicodeString(&KeyFullPath);
+
+        if (RedirectedKey != nullptr)
+        {
+            Status = QueryRegKeyFullPath(RedirectedKey, &KeyFullPath);
+            Reg::CloseKeyHandle(RedirectedKey);
+            if (NT_FAILED(Status))
+            {
+                this->RegistryRedirectionEntry.Remove(LastIndex);
+                continue;
+            }
+
+            Entry->Redirected.FullPath = KeyFullPath;
+            RtlFreeUnicodeString(&KeyFullPath);
+        }
+
+        Entry->Original.Root        = Config->Original.Root;
+        Entry->Original.SubKey      = Config->Original.SubKey;
+        Entry->Original.ValueName   = Config->Original.ValueName;
+        Entry->Original.DataType    = Config->Original.DataType;
+        Entry->Original.Data        = nullptr;
+        Entry->Original.DataSize    = 0;
+
+        Entry->Redirected.Root      = Config->Redirected.Root;
+        Entry->Redirected.SubKey    = Config->Redirected.SubKey;
+        Entry->Redirected.ValueName = Config->Redirected.ValueName;
+        Entry->Redirected.DataType  = Config->Redirected.DataType;
+        Entry->Redirected.Data      = nullptr;
+        Entry->Redirected.DataSize  = 0;
+
+        if (Config->Redirected.Data != nullptr && Config->Redirected.DataSize != 0)
+        {
+            Entry->Redirected.DataSize = Config->Redirected.DataSize;
+            Entry->Redirected.Data = AllocateMemoryP(Entry->Redirected.DataSize);
+            if (Entry->Redirected.Data == nullptr)
+            {
+                this->RegistryRedirectionEntry.Remove(LastIndex);
+                continue;
+            }
+
+            CopyMemory(Entry->Redirected.Data, Config->Redirected.Data, Entry->Redirected.DataSize);
+        }
+    }
+
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS LepGlobalData::InitRegistryRedirectionMode(ULONG Mode)
+{
+    ULONG_PTR DefaultACPLength, DefaultLCIDLength, DefaultOEMCPLength;
+    WCHAR DefaultACP[0x20], DefaultOEMCP[0x20], DefaultLCID[0x20];
+
+    if (Mode > LEP_REGISTRY_REDIRECTION_MODE_MAX)
+        return STATUS_INVALID_PARAMETER;
+
+    DefaultACPLength    = (FormatLepUIntDecimal(DefaultACP, GetEnvironment()->AnsiCodePage) + 1) * sizeof(WCHAR);
+    DefaultOEMCPLength  = (FormatLepUIntDecimal(DefaultOEMCP, GetEnvironment()->OemCodePage) + 1) * sizeof(WCHAR);
+    DefaultLCIDLength   = (FormatLepUIntDecimal(DefaultLCID, GetEnvironment()->LocaleId) + 1) * sizeof(WCHAR);
+
+    REGISTRY_REDIRECTION_CONFIG DefaultEntries[] =
+    {
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_ACP, REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_ACP, REG_SZ, DefaultACP, DefaultACPLength },
+        },
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_OEMCP, REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_OEMCP, REG_SZ, DefaultOEMCP, DefaultOEMCPLength },
+        },
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_LANGUAGE, REGKEY_DEFAULT_LANGUAGE, REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_LANGUAGE, REGKEY_DEFAULT_LANGUAGE, REG_SZ, DefaultLCID, DefaultLCIDLength },
+        },
+    };
+
+    REGISTRY_REDIRECTION_CONFIG ExtendedEntries[] =
+    {
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, L"InstallLanguage", REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, L"InstallLanguage", REG_SZ, DefaultLCID, DefaultLCIDLength },
+        },
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, L"Default", REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, L"Default", REG_SZ, DefaultLCID, DefaultLCIDLength },
+        },
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_OEMCP, REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_OEMCP, REG_SZ, DefaultOEMCP, DefaultOEMCPLength },
+        },
+        {
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_ACP, REG_SZ, },
+            { HKEY_LOCAL_MACHINE, REGPATH_CODEPAGE, REGKEY_ACP, REG_SZ, DefaultACP, DefaultACPLength },
+        },
+    };
+
+    return Mode == 0
+        ? InitRegistryRedirection(DefaultEntries, countof(DefaultEntries))
+        : InitRegistryRedirection(ExtendedEntries, countof(ExtendedEntries));
+}
+
+NTSTATUS LepGlobalData::InitAdvancedRegistryRedirection(PCWSTR LocaleName, USHORT LocaleNameLength)
+{
+    static const WCHAR Hex[] = L"0123456789ABCDEF";
+    WCHAR LocaleHex[9];
+    WCHAR PreferredLanguages[LOCALE_NAME_MAX_LENGTH + 2];
+    ULONG LocaleNameCharacters = LocaleNameLength / sizeof(WCHAR);
+
+    if (LocaleName == nullptr ||
+        (LocaleNameLength & (sizeof(WCHAR) - 1)) != 0 ||
+        LocaleNameCharacters == 0 ||
+        LocaleNameCharacters >= LOCALE_NAME_MAX_LENGTH)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    ULONG LocaleId = GetEnvironment()->LocaleId;
+    for (ULONG Index = 0; Index != 8; ++Index)
+        LocaleHex[Index] = Hex[(LocaleId >> ((7 - Index) * 4)) & 0xF];
+    LocaleHex[8] = 0;
+
+    CopyMemory(PreferredLanguages, LocaleName, LocaleNameLength);
+    PreferredLanguages[LocaleNameCharacters] = 0;
+    PreferredLanguages[LocaleNameCharacters + 1] = 0;
+
+    ULONG LocaleHexSize = sizeof(LocaleHex);
+    ULONG LocaleNameSize = LocaleNameLength + sizeof(WCHAR);
+    ULONG PreferredLanguagesSize = LocaleNameLength + sizeof(WCHAR) * 2;
+    REGISTRY_REDIRECTION_CONFIG Entries[] =
+    {
+        {
+            { HKEY_CURRENT_USER, L"Control Panel\\International", L"Locale", REG_SZ, },
+            { HKEY_CURRENT_USER, L"Control Panel\\International", L"Locale", REG_SZ, LocaleHex, LocaleHexSize },
+        },
+        {
+            { HKEY_CURRENT_USER, L"Control Panel\\International", L"LocaleName", REG_SZ, },
+            { HKEY_CURRENT_USER, L"Control Panel\\International", L"LocaleName", REG_SZ, LocaleName, LocaleNameSize },
+        },
+        {
+            { HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"PreferredUILanguages", REG_MULTI_SZ, },
+            { HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"PreferredUILanguages", REG_MULTI_SZ, PreferredLanguages, PreferredLanguagesSize },
+        },
+        {
+            { HKEY_CURRENT_USER, L"Control Panel\\Desktop\\MuiCached", L"MachinePreferredUILanguages", REG_MULTI_SZ, },
+            { HKEY_CURRENT_USER, L"Control Panel\\Desktop\\MuiCached", L"MachinePreferredUILanguages", REG_MULTI_SZ, PreferredLanguages, PreferredLanguagesSize },
+        },
+    };
+
+    return InitRegistryRedirection(Entries, countof(Entries));
+}
+
+typedef struct
+{
+    UNICODE_STRING DllName;
+    TYPE_OF(&LepGlobalData::HookNtdllRoutines)     HookRoutine;
+    TYPE_OF(&LepGlobalData::UnHookNtdllRoutines)   UnHookRoutine;
+
+} DLL_HOOK_ENTRY, *PDLL_HOOK_ENTRY;
+
+PDLL_HOOK_ENTRY LookupDllHookEntry(PCUNICODE_STRING BaseDllName)
+{
+    static DLL_HOOK_ENTRY DllHookEntries[] =
+    {
+        { RTL_CONSTANT_STRING(L"USER32.dll"),       &LepGlobalData::HookUser32Routines,      &LepGlobalData::UnHookUser32Routines },
+        { RTL_CONSTANT_STRING(L"GDI32.dll"),        &LepGlobalData::HookGdi32Routines,       &LepGlobalData::UnHookGdi32Routines },
+        { RTL_CONSTANT_STRING(L"KERNELBASE.dll"),   &LepGlobalData::HookKernel32Routines,    &LepGlobalData::UnHookKernel32Routines },
+        { RTL_CONSTANT_STRING(L"KERNEL32.dll"),     &LepGlobalData::HookKernel32Routines,    &LepGlobalData::UnHookKernel32Routines },
+    };
+
+    PDLL_HOOK_ENTRY Entry;
+
+    FOR_EACH_ARRAY(Entry, DllHookEntries)
+    {
+        if (!RtlEqualUnicodeString(BaseDllName, &Entry->DllName, TRUE))
+            continue;
+
+        return Entry;
+    }
+
+    return nullptr;
+}
+
+VOID LepGlobalData::HookModule(PVOID DllBase, PCUNICODE_STRING DllName, BOOL DllLoad)
+{
+#if LEP_DIAG_PROCESS_ONLY
+    return;
+#endif
+    PDLL_HOOK_ENTRY Entry;
+
+    Entry = LookupDllHookEntry(DllName);
+    if (Entry == nullptr)
+        return;
+
+    NTSTATUS Status = DllLoad ? (this->*Entry->HookRoutine)(DllBase) : (this->*Entry->UnHookRoutine)();
+
+    UNREFERENCED_PARAMETER(Status);
+    WriteLog(L"hook %ws: %p", Entry->DllName.Buffer, Status);
+}
+
+VOID LepGlobalData::DllNotification(ULONG NotificationReason, PCLDR_DLL_NOTIFICATION_DATA NotificationData)
+{
+#if LEP_DIAG_PROCESS_ONLY
+    return;
+#endif
+    NTSTATUS            Status;
+    PVOID               DllBase;
+    ULONG_PTR           Length;
+    PLDR_MODULE         Module;
+    UNICODE_STRING      DllPath;
+    PCUNICODE_STRING    DllName;
+
+    switch (NotificationReason)
+    {
+        case LDR_DLL_NOTIFICATION_REASON_LOADED:
+            DllName = NotificationData->Loaded.BaseDllName;
+            DllBase = NotificationData->Loaded.DllBase;
+            DllPath = *NotificationData->Loaded.FullDllName;
+            DllPath.Length -= DllName->Length;
+            break;
+
+        case LDR_DLL_NOTIFICATION_REASON_UNLOADED:
+            DllName = NotificationData->Unloaded.BaseDllName;
+            DllBase = NotificationData->Unloaded.DllBase;
+            DllPath = *NotificationData->Unloaded.FullDllName;
+            DllPath.Length -= DllName->Length;
+            break;
+
+        default:
+            return;
+    }
+
+    //if (!RtlEqualUnicodeString(&SystemDirectory, &DllPath, TRUE))
+    //    return;
+
+    if (LookupDllHookEntry(DllName) == nullptr)
+        return;
+
+    Module = FindLdrModuleByHandle(DllBase);
+    if (!FLAG_ON(Module->Flags, LDRP_PROCESS_ATTACH_CALLED))
+    {
+        Module->EntryPoint = DelayInitDllEntry;
+    }
+    else
+    {
+        HookModule(DllBase, DllName, NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED);
+    }
+}
+
+NTSTATUS LepGlobalData::UnInitialize()
+{
+    if (DllNotificationCookie != nullptr)
+    {
+        LdrUnregisterDllNotification(DllNotificationCookie);
+        DllNotificationCookie = nullptr;
+    }
+
+#if !LEP_DIAG_PROCESS_ONLY
+    UnHookGdi32Routines();
+    UnHookUser32Routines();
+    UnHookKernel32Routines();
+    UnHookNtdllRoutines();
+#endif
+
+    UnInstallHookPort();
+
+    RtlFreeUnicodeString(&SystemDirectory);
+
+    if (OwnBootstrapPayload && BootstrapPayload != nullptr)
+    {
+        FreeMemory(BootstrapPayload);
+        BootstrapPayload = nullptr;
+        OwnBootstrapPayload = FALSE;
+    }
+
+    return 0;
+}
+
+inline BOOL UnInitialize(PVOID BaseAddress)
+{
+    LepReleaseGlobalData();
+    lep::UninitializeSupportHeap();
+    return FALSE;
+}
+
+VOID GenerateModuleList(lep::String &ModuleNames)
+{
+    PVOID                               Address, BaseAddress, LastAllocationBase;
+    ULONG_PTR                           Size, Need, BufferSize;
+    NTSTATUS                            Status;
+    SYSTEM_BASIC_INFORMATION            SystemBasic;
+    MEMORY_BASIC_INFORMATION            MemoryBasic;
+
+    union
+    {
+        MEMORY_MAPPED_FILENAME_INFORMATION2 MappedFile;
+        BYTE MappedFileBuffer[0x2000];
+    };
+
+    auto AppendHexPointer = [] (lep::String &String, ULONG_PTR Value)
+    {
+        BOOL LeadingZero = TRUE;
+        WCHAR Buffer[bitsof(Value) / 4];
+        ULONG_PTR Count = 0;
+
+        for (LONG_PTR Shift = bitsof(Value) - 4; Shift >= 0; Shift -= 4)
+        {
+            ULONG_PTR Digit = (Value >> Shift) & 0xF;
+
+            if (Digit == 0 && LeadingZero && Shift != 0)
+                continue;
+
+            LeadingZero = FALSE;
+            Buffer[Count++] = (WCHAR)(Digit < 10 ? L'0' + Digit : L'A' + Digit - 10);
+        }
+
+        String.Concat(Buffer, Count);
+    };
+
+    Status = NtQuerySystemInformation(SystemBasicInformation, &SystemBasic, sizeof(SystemBasic), nullptr);
+    if (!NT_SUCCESS(Status))
+        return;
+
+    LastAllocationBase = IMAGE_INVALID_VA;
+    BaseAddress = (PVOID)SystemBasic.MinimumUserModeAddress;
+    BaseAddress = nullptr;
+
+    for (; (ULONG_PTR)BaseAddress < SystemBasic.MaximumUserModeAddress; BaseAddress = PtrAdd(BaseAddress, MemoryBasic.RegionSize))
+    {
+        MemoryBasic.RegionSize = MEMORY_PAGE_SIZE;
+        Status = NtQueryVirtualMemory(CurrentProcess, BaseAddress, MemoryBasicInformation, &MemoryBasic, sizeof(MemoryBasic), nullptr);
+        FAIL_CONTINUE(Status);
+
+        BaseAddress = MemoryBasic.BaseAddress;
+
+        if (MemoryBasic.Type != MEM_IMAGE || MemoryBasic.AllocationBase == LastAllocationBase)
+            continue;
+
+        LastAllocationBase = MemoryBasic.AllocationBase;
+
+        Status = NtQueryVirtualMemory(CurrentProcess, BaseAddress, MemoryMappedFilenameInformation, &MappedFile, sizeof(MappedFileBuffer), nullptr);
+        if (NT_FAILED(Status) || MappedFile.Name.Length == 0)
+            continue;
+
+        UNICODE_STRING DosPath;
+
+        Status = Io::QueryDosPathFromNtDeviceName(&DosPath, &MappedFile.Name);
+
+        ModuleNames += L"0x";
+        AppendHexPointer(ModuleNames, (ULONG_PTR)BaseAddress);
+        ModuleNames += L": ";
+        if (NT_SUCCESS(Status))
+            ModuleNames.Concat(DosPath.Buffer, DosPath.Length / sizeof(WCHAR));
+        else
+            ModuleNames.Concat(MappedFile.Name.Buffer, MappedFile.Name.Length / sizeof(WCHAR));
+        ModuleNames += L"\n";
+
+        RtlFreeUnicodeString(&DosPath);
+    }
+}
+
+BOOL Initialize(PVOID BaseAddress, PLEP_BOOTSTRAP_PAYLOAD BootstrapPayload = nullptr)
+{
+    NTSTATUS            Status;
+    PLDR_MODULE         Kernel32;
+    PLepGlobalData       GlobalData;
+    BOOL                IsLoader;
+    BOOL                OwnBootstrapPayload;
+    BOOL                BootstrapPayloadPresent;
+    lep::ActiveFrame*   LoaderFrame;
+
+    lep::InitializeSupportHeap();
+
+    LoaderFrame = lep::ActiveFrame::Find(LEP_LOADER_PROCESS);
+    IsLoader = LoaderFrame != nullptr;
+    OwnBootstrapPayload = FALSE;
+    if (BootstrapPayload == nullptr && LoaderFrame != nullptr)
+    {
+        BootstrapPayload = (PLEP_BOOTSTRAP_PAYLOAD)LoaderFrame->Data;
+        if (LepValidateBootstrapPayload(BootstrapPayload))
+        {
+            OwnBootstrapPayload = TRUE;
+        }
+    }
+    BootstrapPayloadPresent = LepValidateBootstrapPayload(BootstrapPayload);
+    LEP_DIAG_HERE_IF(!IsLoader, L"Initialize entry");
+
+    if (!IsLoader && !BootstrapPayloadPresent)
+    {
+        Kernel32 = GetKernel32Ldr();
+        if (Kernel32 != nullptr && FLAG_ON(Kernel32->Flags, LDRP_PROCESS_ATTACH_CALLED))
+        {
+            lep::String ModuleList = L"kernel32 has been loaded before the initialization of LEP\n\nModule list:\n\n";
+            GenerateModuleList(ModuleList);
+            ExceptionBox(ModuleList);
+            LEP_DIAG_HERE(L"kernel32 loaded before LEP");
+            return FALSE;
+        }
+    }
+    else if (BootstrapPayloadPresent)
+    {
+        WriteLog(L"initialization accepted: bootstrap payload is present");
+    }
+
+    if (!BootstrapPayloadPresent)
+        return FALSE;
+
+    LdrDisableThreadCalloutsForDll(BaseAddress);
+
+    GlobalData = new (std::nothrow) LepGlobalData;
+    if (GlobalData == nullptr)
+    {
+        LEP_DIAG_HERE(L"new LepGlobalData failed");
+        return FALSE;
+    }
+
+    if (OwnBootstrapPayload)
+        LoaderFrame->Data = 0;
+
+    LepSetGlobalData(GlobalData);
+
+#if ENABLE_LOG
+    InitLog(GlobalData->LogFile, BootstrapPayload);
+    WriteLog(L"process identity pid=%u tid=%u bits=%u processOnly=%u nlsApply=%u",
+             (ULONG)CurrentPid(), (ULONG)CurrentTid(), (ULONG)(sizeof(PVOID) * 8),
+             (ULONG)LEP_DIAG_PROCESS_ONLY, (ULONG)!LEP_DIAG_SKIP_NLS_APPLY);
+    if (LepCurrentPeb()->ProcessParameters != nullptr)
+    {
+        const UNICODE_STRING& CommandLine = LepCurrentPeb()->ProcessParameters->CommandLine;
+        LepLogUnicodeString(L"process commandLine:", CommandLine);
+    }
+    WriteLog(L"initialize entry loader=%u bootstrapPayloadPresent=%u payloadSize=%u",
+             IsLoader, BootstrapPayloadPresent, BootstrapPayload->TotalSize);
+#endif
+
+    WriteLog(L"GlobalData.Initialize begin");
+    Status = GlobalData->Initialize(BootstrapPayload, OwnBootstrapPayload);
+    WriteLog(L"GlobalData.Initialize end status=%08X", Status);
+    if (NT_FAILED(Status))
+    {
+#if LEP_DIAG_INIT
+        LepDiagStatus(L"GlobalData.Initialize", Status);
+#endif
+        return FALSE;
+    }
+
+    // Configuration is still propagated when NLS application is disabled;
+    // do not label configured values as the effective process state.
+    WriteLog(L"configured locale=%u originalLocale=%p acp=%u oemcp=%u tebLocale=%u",
+             GlobalData->GetEnvironment()->LocaleId,
+             GlobalData->GetRuntimeState()->OriginalLocaleId,
+             GlobalData->GetEnvironment()->AnsiCodePage,
+             GlobalData->GetEnvironment()->OemCodePage,
+             (ULONG)CurrentTeb()->CurrentLocale);
+
+    WriteLog(L"observed ntdllAcp=%u nlsApply=%u", (ULONG)NlsAnsiCodePage, (ULONG)!LEP_DIAG_SKIP_NLS_APPLY);
+    WriteLog(L"init complete pid=%u tid=%u processOnly=%u nlsApply=%u status=%08X",
+             (ULONG)CurrentPid(), (ULONG)CurrentTid(), (ULONG)LEP_DIAG_PROCESS_ONLY,
+             (ULONG)!LEP_DIAG_SKIP_NLS_APPLY, Status);
+    WriteLog(L"init ret");
+
+    return TRUE;
+}
+
+BOOL NTAPI DllMain(PVOID BaseAddress, ULONG Reason, PVOID Reserved)
+{
+    switch (Reason)
+    {
+        case DLL_PROCESS_ATTACH:
+            return Initialize(BaseAddress) || UnInitialize(BaseAddress);
+
+        case DLL_PROCESS_DETACH:
+            UnInitialize(BaseAddress);
+            break;
+    }
+
+    return TRUE;
+}

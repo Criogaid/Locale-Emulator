@@ -1,0 +1,4 @@
+EXPORTS
+    LepCreateProcess
+    LepCreateProcess2
+    LepBrokerEntry
