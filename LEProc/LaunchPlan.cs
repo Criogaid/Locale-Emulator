@@ -35,9 +35,48 @@ namespace LEProc
             var plan = Create(path, rawParameters, arguments);
             plan.ApplicationName = applicationName.Trim('"');
             plan.CommandLine = WindowsCommandLine.QuoteArgument(plan.ApplicationName) + " "
-                + template.Replace("%1", Path.GetFullPath(path))
-                    .Replace("%*", GetParameters(rawParameters, arguments));
+                + ExpandAssociationTemplate(template, Path.GetFullPath(path), GetParameters(rawParameters, arguments));
             return plan;
+        }
+
+        private static string ExpandAssociationTemplate(string template, string path, string parameters)
+        {
+            var result = new System.Text.StringBuilder();
+            for (var index = 0; index < template.Length;)
+            {
+                if (template[index] == '%' && index + 1 < template.Length)
+                {
+                    var placeholder = template[index + 1];
+                    if (placeholder == '1' || placeholder == 'L' || placeholder == 'l')
+                    {
+                        result.Append(IsInsideQuotes(template, index)
+                            ? path
+                            : WindowsCommandLine.QuoteArgument(path));
+                        index += 2;
+                        continue;
+                    }
+                    if (placeholder == '*')
+                    {
+                        result.Append(parameters);
+                        index += 2;
+                        continue;
+                    }
+                }
+
+                result.Append(template[index++]);
+            }
+            return result.ToString();
+        }
+
+        private static bool IsInsideQuotes(string template, int index)
+        {
+            var quoted = false;
+            for (var cursor = 0; cursor < index; cursor++)
+            {
+                if (template[cursor] == '"' && (cursor == 0 || template[cursor - 1] != '\\'))
+                    quoted = !quoted;
+            }
+            return quoted;
         }
 
         private static string GetParameters(string rawParameters, IEnumerable<string> arguments)

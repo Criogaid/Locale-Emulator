@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using LECommonLibrary;
@@ -161,6 +162,7 @@ namespace ManagedRegression
         {
             System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("zh-CN");
             var path = Path.Combine(Path.GetDirectoryName(typeof(App).Assembly.Location), "Lang", "zh-CN.xaml");
+            var original = File.ReadAllBytes(path);
             var expected = System.Xml.Linq.XDocument.Load(path);
             var keyName = System.Xml.Linq.XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml");
             var translation = System.Linq.Enumerable.First(expected.Root.Elements(), element => (string)element.Attribute(keyName) == "Save").Value;
@@ -178,6 +180,23 @@ namespace ManagedRegression
                     File.SetAttributes(path, attributes);
                     File.Move(path, moved);
                     File.Move(moved, path);
+                    try
+                    {
+                        File.WriteAllText(path,
+                            "<ResourceDictionary xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" " +
+                            "xmlns:system=\"clr-namespace:System;assembly=mscorlib\"><system:String x:Key=\"Save\">Save</system:String></ResourceDictionary>",
+                            Encoding.UTF8);
+                        type.GetField("cacheDictionary", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, null);
+                        type.GetMethod("LoadLanguage", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+                        var getString = type.GetMethod("GetString", BindingFlags.Static | BindingFlags.NonPublic);
+                        Check((string)getString.Invoke(null, new object[] { "MissingKey" }) == "MissingKey",
+                            "A missing translation key did not fall back to its key.");
+                    }
+                    finally
+                    {
+                        File.WriteAllBytes(path, original);
+                        type.GetField("cacheDictionary", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, null);
+                    }
                 });
             }
             finally

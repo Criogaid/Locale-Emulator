@@ -17,7 +17,7 @@ namespace LEGUI
         internal static string GetString(string key)
         {
             var dict = LoadDictionary();
-            var value = dict[key] as string;
+            var value = dict.Contains(key) ? dict[key] as string : null;
             return string.IsNullOrEmpty(value) ? key : value;
         }
 

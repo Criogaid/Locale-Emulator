@@ -50,16 +50,34 @@ namespace LECommonLibrary
 
         private static string[] SplitExecutableAndArgument(string line)
         {
-            var ret = line.StartsWith("\"")
-                          ? line.Split(new[] {"\" "}, 2, StringSplitOptions.None)
-                          : line.Split(new[] {' '}, 2, StringSplitOptions.None);
+            if (string.IsNullOrWhiteSpace(line))
+                return null;
 
-            if (ret.Length == 2)
+            var executableEnd = -1;
+            var executable = line[0] == '"';
+            if (executable)
             {
-                ret[0] = ret[0].StartsWith("\"") ? ret[0].Substring(1) : ret[0];
-                return ret;
+                executableEnd = line.IndexOf('"', 1);
+                if (executableEnd <= 1)
+                    return null;
             }
-            return null;
+            else
+            {
+                var extension = line.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+                if (extension >= 0)
+                    executableEnd = extension + ".exe".Length;
+                else
+                    executableEnd = line.IndexOf(' ');
+            }
+
+            if (executableEnd <= 0 || executableEnd >= line.Length - 1)
+                return null;
+
+            var executablePath = executable
+                ? line.Substring(1, executableEnd - 1)
+                : line.Substring(0, executableEnd);
+            var arguments = line.Substring(executable ? executableEnd + 1 : executableEnd).TrimStart();
+            return arguments.Length == 0 ? null : new[] { executablePath, arguments };
         }
 
         private static string GetAssociatedProgramFromRegistry(string ext)

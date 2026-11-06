@@ -54,10 +54,11 @@ namespace ManagedRegression
                 File.WriteAllText(document, "document");
                 File.WriteAllText(Path.Combine(directory, "relative.txt"), "target-content");
                 var cli = new[] { "", "two words", "embedded\"quote", @"C:\trailing space\", "日本語" };
+                foreach (var template in new[] { "--child \"%1\" %*", "--child \"%L\" %*", "--child %1 %*" })
                 foreach (var raw in new[] { "", "\"profile value\" \"\"" })
                 {
                     var plan = Invoke(ProductType("LEProc.LaunchPlan").GetMethod("CreateAssociated", Static), null,
-                        document, "\"" + Assembly.GetExecutingAssembly().Location + "\"", "--child \"%1\" %*", raw, cli);
+                        document, "\"" + Assembly.GetExecutingAssembly().Location + "\"", template, raw, cli);
                     var output = RunChild((string)Property(plan, "ApplicationName"),
                         RemoveExecutable((string)Property(plan, "CommandLine")), (string)Property(plan, "CurrentDirectory"));
                     Check(output[0] == directory && output[1] == "target-content", "Associated child working directory changed.");
