@@ -20,6 +20,13 @@ ForceInline VOID InitUnicodeProc(PLeGlobalData GlobalData, HWND hWnd, PVOID Unic
     ResetDCCharset(GlobalData, hWnd);
 }
 
+template<typename CHARACTER>
+ForceInline BOOL IsReadableClassName(const CHARACTER* Name)
+{
+    return Name == nullptr || reinterpret_cast<ULONG_PTR>(Name) <= MAX_USHORT ||
+        IsReadableNullTerminatedString(Name);
+}
+
 /************************************************************************
   ansi to unicode
 ************************************************************************/
@@ -60,6 +67,9 @@ UserMessageCall(INLPCREATESTRUCT)
     LOOP_ONCE
     {
         if (CreateStructW == nullptr || !IsReadableMemory((PVOID)CreateStructW, sizeof(*CreateStructW)))
+            break;
+        if (!IsReadableClassName(CreateStructW->lpszClass) ||
+            !IsReadableNullTerminatedString(CreateStructW->lpszName))
             break;
 
         CreateStructA = *(LPCREATESTRUCTA)CreateStructW;
@@ -104,6 +114,9 @@ UserMessageCall(INLPMDICREATESTRUCT)
     {
         if (MdiCreateStructW == nullptr || !IsReadableMemory((PVOID)MdiCreateStructW, sizeof(*MdiCreateStructW)))
             break;
+        if (!IsReadableClassName(MdiCreateStructW->szClass) ||
+            !IsReadableNullTerminatedString(MdiCreateStructW->szTitle))
+            break;
 
         MdiCreateStructA = *(LPMDICREATESTRUCTA)MdiCreateStructW;
 
@@ -141,7 +154,7 @@ UserMessageCall(INSTRINGNULL)
 
     LOOP_ONCE
     {
-        if (lParam == 0)
+        if (!IsReadableNullTerminatedString((PCWSTR)lParam))
             break;
 
         Length = StrLengthW((PWSTR)lParam);
@@ -170,6 +183,9 @@ UserMessageCall(OUTSTRING)
 
     OutputSize = wParam;
     OutputBuffer = (PWSTR)lParam;
+    if (OutputSize < 0 || (OutputSize != 0 &&
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR))))
+        return 0;
 
     Length = OutputSize * sizeof(WCHAR);
     Ansi = AllocAnsi(Length);
@@ -197,8 +213,13 @@ UserMessageCall(INSTRING)
 UserMessageCall(INCNTOUTSTRING)
 {
     PMSG_INPUT_COUNT_OUPUT_STRING ParamW = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
+    if (!IsReadableMemory(ParamW, sizeof(*ParamW)))
+        return 0;
     const USHORT OutputSize = ParamW->BufferSize;
     PWSTR OutputBuffer = ParamW->UnicodeBuffer;
+    if (OutputSize != 0 &&
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR)))
+        return 0;
     const USHORT Capacity = static_cast<USHORT>(ML_MIN(static_cast<ULONG>(OutputSize) * sizeof(WCHAR), MAX_USHORT));
     PSTR Ansi = AllocAnsi(ML_MAX(Capacity, sizeof(USHORT)));
     if (Ansi == nullptr)
@@ -232,6 +253,8 @@ UserMessageCall(OUTCBOXSTRING)
 
     OutputBuffer = (PWSTR)lParam;
     ++OutputSize;
+    if (OutputSize < 0 || !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR)))
+        return 0;
     Ansi = AllocAnsi(OutputSize);
     if (Ansi == nullptr)
         return 0;
@@ -381,6 +404,9 @@ KernelMessageCall(INLPCREATESTRUCT)
     {
         if (CreateStructA == nullptr || !IsReadableMemory((PVOID)CreateStructA, sizeof(*CreateStructA)))
             break;
+        if (!IsReadableClassName(CreateStructA->lpszClass) ||
+            !IsReadableNullTerminatedString(CreateStructA->lpszName))
+            break;
 
         CreateStructW = *(LPCREATESTRUCTW)CreateStructA;
 
@@ -424,6 +450,9 @@ KernelMessageCall(INLPMDICREATESTRUCT)
     {
         if (MdiCreateStructA == nullptr || !IsReadableMemory((PVOID)MdiCreateStructA, sizeof(*MdiCreateStructA)))
             break;
+        if (!IsReadableClassName(MdiCreateStructA->szClass) ||
+            !IsReadableNullTerminatedString(MdiCreateStructA->szTitle))
+            break;
 
         MdiCreateStructW = *(LPMDICREATESTRUCTW)MdiCreateStructA;
 
@@ -462,7 +491,7 @@ KernelMessageCall(INSTRINGNULL)
 
     LOOP_ONCE
     {
-        if (lParam == 0 || !IsReadableMemory((PVOID)lParam, 1))
+        if (lParam == 0 || !IsReadableNullTerminatedString((PCSTR)lParam))
             break;
 
         Length = StrLengthA((PSTR)lParam);
@@ -496,6 +525,8 @@ KernelMessageCall(OUTSTRING)
 
     OutputBuffer = (PSTR)lParam;
     OutputSize = wParam;
+    if (OutputSize < 0 || (OutputSize != 0 && !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize))))
+        return 0;
 
     Length = GlobalData->NtUserMessageCall(Window, Message + 1, wParam, lParam, xParam, xpfnProc, Flags);
     if (Length == 0)
@@ -528,6 +559,8 @@ KernelMessageCall(INCNTOUTSTRING)
         return 0;
     const USHORT OutputSize = ParamA->BufferSize;
     PSTR OutputBuffer = ParamA->AnsiBuffer;
+    if (OutputSize != 0 && !IsWritableMemory(OutputBuffer, OutputSize))
+        return 0;
     // 私有消息传输以 WORD 计字节，避免宽字符容量乘二后回绕。
     const USHORT Capacity = static_cast<USHORT>(ML_MIN(OutputSize, MAX_USHORT / sizeof(WCHAR)));
     PWSTR Unicode = AllocUnicode(ML_MAX(Capacity, 1));
@@ -579,7 +612,10 @@ KernelMessageCall(OUTCBOXSTRING)
             RequiredBytes < ULONG_MAX)
         {
             // LB_GETTEXT/CB_GETLBTEXT 无容量参数；调用者按 GETTEXTLEN 结果分配。
-            UnicodeToAnsi(OutputBuffer, RequiredBytes + 1, Unicode, Length, (PULONG_PTR)&Length);
+            if (IsWritableMemory(OutputBuffer, RequiredBytes + 1))
+                UnicodeToAnsi(OutputBuffer, RequiredBytes + 1, Unicode, Length, (PULONG_PTR)&Length);
+            else
+                Length = 0;
         }
         else
         {

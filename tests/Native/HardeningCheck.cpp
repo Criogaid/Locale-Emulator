@@ -13,6 +13,7 @@ PLeGlobalData TestGetGlobalData() { return testGlobalData; }
 #include "../../Native/LocaleEmulator/Hooks/User32Hook.cpp"
 #undef LeGetGlobalData
 #include <stdio.h>
+#include <vector>
 
 static __declspec(noinline) int __stdcall Original(int value)
 {
@@ -38,14 +39,43 @@ static bool CheckLineThunks() {
     testGlobalData->HookStub.StubNtUserMessageCall = LineW;
     const USHORT capacities[] = {0,1,2,32767,32768,65535};
     for (USHORT capacity : capacities) {
-        BYTE ansi[32]; WCHAR wide[32]; FillMemory(ansi,sizeof(ansi),0x5A); FillMemory(wide,sizeof(wide),0x5A);
-        *(USHORT*)ansi = capacity; *(USHORT*)wide = capacity;
-        BYTE expectedA[32]; WCHAR expectedW[32]; CopyMemory(expectedA,ansi,sizeof(ansi));CopyMemory(expectedW,wide,sizeof(wide));
+        const size_t ansiSize = capacity > sizeof(USHORT) ? capacity : sizeof(USHORT);
+        const size_t wideSize = capacity != 0 ? capacity : 1;
+        std::vector<BYTE> ansi(ansiSize, 0x5A);
+        std::vector<WCHAR> wide(wideSize, 0x5A);
+        *(USHORT*)ansi.data() = capacity; *(USHORT*)wide.data() = capacity;
+        std::vector<BYTE> expectedA = ansi;
+        std::vector<WCHAR> expectedW = wide;
         const USHORT count = capacity < 4 ? capacity : 4;
-        CopyMemory(expectedA,"ABCD",count);CopyMemory(expectedW,L"ABCD",count * sizeof(WCHAR));
-        if(UserfnINCNTOUTSTRING(LineA,nullptr,EM_GETLINE,0,(LPARAM)wide)!=count || memcmp(wide,expectedW,sizeof(wide))) return false;
-        if(NtUserfnINCNTOUTSTRING(nullptr,EM_GETLINE,0,(LPARAM)ansi,0,0,0)!=count || memcmp(ansi,expectedA,sizeof(ansi))) return false;
+        CopyMemory(expectedA.data(), "ABCD", count);
+        CopyMemory(expectedW.data(), L"ABCD", count * sizeof(WCHAR));
+        if (UserfnINCNTOUTSTRING(LineA, nullptr, EM_GETLINE, 0, (LPARAM)wide.data()) != count ||
+            memcmp(wide.data(), expectedW.data(), wide.size() * sizeof(WCHAR))) return false;
+        if (NtUserfnINCNTOUTSTRING(nullptr, EM_GETLINE, 0, (LPARAM)ansi.data(), 0, 0, 0) != count ||
+            memcmp(ansi.data(), expectedA.data(), ansi.size())) return false;
     }
+    SYSTEM_INFO system;
+    GetSystemInfo(&system);
+    PBYTE pages = static_cast<PBYTE>(VirtualAlloc(nullptr, static_cast<SIZE_T>(system.dwPageSize) * 2, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    if (!pages) return false;
+    DWORD previous;
+    const BOOL guarded = VirtualProtect(pages + system.dwPageSize, system.dwPageSize, PAGE_NOACCESS, &previous);
+    if (!guarded) {
+        VirtualFree(pages, 0, MEM_RELEASE);
+        return false;
+    }
+    PBYTE parameter = pages + system.dwPageSize - sizeof(USHORT) * 2;
+    *reinterpret_cast<USHORT*>(parameter) = 4;
+    if (UserfnINCNTOUTSTRING(LineA, nullptr, EM_GETLINE, 0, (LPARAM)parameter) != 0) {
+        VirtualFree(pages, 0, MEM_RELEASE);
+        return false;
+    }
+    *reinterpret_cast<USHORT*>(parameter) = 8;
+    if (NtUserfnINCNTOUTSTRING(nullptr, EM_GETLINE, 0, (LPARAM)parameter, 0, 0, 0) != 0) {
+        VirtualFree(pages, 0, MEM_RELEASE);
+        return false;
+    }
+    VirtualFree(pages, 0, MEM_RELEASE);
     return true;
 }
 
