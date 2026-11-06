@@ -320,10 +320,16 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
     if (TableSize == GDI_ERROR)
         return STATUS_OBJECT_NAME_NOT_FOUND;
 
-    Table = AllocStack(TableSize);
+    // name 表长度由字体数据决定，栈分配会在大表时耗尽枚举线程栈（实测 1MiB 表溢出）。
+    Table = AllocateMemory(TableSize);
+    if (Table == nullptr)
+        return STATUS_OBJECT_NAME_NOT_FOUND;
     TableSize = GetFontData(AdjustData->DC, TableName, 0, Table, TableSize);
     if (TableSize == GDI_ERROR)
+    {
+        FreeMemory(Table);
         return STATUS_OBJECT_NAME_NOT_FOUND;
+    }
 
     RtlInitEmptyString(&FaceName, FaceNameBuffer, sizeof(FaceNameBuffer));
     RtlInitEmptyString(&FullName, FullNameBuffer, sizeof(FullNameBuffer));
@@ -340,7 +346,10 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
     BOOL Vertical = lfFaceName[0] == '@';
 
     if (NT_FAILED(Status) || wcsicmp(FaceName.Buffer, lfFaceName + Vertical) != 0)
+    {
+        FreeMemory(Table);
         return STATUS_CONTEXT_MISMATCH;
+    }
 
     Status = this->GetNameRecordFromNameTable(
                 Table,
@@ -378,6 +387,7 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
         *PtrAdd(Buffer, Length) = 0;
     }
 
+    FreeMemory(Table);
     return Status;
 }
 
