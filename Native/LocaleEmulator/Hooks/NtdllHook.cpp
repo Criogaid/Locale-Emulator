@@ -199,10 +199,11 @@ LeNtQuerySystemInformation(
     switch (SystemInformationClass)
     {
         case SystemCurrentTimeZoneInformation:
-            if (SystemInformation == nullptr)
+            if (SystemInformation == nullptr ||
+                SystemInformationLength < sizeof(GlobalData->GetLeb()->Timezone) ||
+                IsWritableMemory(SystemInformation, sizeof(GlobalData->GetLeb()->Timezone)) == FALSE)
                 break;
-
-            if (SystemInformationLength < sizeof(GlobalData->GetLeb()->Timezone))
+            if (ReturnLength != nullptr && IsWritableMemory(ReturnLength, sizeof(*ReturnLength)) == FALSE)
                 break;
 
             *((PRTL_TIME_ZONE_INFORMATION)SystemInformation) = GlobalData->GetLeb()->Timezone;
@@ -487,19 +488,42 @@ LeNtCreateUserProcess(
     NTSTATUS            Status, Status2;
     PLeGlobalData       GlobalData;
     PPS_ATTRIBUTE_LIST  LocalAttributeList;
+    PVOID               LocalAttributeAllocation;
     PPS_ATTRIBUTE       Attribute;
     CLIENT_ID           LocalCid, *Cid;
     ULONG_PTR           ReturnLength;
     LONG                Offset;
     PVOID               SelfShadow;
 
-    HpSetFilterAction(BlockSystemCall);
-
-    WriteLog(L"create proc");
-
     LocalAttributeList = nullptr;
+    LocalAttributeAllocation = nullptr;
     Attribute = nullptr;
     Cid = nullptr;
+
+    if ((ProcessObjectAttributes != nullptr &&
+         IsReadableMemory(ProcessObjectAttributes, sizeof(*ProcessObjectAttributes)) == FALSE) ||
+        (ThreadObjectAttributes != nullptr &&
+         IsReadableMemory(ThreadObjectAttributes, sizeof(*ThreadObjectAttributes)) == FALSE))
+        return 0;
+
+    if (AttributeList != nullptr)
+    {
+        if (IsReadableMemory(AttributeList, FIELD_OFFSET(PS_ATTRIBUTE_LIST, Attributes)) == FALSE ||
+            AttributeList->TotalLength < FIELD_OFFSET(PS_ATTRIBUTE_LIST, Attributes) ||
+            IsReadableMemory(AttributeList, AttributeList->TotalLength) == FALSE)
+            return 0;
+    }
+
+    auto ReleaseLocalAttributes = [&]()
+    {
+        if (LocalAttributeAllocation != nullptr)
+        {
+            FreeMemory(LocalAttributeAllocation);
+            LocalAttributeAllocation = nullptr;
+        }
+    };
+
+    HpSetFilterAction(BlockSystemCall);
 
     if (AttributeList != nullptr)
     {
@@ -524,8 +548,14 @@ LeNtCreateUserProcess(
     {
         ULONG_PTR ListLength;
 
+        if ((AttributeList != nullptr && AttributeList->TotalLength > MAXULONG_PTR - sizeof(*Attribute)) ||
+            (AttributeList == nullptr && sizeof(AttributeList->TotalLength) > MAXULONG_PTR - sizeof(*Attribute)))
+            return STATUS_INTEGER_OVERFLOW;
         ListLength = (AttributeList != nullptr ? AttributeList->TotalLength : sizeof(AttributeList->TotalLength)) + sizeof(*Attribute);
-        LocalAttributeList = (PPS_ATTRIBUTE_LIST)AllocStack(ListLength);
+        LocalAttributeList = (PPS_ATTRIBUTE_LIST)AllocateMemory(ListLength);
+        if (LocalAttributeList == nullptr)
+            return STATUS_NO_MEMORY;
+        LocalAttributeAllocation = LocalAttributeList;
 
         if (AttributeList != nullptr)
             CopyMemory(LocalAttributeList, AttributeList, AttributeList->TotalLength);
@@ -582,7 +612,10 @@ LeNtCreateUserProcess(
     WriteLog(L"create proc %p", Status);
 
     if (NT_FAILED(Status))
+    {
+        ReleaseLocalAttributes();
         return Status;
+    }
 
     HANDLE InternalProcess = *ProcessHandle, InternalThread = *ThreadHandle;
     HANDLE ReturnedProcess = nullptr, ReturnedThread = nullptr;
@@ -626,12 +659,14 @@ LeNtCreateUserProcess(
                     // Both termination primitives failed: return the remaining cleanup capability.
                     *ProcessHandle = InternalProcess;
                     *ThreadHandle = InternalThread;
+                    ReleaseLocalAttributes();
                     return CleanupStatus;
                 }
             }
         }
         NtClose(InternalThread);
         NtClose(InternalProcess);
+        ReleaseLocalAttributes();
         return Status2;
     }
 
@@ -642,6 +677,7 @@ LeNtCreateUserProcess(
 
     WriteLog(L"inject %p", Status2);
 
+    ReleaseLocalAttributes();
     return Status;
 }
 
@@ -781,6 +817,15 @@ LeNtQueryValueKey(
     WriteLog(L"lookup %s: %p", ValueName->Buffer, Status);
 
     FAIL_RETURN(Status);
+
+    if (Entry->Redirected.Data != nullptr)
+    {
+        if (KeyValueInformation != nullptr && Length != 0 &&
+            IsWritableMemory(KeyValueInformation, Length) == FALSE)
+            return 0;
+        if (ResultLength != nullptr && IsWritableMemory(ResultLength, sizeof(*ResultLength)) == FALSE)
+            return 0;
+    }
 
     HpSetFilterAction(BlockSystemCall);
 
@@ -932,8 +977,9 @@ LeNtQueryDefaultLocale(
     PLCID   DefaultLocaleId
 )
 {
+    if (IsWritableMemory(DefaultLocaleId, sizeof(*DefaultLocaleId)) == FALSE)
+        return 0;
     HpSetFilterAction(BlockSystemCall);
-
     *DefaultLocaleId = ((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID;
     return STATUS_SUCCESS;
 }
@@ -945,8 +991,9 @@ LeNtQueryDefaultUILanguage(
     LANGID *DefaultUILanguageId
 )
 {
+    if (IsWritableMemory(DefaultUILanguageId, sizeof(*DefaultUILanguageId)) == FALSE)
+        return 0;
     HpSetFilterAction(BlockSystemCall);
-
     *DefaultUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID);
     return STATUS_SUCCESS;
 }
@@ -958,8 +1005,9 @@ LeNtQueryInstallUILanguage(
     LANGID *InstallUILanguageId
 )
 {
+    if (IsWritableMemory(InstallUILanguageId, sizeof(*InstallUILanguageId)) == FALSE)
+        return 0;
     HpSetFilterAction(BlockSystemCall);
-
     *InstallUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID);
     return STATUS_SUCCESS;
 }

@@ -105,10 +105,10 @@ typedef struct TEXT_METRIC_INTERNAL
 
 } TEXT_METRIC_INTERNAL, *PTEXT_METRIC_INTERNAL;
 
-// 影子映像不在加载器模块表中，SafeSEH 拒绝其 SEH 处理函数（实测 N11/N12，
+// 影子映像不在加载器模块表中，SafeSEH 拒绝其异常处理函数（实测 N11/N12，
 // 二阶异常码 STATUS_INVALID_EXCEPTION_HANDLER），影子上下文内 SEH 不可作为防线；
-// 应用可探指针在解引用前必须验证可读。
-ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
+// 应用可控指针在解引用前必须验证对应的读/写权限。
+ForceInline BOOL IsMemoryAccessible(PVOID Address, ULONG_PTR Size, BOOL WriteAccess)
 {
     MEMORY_BASIC_INFORMATION MemoryInfo;
     ULONG_PTR               AddressValue;
@@ -128,6 +128,15 @@ ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
         Protection == PAGE_EXECUTE || FLAG_ON(MemoryInfo.Protect, PAGE_GUARD))
         return FALSE;
 
+    if (WriteAccess && Protection != PAGE_READWRITE && Protection != PAGE_WRITECOPY &&
+        Protection != PAGE_EXECUTE_READWRITE && Protection != PAGE_EXECUTE_WRITECOPY)
+        return FALSE;
+
+    if (!WriteAccess && Protection != PAGE_READONLY && Protection != PAGE_READWRITE &&
+        Protection != PAGE_WRITECOPY && Protection != PAGE_EXECUTE_READ &&
+        Protection != PAGE_EXECUTE_READWRITE && Protection != PAGE_EXECUTE_WRITECOPY)
+        return FALSE;
+
     AddressValue = reinterpret_cast<ULONG_PTR>(Address);
     RegionBase = reinterpret_cast<ULONG_PTR>(MemoryInfo.BaseAddress);
     if (AddressValue < RegionBase)
@@ -135,6 +144,16 @@ ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
 
     Offset = AddressValue - RegionBase;
     return Offset <= MemoryInfo.RegionSize && Size <= MemoryInfo.RegionSize - Offset;
+}
+
+ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
+{
+    return IsMemoryAccessible(Address, Size, FALSE);
+}
+
+ForceInline BOOL IsWritableMemory(PVOID Address, ULONG_PTR Size)
+{
+    return IsMemoryAccessible(Address, Size, TRUE);
 }
 
 typedef struct
