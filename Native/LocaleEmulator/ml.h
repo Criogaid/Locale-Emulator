@@ -27666,7 +27666,8 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         NoInline Function(const SELF_TYPE &func) \
         { \
             this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
+            if (this->invoker != nullptr) \
+                this->invoker->AddRef(); \
         } \
 \
         template<typename F> \
@@ -27687,6 +27688,11 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         { \
             if (invoker != nullptr) \
                 invoker->Release(); \
+        } \
+\
+        BOOL IsValid() const \
+        { \
+            return this->invoker != nullptr; \
         } \
 \
         R operator()(ARGS... args) \
@@ -27748,7 +27754,8 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         NoInline Function(const SELF_TYPE &func) \
         { \
             this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
+            if (this->invoker != nullptr) \
+                this->invoker->AddRef(); \
         } \
 \
         template<typename F> \
@@ -27769,6 +27776,11 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         { \
             if (invoker != nullptr) \
                 invoker->Release(); \
+        } \
+\
+        BOOL IsValid() const \
+        { \
+            return this->invoker != nullptr; \
         } \
 \
         R operator()(ARGS... args) \
@@ -27830,7 +27842,8 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         NoInline Function(const SELF_TYPE &func) \
         { \
             this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
+            if (this->invoker != nullptr) \
+                this->invoker->AddRef(); \
         } \
 \
         template<typename F> \
@@ -27851,6 +27864,11 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         { \
             if (invoker != nullptr) \
                 invoker->Release(); \
+        } \
+\
+        BOOL IsValid() const \
+        { \
+            return this->invoker != nullptr; \
         } \
 \
         R operator()(const CLASS& thiz, ARGS... args) \
@@ -27913,7 +27931,8 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         NoInline Function(const SELF_TYPE &func) \
         { \
             this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
+            if (this->invoker != nullptr) \
+                this->invoker->AddRef(); \
         } \
 \
         template<typename F> \
@@ -27934,6 +27953,11 @@ template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {
         { \
             if (invoker != nullptr) \
                 invoker->Release(); \
+        } \
+\
+        BOOL IsValid() const \
+        { \
+            return this->invoker != nullptr; \
         } \
 \
         R operator()(ARGS... args) \
@@ -30327,14 +30351,16 @@ public:
     }
 
     template<typename KEY_TYPE>
-    NoInline VALUE_REF Add(const KEY_TYPE& Key, CONST_VALUE_REF Value)
+    NoInline PVALUE Add(const KEY_TYPE& Key, CONST_VALUE_REF Value)
     {
-        return AddElement(Hasher<KEY_TYPE>::Hash(this, Key), Value).Element;
+        auto Entry = AddElement(Hasher<KEY_TYPE>::Hash(this, Key), Value);
+        return Entry == nullptr ? nullptr : &Entry->Element;
     }
 
-    NoInline VALUE_REF Add(PVOID Key, ULONG_PTR Length, CONST_VALUE_REF Value)
+    NoInline PVALUE Add(PVOID Key, ULONG_PTR Length, CONST_VALUE_REF Value)
     {
-        return AddElement(HashData(Key, Length), Value).Element;
+        auto Entry = AddElement(HashData(Key, Length), Value);
+        return Entry == nullptr ? nullptr : &Entry->Element;
     }
 
     template<typename KEY_TYPE>
@@ -30405,17 +30431,19 @@ protected:
         return STATUS_SUCCESS;
     }
 
-    NoInline HASH_TABLE_ITEM& AddElement(const HASH_VALUE& Hash, CONST_VALUE_REF Element)
+    NoInline PHASH_TABLE_ITEM AddElement(const HASH_VALUE& Hash, CONST_VALUE_REF Element)
     {
-        IncreaseCapacity();
+        if (NT_FAILED(IncreaseCapacity()))
+            return nullptr;
 
         auto Entry = LookupEntry(Hash, TRUE);
-
+        if (Entry == nullptr)
+            return nullptr;
         Entry->Hash = Hash;
         Entry->Element = Element;
         ++this->TableUsedSize;
 
-        return *Entry;
+        return Entry;
     }
 
     NoInline VOID RemoveElement(const HASH_VALUE& Hash)
@@ -30886,8 +30914,11 @@ CreateThreadT(
     StartParameterWrapper *func;
 
     func = new (std::nothrow) StartParameterWrapper(StartAddress, StartParameter);
-    if (func == NULL)
+    if (func == NULL || !func->func.IsValid())
+    {
+        delete func;
         return STATUS_NO_MEMORY;
+    }
 
     Status = CreateThread(PTHREAD_START_ROUTINE(
                 [] (PVOID Function) -> ULONG
@@ -30920,8 +30951,11 @@ NTSTATUS QueueApcRoutine(const F &ApcFunction, HANDLE Thread = CurrentThread)
     ml::Function<void()> *func;
 
     func = new (std::nothrow) ml::Function<void()>(ApcFunction);
-    if (func == NULL)
+    if (func == NULL || !func->IsValid())
+    {
+        delete func;
         return STATUS_NO_MEMORY;
+    }
 
     Status = NtQueueApcThread(Thread,
                 [] (PVOID ApcFunction, PVOID, PVOID) -> VOID
@@ -31998,8 +32032,11 @@ SetAsyncCall(
     } PARAMETER;
 
     PARAMETER *func = new (std::nothrow) PARAMETER(Callback, Context, Period);
-    if (func == nullptr)
+    if (func == nullptr || !func->func.IsValid())
+    {
+        delete func;
         return STATUS_NO_MEMORY;
+    }
 
     Status = NtCreateTimer(&Timer, TIMER_ALL_ACCESS, nullptr, SynchronizationTimer);
     if (NT_FAILED(Status))
@@ -32068,8 +32105,11 @@ SetAsyncCall(
     } PARAMETER;
 
     PARAMETER *func = new (std::nothrow) PARAMETER(Callback, Period);
-    if (func == nullptr)
+    if (func == nullptr || !func->func.IsValid())
+    {
+        delete func;
         return STATUS_NO_MEMORY;
+    }
 
     Status = NtCreateTimer(&Timer, TIMER_ALL_ACCESS, nullptr, SynchronizationTimer);
     if (NT_FAILED(Status))
