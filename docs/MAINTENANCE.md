@@ -30,6 +30,14 @@
 
 迁移后 Core 由于官方 SEH/GS 支持增加直接 KERNEL32 导入，没有 UCRT 或 VC runtime DLL 依赖。当前两产品启用 W4/WX、GS、ASLR、DEP 和 SafeSEH，正常及私有映像入口均使用官方 cookie 初始化，代码与数据分节、跳板发布为 RX；Loader 另启用 CFG。核心完整 CFG 的实际失败与私有 NLS 依赖见 [QUALITY.md](QUALITY.md)。本机早期注入及行为回归通过，其他系统版本需相同验证。
 
+## 业务目的与替代方案研究
+
+项目的业务目的仍是启动一个不配合改造的旧 Windows 目标进程，让它在自己的进程边界内看到指定的 ACP/OEMCP、LocaleID、UI 语言、时区、注册表和字体行为；它不负责翻译游戏内容。LEProc 负责配置和命令行，Loader 负责创建并注入目标，Core 负责目标进程内的兼容行为。
+
+公开 API 只能覆盖其中一部分：[`SetThreadLocale`](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-setthreadlocale) 只改变调用线程的 Locale；[`SetProcessPreferredUILanguages`](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-setprocesspreferreduilanguages) 只设置进程首选 UI 语言；[`activeCodePage`](https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page) 只提供 UTF-8 清单声明，官方文档明确说明 GDI 不支持按进程设置它。公开代码页 API也不能把任意旧程序的 ACP/OEMCP 变成目标值，公开时区和注册表 API也不能提供按目标进程的覆盖层。
+
+因此，改成纯公开 API、UTF-8 清单或 Windows 兼容性数据库都不能保持当前业务目的；它们只能作为目标程序自身愿意配合时的补充方案。x86 与 x64 Loader/Core 的分叉属于 ABI、PEB 布局和系统调用实现的运行时边界，强行合并会把架构条件扩散到 hook 代码，维护收益小于兼容风险。当前有证据的重构集中在 LEProc：启动失败现在返回非零退出码，提权失败和无文件关联也不再伪装成成功；区域解析在一次 `CultureInfo` 读取中完成，避免同一启动路径重复解析。
+
 ## 已复现并修复的托管问题
 
 - 旧 LEProc 用空格连接已解析参数，提权路径简单包引号，导致空参数、空格、嵌入引号及尾部反斜杠丢失。现由 `WindowsCommandLine` 统一编码，启动器、提权和 GUI 生成的命令使用同一实现。

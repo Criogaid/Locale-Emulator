@@ -17,7 +17,7 @@ namespace LEProc
         ///     The main entry point for the application.
         /// </summary>
         [STAThread]
-        private static void Main(string[] args)
+        private static int Main(string[] args)
         {
             SystemHelper.DisableDPIScale();
 
@@ -32,7 +32,7 @@ namespace LEProc
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
 
-                return;
+                return 1;
             }
 
             if (args.Length == 0)
@@ -67,7 +67,7 @@ namespace LEProc
 
                 GlobalHelper.ShowErrorDebugMessageBox("SYSTEM_REPORT", 0);
 
-                return;
+                return 1;
             }
 
             try
@@ -81,39 +81,37 @@ namespace LEProc
                 switch (Args[0])
                 {
                     case "-run": //-run %APP%
-                        RunWithIndependentProfile(Args[1]);
-                        break;
+                        return RunWithIndependentProfile(Args[1]);
 
                     case "-manage": //-manage %APP%
                         Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
                                 "LEGUI.exe"),
                             WindowsCommandLine.QuoteArgument(Args[1] + ".le.config"));
-                        break;
+                        return 0;
 
                     case "-global": //-global
                         Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
                             "LEGUI.exe"));
-                        break;
+                        return 0;
 
                     case "-runas": //-runas %GUID% %APP%
-                        RunWithGlobalProfile(Args[1], Args[2]);
-                        break;
+                        return RunWithGlobalProfile(Args[1], Args[2]);
 
                     default:
                         if (!File.Exists(Args[0]))
                             throw new FileNotFoundException("找不到目标程序或命令无效。", Args[0]);
-                        RunWithDefaultProfile(Args[0]);
-                        break;
+                        return RunWithDefaultProfile(Args[0]);
                 }
             }
             catch (Exception e)
             {
                 MessageBox.Show("无法启动：" + e.Message, "Locale Emulator",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 1;
             }
         }
 
-        private static void RunWithDefaultProfile(string path)
+        private static int RunWithDefaultProfile(string path)
         {
             path = SystemHelper.EnsureAbsolutePath(path);
 
@@ -127,10 +125,10 @@ namespace LEProc
                 ? appProfile.First()
                 : globalProfiles.Any() ? globalProfiles.First() : new LEProfile(true);
 
-            DoRunWithLEProfile(path, 1, profile);
+            return DoRunWithLEProfile(path, 1, profile);
         }
 
-        private static void RunWithGlobalProfile(string guid, string path)
+        private static int RunWithGlobalProfile(string guid, string path)
         {
             path = SystemHelper.EnsureAbsolutePath(path);
 
@@ -140,32 +138,28 @@ namespace LEProc
 
             var profile = profiles[0];
 
-            DoRunWithLEProfile(path, 3, profile);
+            return DoRunWithLEProfile(path, 3, profile);
         }
 
-        private static void RunWithIndependentProfile(string path)
+        private static int RunWithIndependentProfile(string path)
         {
             path = SystemHelper.EnsureAbsolutePath(path);
-
             var conf = path + ".le.config";
-
             if (!File.Exists(conf))
             {
                 Process.Start(
                     Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "LEGUI.exe"),
                     WindowsCommandLine.QuoteArgument(path + ".le.config"));
+                return 0;
             }
-            else
-            {
-                var profiles = LEConfig.GetProfiles(conf);
-                if (profiles.Length == 0)
-                    throw new InvalidDataException("应用配置为空或格式无效：" + conf);
-                var profile = profiles[0];
-                DoRunWithLEProfile(path, 2, profile);
-            }
+
+            var profiles = LEConfig.GetProfiles(conf);
+            if (profiles.Length == 0)
+                throw new InvalidDataException("应用配置为空或格式无效：" + conf);
+            return DoRunWithLEProfile(path, 2, profiles[0]);
         }
 
-        private static void DoRunWithLEProfile(string absPath, int argumentsStart, LEProfile profile)
+        private static int DoRunWithLEProfile(string absPath, int argumentsStart, LEProfile profile)
         {
             try
             {
@@ -174,9 +168,7 @@ namespace LEProc
 
                 if (profile.RunAsAdmin && !SystemHelper.IsAdministrator())
                 {
-                    ElevateProcess();
-
-                    return;
+                    return ElevateProcess() ? 0 : 1;
                 }
 
                 if (profile.RunWithSuspend)
@@ -192,7 +184,7 @@ namespace LEProc
                             MessageBoxButtons.YesNo,
                             MessageBoxIcon.Information
                             ))
-                        return;
+                        return 0;
                 }
 
                 var applicationName = string.Empty;
@@ -211,7 +203,7 @@ namespace LEProc
                     var jb = AssociationReader.GetAssociatedProgram(Path.GetExtension(absPath));
 
                     if (jb == null)
-                        return;
+                        return 1;
 
                     var plan = LaunchPlan.CreateAssociated(absPath, jb[0], jb[1],
                         profile.Parameter, Args.Skip(argumentsStart));
@@ -220,12 +212,12 @@ namespace LEProc
                     currentDirectory = plan.CurrentDirectory;
                 }
 
-                var ansiCodePage = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.ANSICodePage;
-                var oemCodePage = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.OEMCodePage;
-                var localeID = (uint) CultureInfo.GetCultureInfo(profile.Location).TextInfo.LCID;
-                var defaultCharset = (uint)
-                    GetCharsetFromANSICodepage(CultureInfo.GetCultureInfo(profile.Location)
-                        .TextInfo.ANSICodePage);
+                var culture = CultureInfo.GetCultureInfo(profile.Location);
+                var textInfo = culture.TextInfo;
+                var ansiCodePage = (uint) textInfo.ANSICodePage;
+                var oemCodePage = (uint) textInfo.OEMCodePage;
+                var localeID = (uint) textInfo.LCID;
+                var defaultCharset = (uint) GetCharsetFromANSICodepage(textInfo.ANSICodePage);
 
                 var registries = profile.RedirectRegistry
                     ? RegistryEntriesLoader.GetRegistryEntries(profile.IsAdvancedRedirection)
@@ -253,28 +245,28 @@ namespace LEProc
                                 item.Key,
                                 item.Name,
                                 item.Type,
-                                item.GetValue(CultureInfo.GetCultureInfo(profile.Location))));
+                                item.GetValue(culture)));
 
-                uint ret;
-                if ((ret = l.Start()) != 0)
+                uint ret = l.Start();
+                if (ret == 0)
+                    return 0;
+
+                if (SystemHelper.IsAdministrator())
                 {
-                    if (SystemHelper.IsAdministrator())
-                    {
-                        GlobalHelper.ShowErrorDebugMessageBox(commandLine, ret);
-                    }
-                    else
-                    {
-                        ElevateProcess();
-                    }
+                    GlobalHelper.ShowErrorDebugMessageBox(commandLine, ret);
+                    return unchecked((int)ret);
                 }
+
+                return ElevateProcess() ? 0 : 1;
             }
             catch (Exception e)
             {
                 MessageBox.Show(e.ToString());
+                return 1;
             }
         }
 
-        private static void ElevateProcess()
+        private static bool ElevateProcess()
         {
             try
             {
@@ -285,9 +277,11 @@ namespace LEProc
                                 .Location),
                         "LEProc.exe"),
                     Args);
+                return true;
             }
             catch (Exception)
             {
+                return false;
             }
         }
 
