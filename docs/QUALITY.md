@@ -106,5 +106,7 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - `81b513e`：字体 name 表枚举堆缓冲；注入进程 1MiB name 表栈溢出实测修复，12/12 组合与完整源码、ZIP 验收通过。
 - N10 修复后同型路径复核：其余可达 `AllocStack` 均为固定结构、系统表大小或宿主自构的小型属性表，无字体数据这类外部控制长度；循环收敛。
 - `61bb26e`：code-health-pass 全库审计（镜头：死契约/重复/放置/类型/可推导/无效测试/风格）：删除产品零调用的陷阱契约 `LEConfig.GetProfile(name)`，FIXME 误导注释改事实陈述；其余候选（LEProfile 占位参数、csproj 逐项目属性组、重定向表尺寸来源）均核实后不动。完整回归与 ZIP 验收通过。
+- `1526a96`：架构审查引出 N12：影子映像 SEH 失效是横切不变量而非孤立点——注册表重定向查找同样解引用应用提供的 ValueName 缓冲（空表时长度短路掩盖了路径）；带单条目 LEB 实证崩溃且二阶异常码 STATUS_INVALID_EXCEPTION_HANDLER 直接证实 SafeSEH 拒绝机制。IsReadableMemory 提升至 LocaleEmulator.h 共享，注册表边界同样先验证后解引用。矩阵 30 组除三模式对等的 sendgettext（原生亦崩）外全绿。剩余 SEH 站点盘点：Kernel32Hook/User32Hook 操作码与重定位走查均读受信模块内存，ml.cpp 三处为内核同源 shim，均无应用数据面，不再处置。
+- 行为变化：野 ValueName 的 NtQueryValueKey 在注入下由进程崩溃改为内核优雅拒绝，与原生一致。
 - `c82d061`：消息编组 SEH 失效实测与修复（N11）：影子映像不在加载器模块表，SafeSEH 拒绝其异常处理函数，上游 FIXME: SEH DOESN'T work 得到实证；WM_CREATE/WM_MDICREATE/WM_SETTEXT 野 lParam 注入崩溃而原生存活，改用 NtQueryVirtualMemory 可读性验证后再解引用（7 处）；WM_GETTEXT 野缓冲原生同样崩溃属对等不修。探针与日志在 `artifacts/review-round4/seh-probe/`，矩阵 21 组。
 - 注：临时诊断（ENABLE_LOG 构建、三处 WriteLog 打点）已全部还原，产品源码无残留。
