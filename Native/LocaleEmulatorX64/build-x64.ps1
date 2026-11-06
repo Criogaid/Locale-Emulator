@@ -39,7 +39,7 @@ $required = @(
     (Join-Path $dependencyRoot 'lep_ntdll_x64.def'),
     (Join-Path $dependencyRoot 'lep_k32_x64.def')
 )
-$missing = $required | Where-Object { -not (Test-Path $_) }
+$missing = @($required | Where-Object { -not (Test-Path -LiteralPath $_) })
 if ($missing.Count -ne 0) {
     throw "缺少 x64 构建依赖：`n$($missing -join "`n")"
 }
