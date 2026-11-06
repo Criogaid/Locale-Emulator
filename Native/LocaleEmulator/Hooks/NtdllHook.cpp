@@ -760,6 +760,9 @@ LeNtQueryValueKey(
     OBJECT_ATTRIBUTES           ObjectAttributes;
     PREGISTRY_REDIRECTION_ENTRY Entry;
 
+    // ValueName 结构及其 Buffer 都来自系统调用方，必须在影子映像中分别验证。
+    if (IsReadableMemory(ValueName, sizeof(*ValueName)) == FALSE)
+        return 0;
     if (NT_FAILED(RtlValidateUnicodeString(0, ValueName)))
         return 0;
 
