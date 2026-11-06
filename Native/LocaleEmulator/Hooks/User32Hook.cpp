@@ -24,6 +24,33 @@ ForceInline VOID InitUnicodeProc(PLeGlobalData GlobalData, HWND hWnd, PVOID Unic
   ansi to unicode
 ************************************************************************/
 
+// 影子映像不在加载器模块表中，SafeSEH 会拒绝其 SEH 处理函数（实测 N11），
+// 因此应用可控行指针在解引用前必须用 NtQueryVirtualMemory 验证可读。
+static BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
+{
+    MEMORY_BASIC_INFORMATION MemoryInfo;
+    NTSTATUS                Status;
+
+    if (Address == nullptr)
+        return FALSE;
+
+    Status = NtQueryVirtualMemory(
+                CurrentProcess,
+                Address,
+                MemoryBasicInformation,
+                &MemoryInfo,
+                sizeof(MemoryInfo),
+                nullptr
+            );
+    if (NT_FAILED(Status) || MemoryInfo.State != MEM_COMMIT)
+        return FALSE;
+
+    if (FLAG_ON(MemoryInfo.Protect, PAGE_NOACCESS) || FLAG_ON(MemoryInfo.Protect, PAGE_GUARD))
+        return FALSE;
+
+    return PtrAdd(Address, Size) <= PtrAdd(MemoryInfo.BaseAddress, MemoryInfo.RegionSize);
+}
+
 UserMessageCall(EMPTY)
 {
     return CallUserMessageCallA();
@@ -41,9 +68,10 @@ UserMessageCall(INLPCREATESTRUCT)
     {
         LOOP_ONCE
         {
-            if (!CreateStructW) break;
+            if (!IsReadableMemory((PVOID)CreateStructW, sizeof(*CreateStructW))) break;
             PCBT_CREATE_PARAM CbtCreateParam = (PCBT_CREATE_PARAM)CreateStructW->lpCreateParams;
             if (!CbtCreateParam) break;
+            if (!IsReadableMemory(CbtCreateParam, sizeof(*CbtCreateParam))) break;
             if (CbtCreateParam->Magic == CBT_PROC_PARAM_CONTEXT)
                 CreateStructW->lpCreateParams = CbtCreateParam->CreateParams;
         }
@@ -58,7 +86,7 @@ UserMessageCall(INLPCREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (CreateStructW == nullptr)
+        if (CreateStructW == nullptr || !IsReadableMemory((PVOID)CreateStructW, sizeof(*CreateStructW)))
             break;
 
         CreateStructA = *(LPCREATESTRUCTA)CreateStructW;
@@ -101,7 +129,7 @@ UserMessageCall(INLPMDICREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (MdiCreateStructW == nullptr)
+        if (MdiCreateStructW == nullptr || !IsReadableMemory((PVOID)MdiCreateStructW, sizeof(*MdiCreateStructW)))
             break;
 
         MdiCreateStructA = *(LPMDICREATESTRUCTA)MdiCreateStructW;
@@ -378,7 +406,7 @@ KernelMessageCall(INLPCREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (CreateStructA == nullptr)
+        if (CreateStructA == nullptr || !IsReadableMemory((PVOID)CreateStructA, sizeof(*CreateStructA)))
             break;
 
         CreateStructW = *(LPCREATESTRUCTW)CreateStructA;
@@ -421,7 +449,7 @@ KernelMessageCall(INLPMDICREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (MdiCreateStructA == nullptr)
+        if (MdiCreateStructA == nullptr || !IsReadableMemory((PVOID)MdiCreateStructA, sizeof(*MdiCreateStructA)))
             break;
 
         MdiCreateStructW = *(LPMDICREATESTRUCTW)MdiCreateStructA;
@@ -461,7 +489,7 @@ KernelMessageCall(INSTRINGNULL)
 
     LOOP_ONCE
     {
-        if (lParam == 0)
+        if (lParam == 0 || !IsReadableMemory((PVOID)lParam, 1))
             break;
 
         Length = StrLengthA((PSTR)lParam);
@@ -522,6 +550,9 @@ KernelMessageCall(INSTRING)
 KernelMessageCall(INCNTOUTSTRING)
 {
     PMSG_INPUT_COUNT_OUPUT_STRING ParamA = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
+    // lParam 结构来自应用发送路径；影子映像内 SEH 不可靠，先验证可读。
+    if (!IsReadableMemory(ParamA, sizeof(*ParamA)))
+        return 0;
     const USHORT OutputSize = ParamA->BufferSize;
     PSTR OutputBuffer = ParamA->AnsiBuffer;
     // 私有消息传输以 WORD 计字节，避免宽字符容量乘二后回绕。
