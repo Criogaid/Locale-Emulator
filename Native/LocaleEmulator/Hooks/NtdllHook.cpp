@@ -763,6 +763,12 @@ LeNtQueryValueKey(
     if (NT_FAILED(RtlValidateUnicodeString(0, ValueName)))
         return 0;
 
+    // N12：ValueName 缓冲区由应用提供，重定向表非空时查找路径会解引用；
+    // 影子映像内 SEH 不可靠（见 N11），不可读时放行原系统调用，
+    // 由内核 ProbeForRead 返回访问冲突，与原生行为一致。
+    if (ValueName->Length != 0 && IsReadableMemory(ValueName->Buffer, ValueName->Length) == FALSE)
+        return 0;
+
     GlobalData = (PLeGlobalData)HpGetFilterContext();
     
     WriteLog(L"lookup %s", ValueName->Buffer);

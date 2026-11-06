@@ -24,33 +24,6 @@ ForceInline VOID InitUnicodeProc(PLeGlobalData GlobalData, HWND hWnd, PVOID Unic
   ansi to unicode
 ************************************************************************/
 
-// 影子映像不在加载器模块表中，SafeSEH 会拒绝其 SEH 处理函数（实测 N11），
-// 因此应用可控行指针在解引用前必须用 NtQueryVirtualMemory 验证可读。
-static BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
-{
-    MEMORY_BASIC_INFORMATION MemoryInfo;
-    NTSTATUS                Status;
-
-    if (Address == nullptr)
-        return FALSE;
-
-    Status = NtQueryVirtualMemory(
-                CurrentProcess,
-                Address,
-                MemoryBasicInformation,
-                &MemoryInfo,
-                sizeof(MemoryInfo),
-                nullptr
-            );
-    if (NT_FAILED(Status) || MemoryInfo.State != MEM_COMMIT)
-        return FALSE;
-
-    if (FLAG_ON(MemoryInfo.Protect, PAGE_NOACCESS) || FLAG_ON(MemoryInfo.Protect, PAGE_GUARD))
-        return FALSE;
-
-    return PtrAdd(Address, Size) <= PtrAdd(MemoryInfo.BaseAddress, MemoryInfo.RegionSize);
-}
-
 UserMessageCall(EMPTY)
 {
     return CallUserMessageCallA();
