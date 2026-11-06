@@ -92,6 +92,8 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 
 | 超大 name 表字体 | 枚举改用堆缓冲，不再因大表耗尽线程栈；分配失败保留原始字体数据 |
 | 野 lParam 消息编组 | WM_CREATE/WM_MDICREATE/WM_SETTEXT 等编组先验证 lParam 可读再解引用，不可读时透传，与原生行为对齐 |
+| 野 ValueName 注册表过滤 | 过滤入口先验证 `UNICODE_STRING` 结构及 Buffer 可读，不可读时交给原生系统调用返回访问冲突 |
+| 可读性探针边界 | 使用减法检查避免地址终点溢出，并拒绝 `PAGE_EXECUTE`、`PAGE_NOACCESS`、`PAGE_GUARD` |
 
 原有 XML 字段、GUID、参数优先级、原生公开导出及 x86 目标边界继续作为兼容性约束。后续轮次以当前代码和可重复探针为准；没有触发证据的重写、通用框架和预留选项不作为整改项。
 
@@ -110,3 +112,5 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 行为变化：野 ValueName 的 NtQueryValueKey 在注入下由进程崩溃改为内核优雅拒绝，与原生一致。
 - `c82d061`：消息编组 SEH 失效实测与修复（N11）：影子映像不在加载器模块表，SafeSEH 拒绝其异常处理函数，上游 FIXME: SEH DOESN'T work 得到实证；WM_CREATE/WM_MDICREATE/WM_SETTEXT 野 lParam 注入崩溃而原生存活，改用 NtQueryVirtualMemory 可读性验证后再解引用（7 处）；WM_GETTEXT 野缓冲原生同样崩溃属对等不修。探针与日志在 `artifacts/review-round4/seh-probe/`，矩阵 21 组。
 - 注：临时诊断（ENABLE_LOG 构建、三处 WriteLog 打点）已全部还原，产品源码无残留。
+- `b71381c`：N13 入口结构指针边界；验证失效 `ValueName` 结构后再调用 `RtlValidateUnicodeString`，原生/932/936 注入均存活并返回 `STATUS_ACCESS_VIOLATION`。
+- `7d3d521`：N14 可读性探针规范化；消除终点指针溢出并按 Windows 页面保护契约拒绝不可读保护，30 组探针与完整源码、ZIP 验收保持通过。
