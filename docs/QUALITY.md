@@ -48,6 +48,16 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - N09：`/analyze` 确认全局 `vswprintf` 覆盖替换了 CRT 实现，且自定义 nullable `new[]` 与 SDK SAL 冲突。实际分配点迁移到标准 `std::nothrow` 重载，保留可恢复的失败行为；格式化改用传入真实容量的 `_snwprintf`，删除全局覆盖。C28251/C6066 归零，其余既有诊断逐项分类保留在 `artifacts/review-round3/`。
 - N10：`AdjustFontDataInternal` 把 `GetFontData` 返回的 name 表长度直接栈分配（C6255 的实际后果）。构造合法 1MiB name 表字体实测：Windows 接受该字体且未注入进程枚举正常，注入进程在 64KiB 与默认 1MiB 栈均于 `gdi32full!EnumFontFamiliesExW` 回调链触发 `0xC00000FD` 栈溢出。改为运行时堆分配并在全部退出路径释放，分配失败退回保留原始字体数据；修复后 12/12 组合通过，CP932/936 字符集调整与完整回归不变。证据在 `artifacts/review-round3/font-table/`。
 
+## 第 3 轮复审
+
+- N11：消息编组的影子映像 SEH 不可作为异常边界；WM_CREATE/WM_MDICREATE/WM_SETTEXT 的应用结构先按 `NtQueryVirtualMemory` 验证可读，野 `WM_GETTEXT` 因原生同样崩溃保留对等行为。
+- N12/N13：注册表重定向分别验证 `UNICODE_STRING.Buffer` 和 `UNICODE_STRING` 结构本身；失效输入不在影子映像中继续解引用。
+- N14：共享内存探针使用基址减法检查范围，拒绝 `PAGE_EXECUTE`、`PAGE_NOACCESS` 和 `PAGE_GUARD`，避免地址终点回绕及把不可读页当作可读页。
+- N16：`NtQuerySystemInformation(SystemCurrentTimeZoneInformation)` 的输出及可选 `ReturnLength` 在 Hook 直接写回前验证可写；坏输出页在原生、932、936 注入下均返回 `STATUS_ACCESS_VIOLATION` 且进程存活。
+- N17：注册表重定向分支在填充 `KeyValueInformation` 和 `ResultLength` 前验证调用方写范围；单条重定向、坏输出页的 native/932/936 对照通过。
+- N18：`NtCreateUserProcess` 的对象属性和属性列表先验证可读，并将由调用方 `TotalLength` 控制的附加 `PS_ATTRIBUTE` 副本从线程栈移到可失败堆分配；溢出、分配失败和全部清理路径保留。
+- N19：被 Hook 直接阻断的三个区域语言输出入口验证可写后再写回；合法输出仍分别写回区域 LCID/LANGID，坏输出与原生访问冲突对齐。
+
 ## 规范与支持边界
 
 官方工具链、C++ 声明、SDK 的公开函数参数、输出结构和资源生命周期是本轮直接整改对象。规范依据包括：
@@ -94,6 +104,8 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 | 野 lParam 消息编组 | WM_CREATE/WM_MDICREATE/WM_SETTEXT 等编组先验证 lParam 可读再解引用，不可读时透传，与原生行为对齐 |
 | 野 ValueName 注册表过滤 | 过滤入口先验证 `UNICODE_STRING` 结构及 Buffer 可读，不可读时交给原生系统调用返回访问冲突 |
 | 可读性探针边界 | 使用减法检查避免地址终点溢出，并拒绝 `PAGE_EXECUTE`、`PAGE_NOACCESS`、`PAGE_GUARD` |
+| 系统信息与区域输出边界 | Hook 直接写回前验证可写页面；非法输出透传给原生处理，合法区域值保持不变 |
+| 进程属性与注册表输出边界 | 调用方属性表只在可读且长度合法时复制；重定向输出和结果长度只写入可写范围，失败时不泄漏堆副本 |
 
 原有 XML 字段、GUID、参数优先级、原生公开导出及 x86 目标边界继续作为兼容性约束。后续轮次以当前代码和可重复探针为准；没有触发证据的重写、通用框架和预留选项不作为整改项。
 
@@ -106,7 +118,7 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - `2779e55`：托管启动、安装与 Shell 资源边界；34 项托管回归、8 项 x64 Shell 回归、完整源码与实际 ZIP 验收通过，含资源不一致与构建图负向用例。
 - `f8f1bc6`：统一托管与原生契约回归入口；34 项托管、8 项 x64 Shell、原生契约/目录/防护/消息/分配接入完整入口，干净检出整套复跑通过。
 - `81b513e`：字体 name 表枚举堆缓冲；注入进程 1MiB name 表栈溢出实测修复，12/12 组合与完整源码、ZIP 验收通过。
-- N10 修复后同型路径复核：其余可达 `AllocStack` 均为固定结构、系统表大小或宿主自构的小型属性表，无字体数据这类外部控制长度；循环收敛。
+- N10/N18 同型路径复核：字体 name 表和调用方 `PS_ATTRIBUTE_LIST->TotalLength` 不再进入线程栈；剩余 `AllocStack` 仅处理固定结构、已验证配置数据或宿主自构的小型属性表，没有未验证的外部长度控制。
 - `61bb26e`：code-health-pass 全库审计（镜头：死契约/重复/放置/类型/可推导/无效测试/风格）：删除产品零调用的陷阱契约 `LEConfig.GetProfile(name)`，FIXME 误导注释改事实陈述；其余候选（LEProfile 占位参数、csproj 逐项目属性组、重定向表尺寸来源）均核实后不动。完整回归与 ZIP 验收通过。
 - `1526a96`：架构审查引出 N12：影子映像 SEH 失效是横切不变量而非孤立点——注册表重定向查找同样解引用应用提供的 ValueName 缓冲（空表时长度短路掩盖了路径）；带单条目 LEB 实证崩溃且二阶异常码 STATUS_INVALID_EXCEPTION_HANDLER 直接证实 SafeSEH 拒绝机制。IsReadableMemory 提升至 LocaleEmulator.h 共享，注册表边界同样先验证后解引用。矩阵 30 组除三模式对等的 sendgettext（原生亦崩）外全绿。剩余 SEH 站点盘点：Kernel32Hook/User32Hook 操作码与重定位走查均读受信模块内存，ml.cpp 三处为内核同源 shim，均无应用数据面，不再处置。
 - 行为变化：野 ValueName 的 NtQueryValueKey 在注入下由进程崩溃改为内核优雅拒绝，与原生一致。
@@ -114,3 +126,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 注：临时诊断（ENABLE_LOG 构建、三处 WriteLog 打点）已全部还原，产品源码无残留。
 - `b71381c`：N13 入口结构指针边界；验证失效 `ValueName` 结构后再调用 `RtlValidateUnicodeString`，原生/932/936 注入均存活并返回 `STATUS_ACCESS_VIOLATION`。
 - `7d3d521`：N14 可读性探针规范化；消除终点指针溢出并按 Windows 页面保护契约拒绝不可读保护，30 组探针与完整源码、ZIP 验收保持通过。
+- `0d3ec0d`：N16–N19 应用指针写边界与可变属性表修复；共享读/写页权限探针、系统信息/区域查询、注册表重定向输出和 `NtCreateUserProcess` 属性列表均完成 native/932/936 对照。新增扩展矩阵为 45 组：除 3 组 native 与注入均一致的 `sendgettext` 原生访问冲突外，其余 42 组注入存活且状态一致；合法区域输出对照写回 `0x804`/`0x0804`。
