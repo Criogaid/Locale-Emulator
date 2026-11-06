@@ -111,6 +111,10 @@ typedef struct TEXT_METRIC_INTERNAL
 ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
 {
     MEMORY_BASIC_INFORMATION MemoryInfo;
+    ULONG_PTR               AddressValue;
+    ULONG_PTR               RegionBase;
+    ULONG_PTR               Offset;
+    ULONG                   Protection;
 
     if (Address == nullptr)
         return FALSE;
@@ -119,13 +123,18 @@ ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
                                       &MemoryInfo, sizeof(MemoryInfo), nullptr)))
         return FALSE;
 
-    if (MemoryInfo.State != MEM_COMMIT)
+    Protection = MemoryInfo.Protect & 0xFF;
+    if (MemoryInfo.State != MEM_COMMIT || Protection == PAGE_NOACCESS ||
+        Protection == PAGE_EXECUTE || FLAG_ON(MemoryInfo.Protect, PAGE_GUARD))
         return FALSE;
 
-    if (FLAG_ON(MemoryInfo.Protect, PAGE_NOACCESS) || FLAG_ON(MemoryInfo.Protect, PAGE_GUARD))
+    AddressValue = reinterpret_cast<ULONG_PTR>(Address);
+    RegionBase = reinterpret_cast<ULONG_PTR>(MemoryInfo.BaseAddress);
+    if (AddressValue < RegionBase)
         return FALSE;
 
-    return PtrAdd(Address, Size) <= PtrAdd(MemoryInfo.BaseAddress, MemoryInfo.RegionSize);
+    Offset = AddressValue - RegionBase;
+    return Offset <= MemoryInfo.RegionSize && Size <= MemoryInfo.RegionSize - Offset;
 }
 
 typedef struct
