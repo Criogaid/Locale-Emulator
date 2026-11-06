@@ -704,7 +704,7 @@ BOOL VerifyWindowParam(PCBT_CREATE_PARAM CbtCreateParam, PCBT_PROC_PARAM CbtPara
 {
     SEH_TRY
     {
-        // FIXME: SEH DOESN'T work
+        // Upstream note: SEH was observed not to catch here; keep derefs minimal and treat FALSE as "not an LE window".
         if (!CbtCreateParam || !CbtParam) return FALSE;
         return CbtCreateParam->StackPointer == CbtParam->StackPointer;
     }

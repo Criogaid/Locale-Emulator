@@ -235,7 +235,7 @@ namespace ManagedRegression
                     var profiles = LEConfig.GetProfiles();
                     Check(profiles.Length == 2 && profiles[0].Equals(profile) && profiles[1].Equals(second),
                         "Global profile order or fields did not round-trip.");
-                    Check(LEConfig.GetProfile(profile.Name).Equals(profile), "Profile lookup returned different fields.");
+                    Check(LEConfig.GetProfiles().FirstOrDefault(p => p.Name == profile.Name).Equals(profile), "Profile lookup returned different fields.");
                 }
                 finally { LEConfig.GlobalConfigPath = originalPath; }
             });

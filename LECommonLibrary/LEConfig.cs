@@ -13,17 +13,6 @@ namespace LECommonLibrary
             Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
                          "LEConfig.xml");
 
-        public static LEProfile GetProfile(string name)
-        {
-            try
-            {
-                return GetProfiles(GlobalConfigPath).Where(p => p.Name == name).ToArray()[0];
-            }
-            catch
-            {
-                return new LEProfile();
-            }
-        }
 
         public static LEProfile[] GetProfiles()
         {
