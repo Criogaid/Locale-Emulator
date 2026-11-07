@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Strings>
+  <Title>Locale Emulator 安装程序</Title>
+  <AdminLaunchError>以管理员权限启动安装程序失败。
+
+请以管理员身份运行此程序后重试。</AdminLaunchError>
+  <OSOutdated>Locale Emulator 需要 Windows 7 或更高版本。</OSOutdated>
+  <InstallFinished>安装完成。右键点击任意可执行文件即可使用 Locale Emulator。
+
+从旧版本升级时可能需要重启系统或重启 Explorer。</InstallFinished>
+  <UninstallFinished>卸载完成。感谢使用 Locale Emulator。
+
+解锁部分组件可能需要重启系统。</UninstallFinished>
+  <CurrentUserInstall>为当前用户安装</CurrentUserInstall>
+  <CurrentUserUninstall>为当前用户卸载</CurrentUserUninstall>
+  <AllUsersInstall>为所有用户安装</AllUsersInstall>
+  <AllUsersUninstall>为所有用户卸载</AllUsersUninstall>
+  <EditGlobal>编辑全局配置列表</EditGlobal>
+  <GroupCurrentUser>（1.1）为当前用户安装</GroupCurrentUser>
+  <GroupAllUsers>（1.2）为此电脑的所有用户安装（需要管理员权限）</GroupAllUsers>
+  <GroupProfiles>（2）自定义配置</GroupProfiles>
+  <IntroText>欢迎使用 Locale Emulator！
+如果不想安装而只使用便携模式，现在可以关闭此窗口。
+否则请按以下步骤操作：
+   1. 为当前用户或此电脑的所有用户安装 Locale Emulator。
+   2. 运行 LEGUI.exe 自定义配置列表。
+   3. 右键点击应用并选择 Locale Emulator 菜单项。</IntroText>
+  <AllUsersAdminRequired>为所有用户操作需要管理员权限。</AllUsersAdminRequired>
+  <NoRegisterableComTypes>程序集不包含可注册的 COM 类型。</NoRegisterableComTypes>
+  <CannotOpenClassesKey>无法打开当前用户的 Classes 注册表项。</CannotOpenClassesKey>
+  <MissingPayload>安装器缺少内嵌组件。</MissingPayload>
+  <CannotCreateContextMenuKey>无法创建右键菜单注册表项。</CannotCreateContextMenuKey>
+</Strings>

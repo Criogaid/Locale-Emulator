@@ -151,7 +151,7 @@ namespace LECommonLibrary
                     }
                     catch (ArgumentException error)
                     {
-                        throw new InvalidDataException("配置包含 XML 不允许的字符，请检查名称和参数。", error);
+                        throw new InvalidDataException(Localization.GetString("InvalidXmlText"), error);
                     }
                     stream.Flush(true);
                 }

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Amemiya.Extensions;
 using Microsoft.Win32;
+using LECommonLibrary;
 
 namespace LEProc
 {
@@ -160,7 +161,7 @@ namespace LEProc
         internal uint Start()
         {
             if (string.IsNullOrEmpty(ApplicationName))
-                throw new Exception("ApplicationName cannot null.");
+                throw new Exception(Localization.GetString("ApplicationNameMissing"));
 
             var newLEB = ArrayExtensions.StructToBytes(_leb);
             newLEB = newLEB.CombineWith(_registry.GetBinaryData());
@@ -182,7 +183,8 @@ namespace LEProc
                     if (waitResult == INFINITE)
                         throw new Win32Exception(Marshal.GetLastWin32Error());
                     if (waitResult != 0)
-                        throw new InvalidOperationException("等待进程返回了意外状态：" + waitResult);
+                        throw new InvalidOperationException(
+                            string.Format(Localization.GetString("ProcessWaitError"), waitResult));
                 }
                 return ret;
             }

@@ -36,6 +36,12 @@ namespace ManagedRegression
                 catch (Exception error) { Console.Error.WriteLine(error); return 1; }
             }
 
+            if (args.Length == 1 && args[0] == "--localization-probe")
+            {
+                try { LocalizationRegression.RunLanguageProbe(); return 0; }
+                catch (Exception error) { Console.Error.WriteLine(error); return 1; }
+            }
+
             return RunTests();
         }
 
@@ -44,6 +50,7 @@ namespace ManagedRegression
             var tests = new Action[]
             {
                 RuntimeProductAssembliesAreAdjacent,
+                LocalizationRegression.InstallerAndCommonResourcesUseUiCulture,
                 RuntimeConfigurationsMatchFrameworkTargets,
                 WindowsArgumentsRoundTrip,
                 QuoteArgumentRejectsUnrepresentableInput,

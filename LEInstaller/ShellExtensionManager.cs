@@ -20,7 +20,7 @@ namespace LEInstaller
             using (var key = rootName.CreateSubKey(keyName))
             {
                 if (key == null)
-                    throw new InvalidOperationException("Cannot create the context menu registry key.");
+                    throw new InvalidOperationException(I18n.GetString("CannotCreateContextMenuKey"));
                 key.SetValue(null, friendlyName);
             }
         }

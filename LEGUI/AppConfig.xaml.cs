@@ -90,7 +90,7 @@ namespace LEGUI
                 link.SetArguments(WindowsCommandLine.JoinArguments(new[] { "-run", path }));
                 link.SetIconLocation(AssociationReader.GetAssociatedIcon(Path.GetExtension(path)).Replace("%1", path), 0);
 
-                link.SetDescription($"Run {Path.GetFileName(path)} with Locale Emulator");
+                link.SetDescription(string.Format(I18n.GetString("ShortcutDescription"), Path.GetFileName(path)));
                 link.SetWorkingDirectory(Path.GetDirectoryName(path));
 
                 var file = (IPersistFile)link;

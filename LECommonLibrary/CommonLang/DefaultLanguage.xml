@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Strings>
+  <Title>Locale Emulator</Title>
+  <VersionTitle>Locale Emulator Version {0}</VersionTitle>
+  <CoreFilesMissing>Core DLLs are missing from the application directory. Please check the installation.
+
+Required files:
+LoaderDll.dll
+LocaleEmulator.dll
+
+Application directory: {0}
+https://github.com/Criogaid/Locale-Emulator/issues</CoreFilesMissing>
+  <DebugReport>Error code: 0x{0:X}
+Command line: {1}
+System: {2}
+Application directory: {3}
+Current directory: {4}
+{5}
+Please submit the error code, command line and system version to help diagnose the startup failure.
+https://github.com/Criogaid/Locale-Emulator/issues
+
+Press CTRL+C to copy this window.</DebugReport>
+  <ElevatedLaunchError>Error when running LE with elevated privileges.
+Executable: {0}
+Arguments: {1}</ElevatedLaunchError>
+  <MissingArguments>Required launch arguments are missing: -run and -manage need a path; -runas needs a profile GUID and a path.</MissingArguments>
+  <Usage>Welcome to the Locale Emulator command line tool.
+
+Usage: LEProc.exe
+    path
+    -run path [args]
+    -runas guid path [args]
+    -manage path
+    -global
+
+path    Full path of the target application.
+guid    GUID of the target profile in LEConfig.xml.
+args    Additional arguments passed to the target application.
+
+path    Run an application with its own profile, the first global profile, or the default ja-JP profile.
+-run    Run an application with its own profile.
+-runas  Run an application with a global profile identified by GUID.
+-manage Modify the profile of one application.
+-global Open Global Profile Manager.
+
+Press CTRL+C to copy this message to the clipboard.</Usage>
+  <InvalidCommand>The target program or command is invalid: {0}</InvalidCommand>
+  <GlobalProfileMissing>The specified global profile was not found: {0}</GlobalProfileMissing>
+  <ApplicationProfileInvalid>The application profile is empty or invalid: {0}</ApplicationProfileInvalid>
+  <MissingTargetFile>The target program was not found: {0}</MissingTargetFile>
+  <DebugModeWarning>You are running an executable with the CREATE_SUSPENDED flag.
+
+The executable will start after you click Yes, but it will run as a background process without notifications. You can attach a debugger or stop it with Task Manager.</DebugModeWarning>
+  <StartupError>Unable to start Locale Emulator: {0}</StartupError>
+  <UnsupportedRegistryType>Registry data type {0} is not supported yet.</UnsupportedRegistryType>
+  <ProcessWaitError>The target process returned an unexpected status: {0}</ProcessWaitError>
+  <ApplicationNameMissing>ApplicationName cannot be null or empty.</ApplicationNameMissing>
+  <MissingTargetPath>Please specify the target program path.</MissingTargetPath>
+  <InvalidXmlText>Configuration contains characters that XML does not allow. Please check profile names and parameters.</InvalidXmlText>
+  <NullCharacterArgument>Arguments cannot contain a null character.</NullCharacterArgument>
+</Strings>

@@ -14,11 +14,12 @@ namespace LEProc
         internal static LaunchPlan Create(string path, string rawParameters, IEnumerable<string> arguments)
         {
             if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("请指定目标程序路径。", "path");
+                throw new ArgumentException(Localization.GetString("MissingTargetPath"), "path");
 
             var absolutePath = Path.GetFullPath(path);
             if (!File.Exists(absolutePath))
-                throw new FileNotFoundException("找不到目标程序。", absolutePath);
+                throw new FileNotFoundException(
+                    string.Format(Localization.GetString("MissingTargetFile"), absolutePath), absolutePath);
 
             var parameters = GetParameters(rawParameters, arguments);
             return new LaunchPlan

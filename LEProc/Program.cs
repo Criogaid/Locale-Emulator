@@ -24,11 +24,9 @@ namespace LEProc
             if (!GlobalHelper.CheckCoreDLLs())
             {
                 MessageBox.Show(
-                    "程序目录缺少核心 DLL，请检查安装文件是否完整。\r\n\r\n" +
-                    "所需文件：\r\nLoaderDll.dll\r\nLocaleEmulator.dll\r\n\r\n" +
-                    $"程序目录：{Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)}\r\n" +
-                    "https://github.com/Criogaid/Locale-Emulator/issues",
-                    "Locale Emulator Version " + GlobalHelper.GetLEVersion(),
+                    string.Format(Localization.GetString("CoreFilesMissing"),
+                        Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)),
+                    string.Format(Localization.GetString("VersionTitle"), GlobalHelper.GetLEVersion()),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
 
@@ -38,32 +36,8 @@ namespace LEProc
             if (args.Length == 0)
             {
                 MessageBox.Show(
-                    "Welcome to Locale Emulator command line tool.\r\n" +
-                    "\r\n" +
-                    "Usage: LEProc.exe\r\n" +
-                    "\tpath\r\n" +
-                    "\t-run path [args]\r\n" +
-                    "\t-runas guid path [args]\r\n" +
-                    "\t-manage path\r\n" +
-                    "\t-global\r\n" +
-                    "\r\n" +
-                    "path\tFull path of the target application.\r\n" +
-                    "guid\tGuid of the target profile (in LEConfig.xml).\r\n" +
-                    "args\tAdditional arguments will be passed to the application.\r\n" +
-                    "\r\n" +
-                    "path\tRun an application with \r\n" +
-                    "\t\t(i) its own profile (if any) or \r\n" +
-                    "\t\t(ii) first global profile (if any) or \r\n" +
-                    "\t\t(iii) default ja-JP profile.\r\n" +
-                    "-run\tRun an application with it's own profile.\r\n" +
-                    "-runas\tRun an application with a global profile of specific Guid.\r\n" +
-                    "-manage\tModify the profile of one application.\r\n" +
-                    "-global\tOpen Global Profile Manager.\r\n" +
-                    "\r\n" +
-                    "\r\n" +
-                    "You can press CTRL+C to copy this message to your clipboard.\r\n",
-                    "Locale Emulator Version " + GlobalHelper.GetLEVersion()
-                );
+                    Localization.GetString("Usage"),
+                    string.Format(Localization.GetString("VersionTitle"), GlobalHelper.GetLEVersion()));
 
                 GlobalHelper.ShowErrorDebugMessageBox("SYSTEM_REPORT", 0);
 
@@ -76,7 +50,7 @@ namespace LEProc
 
                 if (((Args[0] == "-run" || Args[0] == "-manage") && Args.Length < 2)
                     || (Args[0] == "-runas" && Args.Length < 3))
-                    throw new ArgumentException("缺少启动参数：-run/-manage 需要路径，-runas 需要配置 GUID 和路径。");
+                    throw new ArgumentException(Localization.GetString("MissingArguments"));
 
                 switch (Args[0])
                 {
@@ -99,13 +73,15 @@ namespace LEProc
 
                     default:
                         if (!File.Exists(Args[0]))
-                            throw new FileNotFoundException("找不到目标程序或命令无效。", Args[0]);
+                            throw new FileNotFoundException(
+                                string.Format(Localization.GetString("InvalidCommand"), Args[0]), Args[0]);
                         return RunWithDefaultProfile(Args[0]);
                 }
             }
             catch (Exception e)
             {
-                MessageBox.Show("无法启动：" + e.Message, "Locale Emulator",
+                MessageBox.Show(string.Format(Localization.GetString("StartupError"), e.Message),
+                    Localization.GetString("Title"),
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
@@ -134,7 +110,8 @@ namespace LEProc
 
             var profiles = LEConfig.GetProfiles().Where(p => p.Guid == guid).ToArray();
             if (profiles.Length == 0)
-                throw new InvalidDataException("找不到指定的全局配置：" + guid);
+                throw new InvalidDataException(
+                    string.Format(Localization.GetString("GlobalProfileMissing"), guid));
 
             var profile = profiles[0];
 
@@ -155,7 +132,8 @@ namespace LEProc
 
             var profiles = LEConfig.GetProfiles(conf);
             if (profiles.Length == 0)
-                throw new InvalidDataException("应用配置为空或格式无效：" + conf);
+                throw new InvalidDataException(
+                    string.Format(Localization.GetString("ApplicationProfileInvalid"), conf));
             return DoRunWithLEProfile(path, 2, profiles[0]);
         }
 
@@ -164,7 +142,8 @@ namespace LEProc
             try
             {
                 if (!File.Exists(absPath))
-                    throw new FileNotFoundException("找不到目标程序。", absPath);
+                    throw new FileNotFoundException(
+                        string.Format(Localization.GetString("MissingTargetFile"), absPath), absPath);
 
                 if (profile.RunAsAdmin && !SystemHelper.IsAdministrator())
                 {
@@ -175,15 +154,11 @@ namespace LEProc
                 {
                     if (DialogResult.No ==
                         MessageBox.Show(
-                            "You are running a exectuable with CREATE_SUSPENDED flag.\r\n" +
-                            "\r\n" +
-                            "The exectuable will be executed after you click the \"Yes\" button, " +
-                            "but as a background process which has no notifications at all." +
-                            "You can attach it by using OllyDbg, or stop it with Task Manager.\r\n",
-                            "Locale Emulator Debug Mode Warning",
+                            Localization.GetString("DebugModeWarning"),
+                            Localization.GetString("Title"),
                             MessageBoxButtons.YesNo,
                             MessageBoxIcon.Information
-                            ))
+                        ))
                         return 0;
                 }
 
@@ -261,7 +236,9 @@ namespace LEProc
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show(string.Format(Localization.GetString("StartupError"), e.Message),
+                    Localization.GetString("Title"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
         }

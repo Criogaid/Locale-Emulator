@@ -13,11 +13,14 @@ namespace LEGUI
         //internal static readonly CultureInfo CurrentCultureInfo = CultureInfo.GetCultureInfo("zh-CN");
 
         private static ResourceDictionary cacheDictionary;
+        private static ResourceDictionary fallbackDictionary;
 
         internal static string GetString(string key)
         {
             var dict = LoadDictionary();
             var value = dict.Contains(key) ? dict[key] as string : null;
+            if (string.IsNullOrEmpty(value) && fallbackDictionary != null && !ReferenceEquals(dict, fallbackDictionary))
+                value = fallbackDictionary.Contains(key) ? fallbackDictionary[key] as string : null;
             return string.IsNullOrEmpty(value) ? key : value;
         }
 
@@ -25,37 +28,41 @@ namespace LEGUI
         {
             if (cacheDictionary != null)
                 return cacheDictionary;
+            if (Application.Current.Resources.MergedDictionaries.Count > 0)
+                fallbackDictionary = Application.Current.Resources.MergedDictionaries[0];
 
             ResourceDictionary dictionary = null;
             try
             {
                 var langDir = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), @"Lang\");
-
-                var firstLangPath = Path.Combine(langDir, CurrentCultureInfo.Name + ".xaml");
-                var fallbackLangPath = Path.Combine(langDir,
-                                                    $@"{CurrentCultureInfo.TwoLetterISOLanguageName}.xaml");
-
-                var path = File.Exists(firstLangPath) ? firstLangPath : fallbackLangPath;
-                using (var stream = File.OpenRead(path))
-                    dictionary = XamlReader.Load(stream) as ResourceDictionary;
-                if (dictionary != null)
-                    Application.Current.Resources.MergedDictionaries.Insert(0, dictionary);
+                var candidates = new[]
+                {
+                    CurrentCultureInfo.Name + ".xaml",
+                    CurrentCultureInfo.TwoLetterISOLanguageName + ".xaml"
+                };
+                foreach (var candidate in candidates)
+                {
+                    var path = Path.Combine(langDir, candidate);
+                    if (!File.Exists(path))
+                        continue;
+                    using (var stream = File.OpenRead(path))
+                        dictionary = XamlReader.Load(stream) as ResourceDictionary;
+                    if (dictionary != null)
+                        break;
+                }
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException
                                           || error is XamlParseException)
             {
-                // External translations are optional; preserve the bundled default on read or parse failure.
+                // 可选翻译读取失败时继续使用内置英文资源。
             }
 
-            //If dictionary is still null, use default language.
             if (dictionary == null)
-                if (Application.Current.Resources.MergedDictionaries.Count > 0)
-                    dictionary = Application.Current.Resources.MergedDictionaries[0];
-                else
-                    throw new Exception("No language file.");
+                dictionary = fallbackDictionary;
+            if (dictionary == null)
+                throw new Exception("No language file.");
 
             cacheDictionary = dictionary;
-
             return cacheDictionary;
         }
 

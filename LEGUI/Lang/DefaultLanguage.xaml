@@ -21,4 +21,16 @@
     <system:String x:Key="WithCREATESUSPENDED">Create process with CREATE__SUSPENDED</system:String>
     <system:String x:Key="Miscellaneous">Miscellaneous</system:String>
     <system:String x:Key="ShowInMainMenu">Show this profile in main menu</system:String>
+    <system:String x:Key="Title">Locale Emulator</system:String>
+    <system:String x:Key="InvalidProfileSelection">Please select a region and time zone available on this system.</system:String>
+    <system:String x:Key="SaveOperationError">Cannot save the configuration or complete the file operation: {0}</system:String>
+    <system:String x:Key="HomeDirectoryNotWritable">The home directory is not writable.
+Please move LE to another location.
+Home directory: {0}</system:String>
+    <system:String x:Key="StandaloneDirectoryNotWritable">The directory is not writable.
+Please use the global profile instead.
+Current directory: {0}</system:String>
+    <system:String x:Key="ElevationError">LEGUI requires administrator privileges to write to the current directory.</system:String>
+    <system:String x:Key="CreateConfigError">Cannot create the configuration file: {0}</system:String>
+    <system:String x:Key="ShortcutDescription">Run {0} with Locale Emulator</system:String>
 </ResourceDictionary>

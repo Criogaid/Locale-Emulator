@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Amemiya.Extensions;
+using LECommonLibrary;
 
 namespace LEProc
 {
@@ -128,7 +129,8 @@ namespace LEProc
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.Message);
+                MessageBox.Show(e.Message, Localization.GetString("Title"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
 
                 return false;
             }
@@ -177,7 +179,7 @@ namespace LEProc
 
                 case "REG_BINARY":
                 default:
-                    throw new Exception("Data type " + type + " not supported yet.");
+                    throw new Exception(string.Format(Localization.GetString("UnsupportedRegistryType"), type));
             }
 
             _objectData.AddRange(new byte[] {0x00, 0x00});

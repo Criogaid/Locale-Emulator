@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
+using LECommonLibrary;
 
 namespace LEProc
 {
@@ -119,7 +120,7 @@ namespace LEProc
         internal uint Start()
         {
             if (string.IsNullOrEmpty(ApplicationName))
-                throw new ArgumentException("ApplicationName cannot be null or empty.");
+                throw new ArgumentException(Localization.GetString("ApplicationNameMissing"));
 
             IntPtr environment = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(LEPB)));
             PROCESS_INFORMATION processInformation = new PROCESS_INFORMATION();
@@ -148,7 +149,8 @@ namespace LEProc
                     if (waitResult == Infinite)
                         throw new Win32Exception(Marshal.GetLastWin32Error());
                     if (waitResult != 0)
-                        throw new InvalidOperationException("等待进程返回了意外状态：" + waitResult);
+                        throw new InvalidOperationException(
+                            string.Format(Localization.GetString("ProcessWaitError"), waitResult));
                 }
 
                 return result;

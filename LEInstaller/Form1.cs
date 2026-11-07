@@ -29,7 +29,22 @@ namespace LEInstaller
             DisableDPIScale();
 
             InitializeComponent();
+            ApplyLanguage();
             cmdMode = CmdMode;
+        }
+
+        private void ApplyLanguage()
+        {
+            Text = I18n.GetString("Title");
+            label1.Text = I18n.GetString("IntroText");
+            buttonInstall.Text = I18n.GetString("CurrentUserInstall");
+            buttonUninstall.Text = I18n.GetString("CurrentUserUninstall");
+            buttonInstallAllUsers.Text = I18n.GetString("AllUsersInstall");
+            buttonUninstallAllUsers.Text = I18n.GetString("AllUsersUninstall");
+            buttonEditGlobal.Text = I18n.GetString("EditGlobal");
+            groupBox1.Text = I18n.GetString("GroupCurrentUser");
+            groupBox2.Text = I18n.GetString("GroupAllUsers");
+            groupBox3.Text = I18n.GetString("GroupProfiles");
         }
 
         private void RunAsAdmin(string Arguments="")
@@ -52,10 +67,8 @@ namespace LEInstaller
             }
             catch (SystemException)
             {
-                MessageBox.Show(this,"Error with Launching Application as administrator\r\n"+ 
-                    "\r\n"+
-                    "Please run this application as administrator and try again.",
-                    "LE Context Menu Installer",
+                MessageBox.Show(this, I18n.GetString("AdminLaunchError"),
+                    I18n.GetString("Title"),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
@@ -66,8 +79,8 @@ namespace LEInstaller
         {
             if (Environment.OSVersion.Version.CompareTo(new Version(6, 0)) <= 0)
             {
-                MessageBox.Show(this, "Sorry, Locale Emulator is only for Windows 7, 8/8.1 and 10.",
-                    "OS Outdated",
+                MessageBox.Show(this, I18n.GetString("OSOutdated"),
+                    I18n.GetString("Title"),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
 
@@ -122,10 +135,8 @@ namespace LEInstaller
 
             NotifyShell();
 
-            MessageBox.Show(this, "Install finished. Right click any executable and enjoy :)\r\n" +
-                            "\r\n" +
-                            "PS: A reboot (or restart of \"explorer.exe\") is required if you are upgrading from an old version.",
-                "LE Context Menu Installer",
+            MessageBox.Show(this, I18n.GetString("InstallFinished"),
+                I18n.GetString("Title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
 
@@ -137,10 +148,6 @@ namespace LEInstaller
         {
             if (!IsAdministrator())
             {
-                /*MessageBox.Show(this, "Please run this application as administrator and try again.",
-                    "LE Context Menu Installer",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);*/
                 
                 RunAsAdmin("--InstallAll");
                 return;
@@ -154,10 +161,8 @@ namespace LEInstaller
 
             NotifyShell();
 
-            MessageBox.Show(this, "Install finished. Right click any executable and enjoy :)\r\n" +
-                            "\r\n" +
-                            "PS: A reboot (or restart of \"explorer.exe\") is required if you are upgrading from an old version.",
-                "LE Context Menu Installer",
+            MessageBox.Show(this, I18n.GetString("InstallFinished"),
+                I18n.GetString("Title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
 
@@ -196,10 +201,8 @@ namespace LEInstaller
 
             NotifyShell();
 
-            MessageBox.Show(this, "Uninstall finished. Thanks for using Locale Emulator :)\r\n" +
-                            "\r\n" +
-                            "PS: A reboot is required to unlock some components.",
-                "LE Context Menu Installer",
+            MessageBox.Show(this, I18n.GetString("UninstallFinished"),
+                I18n.GetString("Title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
 
@@ -210,10 +213,6 @@ namespace LEInstaller
         {
             if (!IsAdministrator())
             {
-                /*MessageBox.Show(this, "Please run this application as administrator and try again.",
-                    "LE Context Menu Installer",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);*/
 
                 
                 RunAsAdmin("--UninstallAll");
@@ -228,10 +227,8 @@ namespace LEInstaller
 
             NotifyShell();
 
-            MessageBox.Show(this, "Uninstall finished. Thanks for using Locale Emulator :)\r\n" +
-                            "\r\n" +
-                            "PS: A reboot is required to unlock some components.",
-                "LE Context Menu Installer",
+            MessageBox.Show(this, I18n.GetString("UninstallFinished"),
+                I18n.GetString("Title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
 
@@ -255,7 +252,7 @@ namespace LEInstaller
 
         private void ShowOperationError()
         {
-            MessageBox.Show(this, operationError.Message, "LE Context Menu Installer",
+            MessageBox.Show(this, operationError.Message, I18n.GetString("Title"),
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
@@ -267,7 +264,7 @@ namespace LEInstaller
                 // Load before overriding HKCR so missing payloads have no registry side effects.
                 var assembly = Assembly.LoadFrom(Path.Combine(crtDir, "LEContextMenuHandler.dll"));
                 if (allUsers && !IsAdministrator())
-                    throw new UnauthorizedAccessException("Administrator privileges are required for all users.");
+                    throw new UnauthorizedAccessException(I18n.GetString("AllUsersAdminRequired"));
                 var rs = new RegistrationServices();
                 var assemblyTouched = false;
                 var shellTouched = false;
@@ -281,7 +278,7 @@ namespace LEInstaller
                         {
                             assemblyTouched = true;
                             if (!rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase))
-                                throw new InvalidOperationException("The assembly contains no registerable COM types.");
+                                throw new InvalidOperationException(I18n.GetString("NoRegisterableComTypes"));
                             shellTouched = true;
                             ShellExtensionManager.RegisterShellExtContextMenuHandler(allUsers);
                         }
@@ -291,7 +288,7 @@ namespace LEInstaller
                             ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
                             assemblyTouched = true;
                             if (!rs.UnregisterAssembly(assembly))
-                                throw new InvalidOperationException("The assembly contains no registerable COM types.");
+                                throw new InvalidOperationException(I18n.GetString("NoRegisterableComTypes"));
                         }
                     }
                     catch (Exception error)
@@ -355,7 +352,7 @@ namespace LEInstaller
             using (var classes = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"))
             {
                 if (classes == null)
-                    throw new InvalidOperationException("Cannot open the current user's Classes key.");
+                    throw new InvalidOperationException(I18n.GetString("CannotOpenClassesKey"));
             }
             UIntPtr currentUser = UIntPtr.Size == 8 ? new UIntPtr(0xFFFFFFFF80000001) : new UIntPtr(0x80000001);
             UIntPtr key;
@@ -397,7 +394,7 @@ namespace LEInstaller
             using (var buffer = new MemoryStream())
             {
                 if (source == null)
-                    throw new FileNotFoundException("安装器缺少内嵌组件。", fileName);
+                    throw new FileNotFoundException(I18n.GetString("MissingPayload"), fileName);
                 source.CopyTo(buffer);
                 return buffer.ToArray();
             }

@@ -21,4 +21,16 @@
     <system:String x:Key="WithCREATESUSPENDED">用 CREATE__SUSPENDED 标志创建进程</system:String>
     <system:String x:Key="Miscellaneous">其它</system:String>
     <system:String x:Key="ShowInMainMenu">在一级菜单中显示此配置</system:String>
+    <system:String x:Key="Title">Locale Emulator</system:String>
+    <system:String x:Key="InvalidProfileSelection">请选择当前系统可用的区域和时区。</system:String>
+    <system:String x:Key="SaveOperationError">无法保存配置或完成文件操作：{0}</system:String>
+    <system:String x:Key="HomeDirectoryNotWritable">主目录不可写。
+请将 LE 移动到其他位置。
+主目录：{0}</system:String>
+    <system:String x:Key="StandaloneDirectoryNotWritable">目录不可写。
+请改用全局配置。
+当前目录：{0}</system:String>
+    <system:String x:Key="ElevationError">LEGUI 需要管理员权限才能写入当前目录。</system:String>
+    <system:String x:Key="CreateConfigError">无法创建配置文件：{0}</system:String>
+    <system:String x:Key="ShortcutDescription">使用 Locale Emulator 运行 {0}</system:String>
 </ResourceDictionary>

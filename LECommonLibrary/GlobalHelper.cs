@@ -32,16 +32,14 @@ namespace LECommonLibrary
         public static void ShowErrorDebugMessageBox(string commandLine, uint errorCode)
         {
             MessageBox.Show(
-                            $"错误代码：0x{errorCode:X}\r\n"
-                            + $"命令行：{commandLine}\r\n"
-                            + $"系统：{Environment.OSVersion} {(SystemHelper.Is64BitOS() ? "x64" : "x86")}\r\n"
-                            + $"程序目录：{Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)}\r\n"
-                            + $"当前目录：{Environment.CurrentDirectory}\r\n"
-                            + $"{GenerateSystemDllVersionList()}\r\n"
-                            + "请提交错误代码、命令行和系统版本，帮助排查启动失败原因。\r\n"
-                            + "https://github.com/Criogaid/Locale-Emulator/issues\r\n\r\n"
-                            + "可以按 CTRL+C 复制本窗口内容。\r\n",
-                            "Locale Emulator Version " + GetLEVersion());
+                string.Format(Localization.GetString("DebugReport"),
+                    errorCode,
+                    commandLine,
+                    $"{Environment.OSVersion} {(SystemHelper.Is64BitOS() ? "x64" : "x86")}",
+                    Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
+                    Environment.CurrentDirectory,
+                    GenerateSystemDllVersionList()),
+                string.Format(Localization.GetString("VersionTitle"), GetLEVersion()));
         }
 
         private static string GenerateSystemDllVersionList()

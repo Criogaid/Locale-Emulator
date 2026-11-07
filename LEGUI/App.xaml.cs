@@ -15,13 +15,14 @@ namespace LEGUI
         internal static void ValidateProfileSelection(int locationIndex, int timezoneIndex)
         {
             if (locationIndex < 0 || timezoneIndex < 0)
-                throw new InvalidDataException("请先选择当前系统可用的区域和时区。");
+                throw new InvalidDataException(I18n.GetString("InvalidProfileSelection"));
         }
 
         protected override void OnStartup(StartupEventArgs e)
         {
             AppDomain.CurrentDomain.UnhandledException +=
-                (sender, args) => MessageBox.Show(((Exception) args.ExceptionObject).Message);
+                (sender, args) => MessageBox.Show(((Exception) args.ExceptionObject).Message,
+                    I18n.GetString("Title"), MessageBoxButton.OK, MessageBoxImage.Error);
             DispatcherUnhandledException += (sender, args) =>
             {
                 if (!(args.Exception is IOException) && !(args.Exception is UnauthorizedAccessException)
@@ -29,10 +30,11 @@ namespace LEGUI
                     return;
 
                 args.Handled = true;
-                MessageBox.Show("无法保存配置或完成文件操作：" + args.Exception.Message, "Locale Emulator",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(string.Format(I18n.GetString("SaveOperationError"), args.Exception.Message),
+                    I18n.GetString("Title"), MessageBoxButton.OK, MessageBoxImage.Error);
             };
 
+            I18n.LoadLanguage();
             base.OnStartup(e);
         }
 
@@ -60,17 +62,16 @@ namespace LEGUI
                     // We can do nothing now.
                     if (isGlobalProfile)
                         MessageBox.Show(
-                                        "Home directory is not writable. \r\n"
-                                        + "Please move LE to another location and try again.\r\n"
-                                        + $"Home directory: {Path.GetDirectoryName(LEConfig.GlobalConfigPath)}",
-                                        "Locale Emulator",
+                                        string.Format(I18n.GetString("HomeDirectoryNotWritable"),
+                                            Path.GetDirectoryName(LEConfig.GlobalConfigPath)),
+                                        I18n.GetString("Title"),
                                         MessageBoxButton.OK,
                                         MessageBoxImage.Error);
                     else
                         MessageBox.Show(
-                                        "The directory is not writable.\r\n" + "Please use global profile instead.\r\n"
-                                        + $"Current Directory: {Path.GetDirectoryName(StandaloneFilePath)}",
-                                        "Locale Emulator",
+                                        string.Format(I18n.GetString("StandaloneDirectoryNotWritable"),
+                                            Path.GetDirectoryName(StandaloneFilePath)),
+                                        I18n.GetString("Title"),
                                         MessageBoxButton.OK,
                                         MessageBoxImage.Error);
 
@@ -90,8 +91,8 @@ namespace LEGUI
                     }
                     catch (Exception)
                     {
-                        MessageBox.Show("LEGUI requires administrator privilege to write to the current directory.",
-                                        "Locale Emulator",
+                        MessageBox.Show(I18n.GetString("ElevationError"),
+                                        I18n.GetString("Title"),
                                         MessageBoxButton.OK,
                                         MessageBoxImage.Error);
                         Current.Shutdown(1);
@@ -106,13 +107,12 @@ namespace LEGUI
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
-                MessageBox.Show("无法创建配置文件：" + error.Message, "Locale Emulator",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(string.Format(I18n.GetString("CreateConfigError"), error.Message),
+                    I18n.GetString("Title"), MessageBoxButton.OK, MessageBoxImage.Error);
                 Current.Shutdown(1);
                 return;
             }
 
-            I18n.LoadLanguage();
 
             Current.StartupUri = isGlobalProfile
                                      ? new Uri("GlobalConfig.xaml", UriKind.RelativeOrAbsolute)

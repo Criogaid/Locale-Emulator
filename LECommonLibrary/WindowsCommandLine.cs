@@ -15,7 +15,7 @@ namespace LECommonLibrary
             if (argument == null)
                 throw new ArgumentNullException("argument");
             if (argument.IndexOf('\0') >= 0)
-                throw new ArgumentException("参数不能包含空字符。", "argument");
+                throw new ArgumentException(Localization.GetString("NullCharacterArgument"), "argument");
 
             var result = new StringBuilder("\"");
             var backslashes = 0;

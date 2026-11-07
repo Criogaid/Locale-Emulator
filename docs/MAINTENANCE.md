@@ -8,6 +8,8 @@
 
 `build.ps1` 是 x86 完整产品构建入口，`build-dual.ps1` 在其通过后追加 x64 原生与托管构建并装配两个架构包，`Scripts/Test.ps1` 是构建产物的回归入口。正式版本取自 `LEProc/LEVersion.xml`；原生工具集和 SDK 取自 `Native/Toolchain.props`。完整入口先完成全部项目的 Clean，再 Build，随后构建测试宿主；安装器按项目引用内嵌实际 DLL，不向源码目录复制二进制，也不重复认领 GUI/启动器的输出。脚本自动收集前端、Core DLL、语言资源、许可、来源、构建提交与文件哈希，并验证实际 ZIP 解包产物。包内保留工具链元数据，解包后检查随包文档的相对链接。
 
+多语言资源按产品界面职责分组：`LEGUI/Lang` 保留现有 20 种 WPF 界面语言，`LEContextMenuHandler/Lang` 保留现有 20 种 Shell 菜单语言；安装器使用 `InstallerLang`，LEProc 与公共诊断使用 `CommonLang`。托管界面按 `CurrentUICulture.Name`、两字母语言名、内置英文默认资源依次选择；GUI 对已存在但缺少新键的语言也回退到英文默认键。当前安装器、启动器和公共诊断提供英文与简体中文资源，其他语言继续显示英文回退文本，不影响目标进程的区域模拟语言。x86 与 x64 包均携带三类资源目录。
+
 ## 原版行为基线与工具链迁移
 
 行为基线采用上游正式发行版 v2.5.0.1 的两个原生 DLL。下载包为 `Locale.Emulator.2.5.0.1.zip`，SHA256：

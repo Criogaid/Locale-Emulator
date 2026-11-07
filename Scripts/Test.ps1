@@ -20,6 +20,50 @@ $product = Join-Path $ResultsDirectory 'product'
 if (Test-Path -LiteralPath $product) { Remove-Item -LiteralPath $product -Recurse -Force }
 New-Item -ItemType Directory -Path $product -Force | Out-Null
 Copy-Item -Path (Join-Path $BuildDirectory '*') -Destination $product -Recurse -Force
+function Assert-LanguageDirectory {
+    param([string]$Directory, [string[]]$RequiredKeys)
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        throw "缺少语言资源目录：$Directory"
+    }
+    $defaultPath = Join-Path $Directory 'DefaultLanguage.xml'
+    if (-not (Test-Path -LiteralPath $defaultPath -PathType Leaf)) {
+        throw "缺少默认语言资源：$defaultPath"
+    }
+    $default = [xml](Get-Content -Raw -LiteralPath $defaultPath)
+    $defaultKeys = @($default.Strings.ChildNodes | Where-Object NodeType -eq 'Element' | ForEach-Object LocalName)
+    foreach ($name in @('DefaultLanguage.xml', 'zh-CN.xml')) {
+        $path = Join-Path $Directory $name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "缺少语言资源：$path"
+        }
+        $document = [xml](Get-Content -Raw -LiteralPath $path)
+        $keys = @($document.Strings.ChildNodes | Where-Object NodeType -eq 'Element' | ForEach-Object LocalName)
+        if ((Compare-Object $defaultKeys $keys)) {
+            throw "语言资源键集合不一致：$path"
+        }
+        foreach ($key in $RequiredKeys) {
+            if ($keys -notcontains $key) {
+                throw "语言资源缺少键：$path/$key"
+            }
+        }
+    }
+}
+
+function Assert-XamlLanguage {
+    param([string]$Path, [string[]]$RequiredKeys)
+    $content = Get-Content -Raw -LiteralPath $Path
+    foreach ($key in $RequiredKeys) {
+        if ($content -notmatch ('x:Key="' + [regex]::Escape($key) + '"')) {
+            throw "XAML 语言资源缺少键：$Path/$key"
+        }
+    }
+}
+
+Assert-LanguageDirectory (Join-Path $product 'CommonLang') @('Title', 'CoreFilesMissing', 'Usage')
+Assert-LanguageDirectory (Join-Path $product 'InstallerLang') @('Title', 'InstallFinished', 'MissingPayload')
+Assert-XamlLanguage (Join-Path $product 'Lang/DefaultLanguage.xaml') @('Save', 'ConfirmDel')
+Assert-XamlLanguage (Join-Path $product 'Lang/zh-CN.xaml') @('Save', 'ConfirmDel')
+Write-Host 'PASS LanguageResources'
 $globalConfiguration = Join-Path $product 'LEConfig.xml'
 if (Test-Path -LiteralPath $globalConfiguration) { Remove-Item -LiteralPath $globalConfiguration }
 foreach ($relative in @(

@@ -126,8 +126,8 @@ namespace LECommonLibrary
 
             if (ShellExecuteEx(ref shExecInfo) == false)
             {
-                throw new Exception("Error when run with elevated LE.\r\n" + $"Executable: {executable}\r\n"
-                                    + $"Arguments: {shExecInfo.lpParameters}");
+                throw new Exception(string.Format(Localization.GetString("ElevatedLaunchError"), executable,
+                    shExecInfo.lpParameters));
             }
         }
 

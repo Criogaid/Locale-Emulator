@@ -17,6 +17,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="WindowsBase" />
@@ -28,6 +29,7 @@
     <Compile Include="LaunchRegression.cs" />
     <Compile Include="LaunchInteropRegression.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="LocalizationRegression.cs" />
     <ProjectReference Include="..\..\LECommonLibrary\LECommonLibrary.csproj">
       <Project>{C4DEF32B-8FBB-41B6-80DC-C60339402323}</Project>
       <Name>LECommonLibrary</Name>

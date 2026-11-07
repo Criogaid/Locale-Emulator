@@ -45,14 +45,18 @@ function Copy-RequiredFile {
     if (-not (Test-Path -LiteralPath $source)) {
         throw "缺少打包文件：$source"
     }
-    Copy-Item -LiteralPath $source -Destination $DestinationRoot -Force
+    if (Test-Path -LiteralPath $source -PathType Container) {
+        Copy-Item -LiteralPath $source -Destination $DestinationRoot -Recurse -Force
+    } else {
+        Copy-Item -LiteralPath $source -Destination $DestinationRoot -Force
+    }
 }
 
 function Copy-PackageCommon {
     param([string]$DestinationRoot)
     foreach ($name in @(
         'LEGUI.exe', 'LEGUI.exe.config', 'LEInstaller.exe', 'LEInstaller.exe.config',
-        'LEContextMenuHandler.dll', 'Lang', 'LEVersion.xml')) {
+        'LEContextMenuHandler.dll', 'Lang', 'CommonLang', 'InstallerLang', 'LEVersion.xml')) {
         Copy-RequiredFile $releaseRoot $DestinationRoot $name
     }
     Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination $DestinationRoot -Force
