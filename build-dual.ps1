@@ -25,11 +25,57 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installation)) {
 }
 $msbuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
 
-Write-Host '[dual 3/6] 构建 x64 LEProc 与公共托管库'
+Write-Host '[dual 3/6] 构建 x64 属性表边界探针'
+& $msbuild (Join-Path $repository 'tests/Native/X64AttributeContracts.vcxproj') /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 "/fl" "/flp:logfile=$(Join-Path $logs 'dual-x64-attribute-contracts-build.log');verbosity=normal;encoding=UTF-8"
+if ($LASTEXITCODE -ne 0) {
+    throw 'x64 属性表边界探针构建失败。'
+}
+
+
+Write-Host '[dual 4/6] 构建 x64 LEProc 与公共托管库'
 & $msbuild (Join-Path $repository 'LEProc/LEProc.csproj') /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 "/p:SolutionDir=$repository/" "/fl" "/flp:logfile=$(Join-Path $logs 'dual-x64-managed-build.log');verbosity=normal;encoding=UTF-8"
 if ($LASTEXITCODE -ne 0) {
     throw 'x64 托管构建失败。'
 }
+
+$x64AttributeSmoke = Join-Path $dualRoot 'x64-attribute-smoke'
+if (Test-Path -LiteralPath $x64AttributeSmoke) {
+    Remove-Item -LiteralPath $x64AttributeSmoke -Recurse -Force
+}
+New-Item -ItemType Directory -Path $x64AttributeSmoke -Force | Out-Null
+foreach ($name in @('LEProc.exe', 'LEProc.exe.config', 'LECommonLibrary.dll', 'LEVersion.xml')) {
+    Copy-Item -LiteralPath (Join-Path $managedX64Root $name) -Destination $x64AttributeSmoke -Force
+}
+foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll', 'X64AttributeContracts.exe')) {
+    Copy-Item -LiteralPath (Join-Path $nativeX64Root $name) -Destination $x64AttributeSmoke -Force
+}
+$attributeTarget = Join-Path $x64AttributeSmoke 'X64AttributeContracts.exe'
+$attributeConfig = '<LEConfig><Profiles><Profile Name="x64 attribute contract" Guid="00000000-0000-0000-0000-0000000000A1" MainMenu="false"><Parameter></Parameter><Location>ja-JP</Location><Timezone>Tokyo Standard Time</Timezone><RunAsAdmin>false</RunAsAdmin><RedirectRegistry>true</RedirectRegistry><IsAdvancedRedirection>false</IsAdvancedRedirection><RunWithSuspend>false</RunWithSuspend></Profile></Profiles></LEConfig>'
+$attributeConfig | Set-Content -LiteralPath ($attributeTarget + '.le.config') -Encoding utf8NoBOM
+$attributeStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $x64AttributeSmoke 'LEProc.exe'))
+$attributeStart.UseShellExecute = $false
+$attributeStart.CreateNoWindow = $true
+$attributeStart.WorkingDirectory = $x64AttributeSmoke
+[void]$attributeStart.ArgumentList.Add('-run')
+[void]$attributeStart.ArgumentList.Add($attributeTarget)
+$attributeProcess = [Diagnostics.Process]::Start($attributeStart)
+try {
+    if (-not $attributeProcess.WaitForExit(60000)) {
+        $attributeProcess.Kill($true)
+        $attributeProcess.WaitForExit()
+        throw 'x64 属性表边界探针超时。'
+    }
+    if ($attributeProcess.ExitCode -ne 0) {
+        throw "x64 属性表边界探针失败，退出码 $($attributeProcess.ExitCode)。"
+    }
+} finally {
+    if (-not $attributeProcess.HasExited) {
+        $attributeProcess.Kill($true)
+        $attributeProcess.WaitForExit()
+    }
+    $attributeProcess.Dispose()
+}
+Remove-Item -LiteralPath $x64AttributeSmoke -Recurse -Force
 
 [xml]$versionFile = Get-Content -Raw -LiteralPath (Join-Path $releaseRoot 'LEVersion.xml')
 $version = [version]$versionFile.LEVersion.Version
@@ -159,7 +205,7 @@ function New-Package {
     return [pscustomobject]@{ Architecture = $Architecture; Package = $package; Archive = $archive }
 }
 
-Write-Host '[dual 4/6] 装配 x86 与 x64 ZIP'
+Write-Host '[dual 5/6] 装配 x86 与 x64 ZIP'
 $x86 = New-Package -Architecture x86 -ManagedRoot $releaseRoot -NativeRoot $releaseRoot
 $x64 = New-Package -Architecture x64 -ManagedRoot $managedX64Root -NativeRoot $nativeX64Root -IncludeX86Compatibility
 
@@ -203,7 +249,7 @@ Assert-Machine (Join-Path $x64.Package 'x86/LEProc.exe') 'x86'
 Assert-Machine (Join-Path $x64.Package 'x86/LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'x86/LocaleEmulator.dll') 'x86'
 
-Write-Host '[dual 5/6] 运行 x64 Loader 启动烟测'
+Write-Host '[dual 6/6] 运行 x64 Loader 启动烟测'
 $smokeRoot = Join-Path $packageRoot 'x64-launch-smoke'
 if (Test-Path -LiteralPath $smokeRoot) {
     Remove-Item -LiteralPath $smokeRoot -Recurse -Force

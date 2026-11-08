@@ -131,6 +131,36 @@ static int FailureContract()
     return failures;
 }
 
+static void LargeAttributeListContract()
+{
+    using NativeCreate = LONG(NTAPI*)(HANDLE*, HANDLE*, ACCESS_MASK, ACCESS_MASK, void*, void*, ULONG, ULONG,
+        void*, void*, void*);
+    auto create = reinterpret_cast<NativeCreate>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtCreateUserProcess"));
+    Check(create != nullptr, "large attribute list syscall");
+    if (create == nullptr) return;
+
+    constexpr SIZE_T AttributeBytes = 1024 * 1024;
+    auto list = static_cast<BYTE*>(VirtualAlloc(nullptr, AttributeBytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    Check(list != nullptr, "large attribute list allocation");
+    if (list == nullptr) return;
+    ZeroMemory(list, AttributeBytes);
+    *reinterpret_cast<ULONG_PTR*>(list) = AttributeBytes;
+
+    HANDLE process = nullptr, thread = nullptr;
+    LONG status = create(&process, &thread, 0, 0, nullptr, nullptr, 0, 0, nullptr, nullptr, list);
+    printf("large-attribute-list bytes=%zu status=%08lx\n", AttributeBytes, status);
+    Check(status < 0, "large attribute list rejected without crash");
+    if (process != nullptr)
+    {
+        TerminateProcess(process, 99);
+        WaitForSingleObject(process, 5000);
+        CloseHandle(process);
+    }
+    if (thread != nullptr) CloseHandle(thread);
+    VirtualFree(list, 0, MEM_RELEASE);
+}
+
+
 static void FaultContracts();
 static void RightsContracts(bool injected);
 static void CleanupOwnChildren();
@@ -176,6 +206,7 @@ static int GuardContract(ULONG count, bool overflow)
     if (status >= 0 && CopyOnly) { TerminateProcess(info.hProcess, 0); WaitForSingleObject(info.hProcess, 5000); CloseHandle(info.hThread); CloseHandle(info.hProcess); }
     if (status >= 0 && !CopyOnly) { DWORD wait = WaitForSingleObject(info.hProcess, 20000), code = 0; Check(wait == WAIT_OBJECT_0, "child completes"); if (wait != WAIT_OBJECT_0) TerminateProcess(info.hProcess, 99); GetExitCodeProcess(info.hProcess, &code); printf("child_exit=%08lx\n", code); Check(code == 0, "child contracts"); CloseHandle(info.hThread); CloseHandle(info.hProcess); }
     if (count == 1 && !overflow && GetModuleHandleW(L"LocaleEmulator.dll")) { RightsContracts(true); FaultContracts(); }
+    if (count == 1 && !overflow && GetModuleHandleW(L"LocaleEmulator.dll")) { LargeAttributeListContract(); }
     VirtualFree(memory, 0, MEM_RELEASE);
     CleanupOwnChildren();
     return failures;

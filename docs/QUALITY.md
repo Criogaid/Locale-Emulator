@@ -55,11 +55,12 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - N14：共享内存探针使用基址减法检查范围，拒绝 `PAGE_EXECUTE`、`PAGE_NOACCESS` 和 `PAGE_GUARD`，避免地址终点回绕及把不可读页当作可读页。
 - N16：`NtQuerySystemInformation(SystemCurrentTimeZoneInformation)` 的输出及可选 `ReturnLength` 在 Hook 直接写回前验证可写；坏输出页在原生、932、936 注入下均返回 `STATUS_ACCESS_VIOLATION` 且进程存活。
 - N17：注册表重定向分支在填充 `KeyValueInformation` 和 `ResultLength` 前验证调用方写范围；单条重定向、坏输出页的 native/932/936 对照通过。
-- N18：`NtCreateUserProcess` 的对象属性和属性列表先验证可读，并将由调用方 `TotalLength` 控制的附加 `PS_ATTRIBUTE` 副本从线程栈移到可失败堆分配；溢出、分配失败和全部清理路径保留。
+- N18：x86/x64 `NtCreateUserProcess` 的对象属性和属性列表先验证可读，并将由调用方 `TotalLength` 控制的附加 `PS_ATTRIBUTE` 副本从线程栈移到可失败堆分配；溢出、分配失败和全部清理路径保留。
 - N19：被 Hook 直接阻断的三个区域语言输出入口验证可写后再写回；合法输出仍分别写回区域 LCID/LANGID，坏输出与原生访问冲突对齐。
 
 ## 第 4 轮复审
 - R01：x64 双包初版只让 Shell 扩展选择 x86/x64 helper，GUI 保存后运行和桌面快捷方式仍硬编码包根目录 `LEProc.exe`；在 x64 包中处理 x86 目标时会错误启动 x64 Loader。将目标 PE 识别、关联程序解析和 helper 校验集中到 `LECommonLibrary.GlobalHelper.GetLauncherPath`，Shell、GUI 运行和快捷方式共用；x64 包公共选择器、x86 单包回退、完整源码回归及双包烟测通过。
+- R02：x64 Core 的 `NtCreateUserProcess` 原先仍用调用方 `TotalLength` 做 `AllocStack`，与 x86 已完成的 N18 修复不一致；现在补齐共享可读性验证、溢出检查和堆副本清理。x86 原生契约与 x64 专用 1MiB 属性表探针均验证为拒绝非法创建且进程存活，双包完整构建与烟测通过。
 
 ## 多语言里程碑
 
@@ -138,3 +139,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - `0d3ec0d`：N16–N19 应用指针写边界与可变属性表修复；共享读/写页权限探针、系统信息/区域查询、注册表重定向输出和 `NtCreateUserProcess` 属性列表均完成 native/932/936 对照。新增扩展矩阵为 45 组：除 3 组 native 与注入均一致的 `sendgettext` 原生访问冲突外，其余 42 组注入存活且状态一致；合法区域输出对照写回 `0x804`/`0x0804`。
 - `b947b23`：x86/x64 双包发布入口；x86 完整回归（34 项托管、8 项 x64 Shell、原生契约/目录/防护、CP932/936）与 x64 原生 W4/WX、PE machine/ASLR/NX、x64 LEProc 和 Loader 启动烟测均通过，生成 `artifacts/package-dual/Locale.Emulator.2.5.1.0-x86.zip` 与 `Locale.Emulator.2.5.1.0-x64.zip`。
 - 当前业务目的研究与 LEProc 契约重构：公开 Locale/UI/UTF-8 API 无法替代非合作旧程序的完整区域模拟；保留必要的 x86/x64 Loader/Core 边界。LEProc 启动失败、提权失败和无文件关联现在返回非零退出码，同一启动路径只解析一次 `CultureInfo`；目标进程的区域模拟和成功路径保持不变。
+- 当前复审修复：x64 `NtCreateUserProcess` 属性表边界与所有权，新增 `X64AttributeContracts` 仅使用 x64 ABI，避免把 x86 专用创建信息布局带入 x64 测试。

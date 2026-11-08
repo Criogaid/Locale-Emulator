@@ -1435,6 +1435,7 @@ LepNtCreateUserProcess(
     NTSTATUS            Status, Status2;
     PLepGlobalData       GlobalData;
     PPS_ATTRIBUTE_LIST  LocalAttributeList;
+    PVOID               LocalAttributeAllocation;
     PPS_ATTRIBUTE       Attribute;
     CLIENT_ID           LocalCid, *Cid;
     ULONG_PTR           ReturnLength;
@@ -1456,8 +1457,26 @@ LepNtCreateUserProcess(
     GlobalData = (PLepGlobalData)HpGetFilterContext();
 
     LocalAttributeList = nullptr;
+    LocalAttributeAllocation = nullptr;
     Attribute = nullptr;
     Cid = nullptr;
+
+    if (AttributeList != nullptr)
+    {
+        if (IsReadableMemory(AttributeList, FIELD_OFFSET(PS_ATTRIBUTE_LIST, Attributes)) == FALSE ||
+            AttributeList->TotalLength < FIELD_OFFSET(PS_ATTRIBUTE_LIST, Attributes) ||
+            IsReadableMemory(AttributeList, AttributeList->TotalLength) == FALSE)
+            return 0;
+    }
+
+    auto ReleaseLocalAttributes = [&]()
+    {
+        if (LocalAttributeAllocation != nullptr)
+        {
+            FreeMemory(LocalAttributeAllocation);
+            LocalAttributeAllocation = nullptr;
+        }
+    };
 
     if (AttributeList != nullptr)
     {
@@ -1482,9 +1501,14 @@ LepNtCreateUserProcess(
     {
         ULONG_PTR ListLength;
 
+        if ((AttributeList != nullptr && AttributeList->TotalLength > MAXULONG_PTR - sizeof(*Attribute)) ||
+            (AttributeList == nullptr && sizeof(AttributeList->TotalLength) > MAXULONG_PTR - sizeof(*Attribute)))
+            return STATUS_INTEGER_OVERFLOW;
         ListLength = (AttributeList != nullptr ? AttributeList->TotalLength : sizeof(AttributeList->TotalLength)) + sizeof(*Attribute);
-        LocalAttributeList = (PPS_ATTRIBUTE_LIST)AllocStack(ListLength);
-
+        LocalAttributeList = (PPS_ATTRIBUTE_LIST)AllocateMemory(ListLength);
+        if (LocalAttributeList == nullptr)
+            return STATUS_NO_MEMORY;
+        LocalAttributeAllocation = LocalAttributeList;
         if (AttributeList != nullptr)
             CopyMemory(LocalAttributeList, AttributeList, AttributeList->TotalLength);
 
@@ -1521,7 +1545,10 @@ LepNtCreateUserProcess(
     WriteLog(L"create proc syscall status=%p effectiveThreadFlags=%08X", Status, ThreadFlags);
 
     if (NT_FAILED(Status))
+    {
+        ReleaseLocalAttributes();
         return Status;
+    }
 
     WriteLog(L"create proc returned pid=%u tid=%u originalSuspended=%u",
              Cid != nullptr ? (ULONG)(ULONG_PTR)Cid->UniqueProcess : 0,
@@ -1550,6 +1577,7 @@ LepNtCreateUserProcess(
                  Cid != nullptr ? (ULONG)(ULONG_PTR)Cid->UniqueThread : 0);
     }
 
+    ReleaseLocalAttributes();
     return Status;
 }
 

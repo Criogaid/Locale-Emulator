@@ -138,6 +138,45 @@ inline BOOL IsLepLoader()
     return lep::ActiveFrame::Find(LEP_LOADER_PROCESS) != nullptr;
 }
 
+ForceInline BOOL IsMemoryAccessible(PVOID Address, ULONG_PTR Size, BOOL WriteAccess)
+{
+    MEMORY_BASIC_INFORMATION MemoryInfo;
+    ULONG_PTR AddressValue;
+    ULONG_PTR RegionBase;
+    ULONG_PTR Offset;
+    ULONG Protection;
+
+    if (Address == nullptr)
+        return FALSE;
+    if (NT_FAILED(NtQueryVirtualMemory(CurrentProcess, Address, MemoryBasicInformation,
+                                      &MemoryInfo, sizeof(MemoryInfo), nullptr)))
+        return FALSE;
+
+    Protection = MemoryInfo.Protect & 0xFF;
+    if (MemoryInfo.State != MEM_COMMIT || Protection == PAGE_NOACCESS ||
+        Protection == PAGE_EXECUTE || FLAG_ON(MemoryInfo.Protect, PAGE_GUARD))
+        return FALSE;
+    if (WriteAccess && Protection != PAGE_READWRITE && Protection != PAGE_WRITECOPY &&
+        Protection != PAGE_EXECUTE_READWRITE && Protection != PAGE_EXECUTE_WRITECOPY)
+        return FALSE;
+    if (!WriteAccess && Protection != PAGE_READONLY && Protection != PAGE_READWRITE &&
+        Protection != PAGE_WRITECOPY && Protection != PAGE_EXECUTE_READ &&
+        Protection != PAGE_EXECUTE_READWRITE && Protection != PAGE_EXECUTE_WRITECOPY)
+        return FALSE;
+
+    AddressValue = reinterpret_cast<ULONG_PTR>(Address);
+    RegionBase = reinterpret_cast<ULONG_PTR>(MemoryInfo.BaseAddress);
+    if (AddressValue < RegionBase)
+        return FALSE;
+    Offset = AddressValue - RegionBase;
+    return Offset <= MemoryInfo.RegionSize && Size <= MemoryInfo.RegionSize - Offset;
+}
+
+ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
+{
+    return IsMemoryAccessible(Address, Size, FALSE);
+}
+
 typedef struct THREAD_LOCAL_BUFFER : public lep::ActiveFrame
 {
     // BYTE Buffer[MEMORY_PAGE_SIZE * 2];
