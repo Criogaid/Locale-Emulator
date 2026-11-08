@@ -11,9 +11,22 @@ namespace LECommonLibrary
 {
     public static class GlobalHelper
     {
+        public static string RuntimeDirectory =
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        public static string ProductDirectory
+        {
+            get
+            {
+                var runtimeDirectory = RuntimeDirectory;
+                var parent = Directory.GetParent(runtimeDirectory);
+                return string.Equals(Path.GetFileName(runtimeDirectory), "x86", StringComparison.OrdinalIgnoreCase)
+                       && parent != null && File.Exists(Path.Combine(parent.FullName, "LEGUI.exe"))
+                    ? parent.FullName
+                    : runtimeDirectory;
+            }
+        }
         public static string GlobalVersionPath =
-            Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
-                         "LEVersion.xml");
+            Path.Combine(ProductDirectory, "LEVersion.xml");
 
         public static string GetLEVersion()
         {
@@ -36,7 +49,7 @@ namespace LECommonLibrary
                     errorCode,
                     commandLine,
                     $"{Environment.OSVersion} {(SystemHelper.Is64BitOS() ? "x64" : "x86")}",
-                    Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
+                    ProductDirectory,
                     Environment.CurrentDirectory,
                     GenerateSystemDllVersionList()),
                 string.Format(Localization.GetString("VersionTitle"), GetLEVersion()));
@@ -73,7 +86,7 @@ namespace LECommonLibrary
             string[] dlls = {"LoaderDll.dll", "LocaleEmulator.dll"};
 
             return
-                dlls.Select(dll => Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), dll))
+                dlls.Select(dll => Path.Combine(RuntimeDirectory, dll))
                     .All(File.Exists);
         }
     }

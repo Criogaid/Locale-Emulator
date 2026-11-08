@@ -80,11 +80,25 @@ function Copy-PackageCommon {
     }
 }
 
+function Copy-X86Compatibility {
+    param([string]$Package, [string]$ManagedRoot, [string]$NativeRoot)
+    $compatibility = Join-Path $Package 'x86'
+    New-Item -ItemType Directory -Path $compatibility -Force | Out-Null
+    foreach ($name in @('LEProc.exe', 'LEProc.exe.config', 'LECommonLibrary.dll')) {
+        Copy-RequiredFile $ManagedRoot $compatibility $name
+    }
+    foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll')) {
+        Copy-RequiredFile $NativeRoot $compatibility $name
+    }
+}
+
+
 function New-Package {
     param(
         [ValidateSet('x86', 'x64')][string]$Architecture,
         [string]$ManagedRoot,
-        [string]$NativeRoot
+        [string]$NativeRoot,
+        [switch]$IncludeX86Compatibility
     )
 
     $name = "Locale.Emulator.$version-$Architecture"
@@ -102,6 +116,9 @@ function New-Package {
     }
     foreach ($nameToCopy in @('LoaderDll.dll', 'LocaleEmulator.dll')) {
         Copy-RequiredFile $NativeRoot $package $nameToCopy
+    if ($IncludeX86Compatibility) {
+        Copy-X86Compatibility $package $releaseRoot $releaseRoot
+    }
     }
 
     $commit = & git -C $repository rev-parse HEAD
@@ -144,7 +161,7 @@ function New-Package {
 
 Write-Host '[dual 4/6] 装配 x86 与 x64 ZIP'
 $x86 = New-Package -Architecture x86 -ManagedRoot $releaseRoot -NativeRoot $releaseRoot
-$x64 = New-Package -Architecture x64 -ManagedRoot $managedX64Root -NativeRoot $nativeX64Root
+$x64 = New-Package -Architecture x64 -ManagedRoot $managedX64Root -NativeRoot $nativeX64Root -IncludeX86Compatibility
 
 $dumpbin = Join-Path $installation 'VC/Tools/MSVC/14.29.30133/bin/Hostx86/x64/dumpbin.exe'
 function Assert-Machine {
@@ -163,6 +180,27 @@ Assert-Machine (Join-Path $x86.Package 'LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'LEProc.exe') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LoaderDll.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LocaleEmulator.dll') 'x64'
+function Assert-ShellHelperSelection {
+    param([string]$Package)
+    $commonAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LECommonLibrary.dll'))
+    $shellAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LEContextMenuHandler.dll'))
+    $method = $shellAssembly.GetType('LEContextMenuHandler.FileContextMenuExt', $true).GetMethod(
+        'GetLauncherPath', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+    $peType = $commonAssembly.GetType('LECommonLibrary.PEType', $true)
+    foreach ($name in @('X32', 'X64')) {
+        $value = [Enum]::Parse($peType, $name)
+        $selected = [string]$method.Invoke($null, @($value))
+        $expected = if ($name -eq 'X32') { Join-Path $Package 'x86/LEProc.exe' } else { Join-Path $Package 'LEProc.exe' }
+        if (-not [StringComparer]::OrdinalIgnoreCase.Equals([IO.Path]::GetFullPath($selected), [IO.Path]::GetFullPath($expected))) {
+            throw "Shell helper 选择错误：$name -> $selected，期望 $expected"
+        }
+    }
+    Write-Host 'PASS ShellHelperSelection x86/x64'
+}
+Assert-ShellHelperSelection $x64.Package
+Assert-Machine (Join-Path $x64.Package 'x86/LEProc.exe') 'x86'
+Assert-Machine (Join-Path $x64.Package 'x86/LoaderDll.dll') 'x86'
+Assert-Machine (Join-Path $x64.Package 'x86/LocaleEmulator.dll') 'x86'
 
 Write-Host '[dual 5/6] 运行 x64 Loader 启动烟测'
 $smokeRoot = Join-Path $packageRoot 'x64-launch-smoke'
@@ -201,6 +239,38 @@ finally {
 }
 if (-not (Test-Path -LiteralPath $marker)) {
     throw 'x64 Loader 启动烟测未生成目标进程标记。'
+}
+
+$x86Target = Join-Path $smokeRoot 'cmd32.exe'
+Copy-Item -LiteralPath (Join-Path $env:windir 'SysWOW64/cmd.exe') -Destination $x86Target
+$x86Marker = Join-Path $smokeRoot 'started-x86.txt'
+$x86Configuration = '<LEConfig><Profiles><Profile Name="x86 smoke" Guid="00000000-0000-0000-0000-000000000032" MainMenu="false"><Parameter>/c echo x86-started&gt;&quot;' + $x86Marker + '&quot;</Parameter><Location>ja-JP</Location><Timezone>Tokyo Standard Time</Timezone><RunAsAdmin>false</RunAsAdmin><RedirectRegistry>true</RedirectRegistry><IsAdvancedRedirection>false</IsAdvancedRedirection><RunWithSuspend>false</RunWithSuspend></Profile></Profiles></LEConfig>'
+$x86Configuration | Set-Content -LiteralPath ($x86Target + '.le.config') -Encoding utf8NoBOM
+$x86Start = [Diagnostics.ProcessStartInfo]::new((Join-Path $x64.Package 'x86/LEProc.exe'))
+$x86Start.UseShellExecute = $false
+$x86Start.CreateNoWindow = $true
+$x86Start.WorkingDirectory = $x64.Package
+[void]$x86Start.ArgumentList.Add('-run')
+[void]$x86Start.ArgumentList.Add($x86Target)
+$x86Process = [Diagnostics.Process]::Start($x86Start)
+try {
+    if (-not $x86Process.WaitForExit(60000)) {
+        $x86Process.Kill($true)
+        $x86Process.WaitForExit()
+        throw 'x86 helper 启动烟测超时。'
+    }
+    if ($x86Process.ExitCode -ne 0) {
+        throw "x86 helper 启动烟测失败，退出码 $($x86Process.ExitCode)。"
+    }
+} finally {
+    if (-not $x86Process.HasExited) {
+        $x86Process.Kill($true)
+        $x86Process.WaitForExit()
+    }
+    $x86Process.Dispose()
+}
+if (-not (Test-Path -LiteralPath $x86Marker)) {
+    throw 'x64 包中的 x86 helper 未生成目标进程标记。'
 }
 
 Write-Host '[dual 6/6] 双包验收完成'

@@ -25,7 +25,7 @@ namespace LEProc
             {
                 MessageBox.Show(
                     string.Format(Localization.GetString("CoreFilesMissing"),
-                        Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)),
+                        GlobalHelper.RuntimeDirectory),
                     string.Format(Localization.GetString("VersionTitle"), GlobalHelper.GetLEVersion()),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -58,14 +58,12 @@ namespace LEProc
                         return RunWithIndependentProfile(Args[1]);
 
                     case "-manage": //-manage %APP%
-                        Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
-                                "LEGUI.exe"),
+                        Process.Start(Path.Combine(GlobalHelper.ProductDirectory, "LEGUI.exe"),
                             WindowsCommandLine.QuoteArgument(Args[1] + ".le.config"));
                         return 0;
 
                     case "-global": //-global
-                        Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
-                            "LEGUI.exe"));
+                        Process.Start(Path.Combine(GlobalHelper.ProductDirectory, "LEGUI.exe"));
                         return 0;
 
                     case "-runas": //-runas %GUID% %APP%
@@ -125,9 +123,8 @@ namespace LEProc
             if (!File.Exists(conf))
             {
                 Process.Start(
-                    Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "LEGUI.exe"),
+                    Path.Combine(GlobalHelper.ProductDirectory, "LEGUI.exe"),
                     WindowsCommandLine.QuoteArgument(path + ".le.config"));
-                return 0;
             }
 
             var profiles = LEConfig.GetProfiles(conf);
@@ -248,11 +245,7 @@ namespace LEProc
             try
             {
                 SystemHelper.RunWithElevatedProcess(
-                    Path.Combine(
-                        Path.GetDirectoryName(
-                            Assembly.GetExecutingAssembly()
-                                .Location),
-                        "LEProc.exe"),
+                    Path.Combine(GlobalHelper.RuntimeDirectory, "LEProc.exe"),
                     Args);
                 return true;
             }

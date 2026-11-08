@@ -26,7 +26,7 @@ pwsh -NoProfile -File ./build.ps1
 pwsh -NoProfile -File ./build-dual.ps1
 ```
 
-该入口先完成 x86 的完整构建和回归，再用 Hostx86\x64 官方编译器构建 x64 原生 Core、Loader 和 x64 LEProc，分别装配 ZIP；两包会解包复核 SHA256，并对 x64 Loader 执行目标进程启动烟测。
+该入口先完成 x86 的完整构建和回归，再用 Hostx86\x64 官方编译器构建 x64 原生 Core、Loader 和 x64 LEProc；x64 包根目录携带 x64 链，并在 `x86/` 携带 x86 LEProc、Loader、Core 和公共库。Shell 扩展按目标 PE 架构自动选择对应 helper；两包会解包复核 SHA256，并对 x64 与 x86 目标分别执行启动烟测。
 
 
 原生构建使用官方编译器、Windows SDK 及系统 DLL 导出生成的导入库，不依赖 `_Compilers`、旧 WDK 或预编译 MyLib 库。相关旧文件保留在上游提交历史中。

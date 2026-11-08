@@ -24,9 +24,7 @@ namespace LECommonLibrary
 
         private static Dictionary<string, string> LoadDictionary()
         {
-            var directory = Path.Combine(
-                Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty,
-                "CommonLang");
+            var directory = Path.Combine(GlobalHelper.ProductDirectory, "CommonLang");
             var candidates = new[]
             {
                 CurrentCultureInfo.Name,

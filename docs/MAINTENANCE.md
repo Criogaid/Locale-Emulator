@@ -2,7 +2,7 @@
 
 ## 当前目标与实现
 
-本轮完成前端与 Core 的历史合并、统一构建与发行、托管及原生回归，以及官方原生工具链迁移。维护范围为 Windows 11 x64 主机上的 x86 与 x64 目标程序；默认包保持 x86，双包入口额外生成隔离的 x64 LEProc、Loader 和 Core，界面与 Shell 托管程序集保持 AnyCPU。
+本轮完成前端与 Core 的历史合并、统一构建与发行、托管及原生回归，以及官方原生工具链迁移。维护范围为 Windows 11 x64 主机上的 x86 与 x64 目标程序；默认包保持 x86，双包入口生成根目录 x64 LEProc/Loader/Core，并在 `x86/` 携带对应的 x86 LEProc/Loader/Core 与公共库，界面与 Shell 托管程序集保持 AnyCPU。
 
 合仓提交为 `8d41af63e4a1b163da2a2f654b6a83b33d58e060`，父提交分别是前端 `2f3f30dc5169b3cf051af389ec1dcc52f167a93d` 和 Core `ae7160dc5deb97947396abcd784f9b98b6ee38b3`。Core 的 31 个原始提交均保留；导入时 Native tree 与原始 Core tree 相同。来源和许可见 [SOURCES.md](SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
@@ -64,7 +64,7 @@
 | 发行包复测 | 从实际 ZIP 解包，逐文件 SHA256 验证，再通过相同产品运行回归 |
 | 干净检出集成 | 在没有 Build、bin 或 artifacts 的独立工作树运行完整构建及发行包复测 |
 
-双包入口的 x64 验收还检查 `LEProc.exe`、`LoaderDll.dll` 和 `LocaleEmulator.dll` 的 PE machine、ASLR/NX 属性，并在解包后的 x64 包中用私有临时副本启动 `cmd.exe`。GUI、安装器和 Shell 托管程序集是 AnyCPU 且关闭 Prefer32Bit，由 x86 或 x64 宿主按包运行；x64 包的进程注入链只使用 x64 LEProc 与原生 DLL。
+双包入口的 x64 验收检查根目录与 `x86/` 子目录中各自的 `LEProc.exe`、`LoaderDll.dll` 和 `LocaleEmulator.dll` 的 PE machine、ASLR/NX 属性，并在解包后的 x64 包中分别用私有临时副本启动 x64 与 x86 `cmd.exe`。Shell 扩展根据目标 PE 架构选择根目录或 `x86/` helper；GUI、安装器和 Shell 托管程序集是 AnyCPU 且关闭 Prefer32Bit。
 
 本机运行报告位于 `artifacts/tests/`：`environment.json` 记录环境和产品哈希；`managed.log`、`shell64.log` 记录双架构检查；`native-contracts.log`、`native-directory.log`、`hardening-check.log` 和 `hardening-*.txt` 记录边界及防护；`native-932.txt`/`native-936.txt` 与 `.child` 记录父子结果；`ui-smoke.json` 记录窗口。`result.json` 仅在整轮成功后生成。包内 `build-info.json` 区分提交构建与有未提交修改的开发构建。
 

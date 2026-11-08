@@ -10,8 +10,7 @@ namespace LECommonLibrary
     public static class LEConfig
     {
         public static string GlobalConfigPath =
-            Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
-                         "LEConfig.xml");
+            Path.Combine(GlobalHelper.ProductDirectory, "LEConfig.xml");
 
 
         public static LEProfile[] GetProfiles()

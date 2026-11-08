@@ -44,6 +44,7 @@ namespace LEContextMenuHandler
         private IntPtr _menuBmpGray = IntPtr.Zero;
         private IntPtr _menuBmpPink = IntPtr.Zero;
         private string _selectedFile;
+        private string _selectedLauncher;
 
         public FileContextMenuExt()
         {
@@ -158,16 +159,8 @@ namespace LEContextMenuHandler
                             path = SystemHelper.RedirectToWow64(path);
                         }
                     }
-                    // Do not display context menus for 64bit exe.
-                    switch (PEFileReader.GetPEType(path))
-                    {
-                        case PEType.Unknown:
-                        case PEType.X64:
-                            Marshal.ThrowExceptionForHR(WinError.E_FAIL);
-                            break;
-                        case PEType.X32:
-                            break;
-                    }
+                    var peType = PEFileReader.GetPEType(path);
+                    _selectedLauncher = GetLauncherPath(peType);
                 }
                 else
                 {
@@ -181,6 +174,24 @@ namespace LEContextMenuHandler
         }
 
         #endregion
+
+        private static string GetLauncherPath(PEType targetType)
+        {
+            if (targetType == PEType.Unknown)
+                Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+
+            var root = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            var launcher = targetType == PEType.X64
+                ? Path.Combine(root, "LEProc.exe")
+                : Path.Combine(root, "x86", "LEProc.exe");
+            if (targetType == PEType.X32 && !File.Exists(launcher))
+                launcher = Path.Combine(root, "LEProc.exe");
+
+            if (!File.Exists(launcher) || PEFileReader.GetPEType(launcher) != targetType)
+                Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+            return launcher;
+        }
+
 
         ~FileContextMenuExt()
         {
@@ -199,8 +210,7 @@ namespace LEContextMenuHandler
 
         private void OnVerbDisplayFileName(string cmd)
         {
-            Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "LEProc.exe"),
-                          cmd.Replace("%APP%", _selectedFile));
+            Process.Start(_selectedLauncher, cmd.Replace("%APP%", _selectedFile));
         }
 
         private int RegisterMenuItem(uint id,
