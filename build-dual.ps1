@@ -43,23 +43,24 @@ if (Test-Path -LiteralPath $x64AttributeSmoke) {
     Remove-Item -LiteralPath $x64AttributeSmoke -Recurse -Force
 }
 New-Item -ItemType Directory -Path $x64AttributeSmoke -Force | Out-Null
-foreach ($name in @('LEProc.exe', 'LEProc.exe.config', 'LECommonLibrary.dll', 'LEVersion.xml')) {
-    Copy-Item -LiteralPath (Join-Path $managedX64Root $name) -Destination $x64AttributeSmoke -Force
-}
-foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll', 'X64AttributeContracts.exe')) {
-    Copy-Item -LiteralPath (Join-Path $nativeX64Root $name) -Destination $x64AttributeSmoke -Force
-}
-$attributeTarget = Join-Path $x64AttributeSmoke 'X64AttributeContracts.exe'
-$attributeConfig = '<LEConfig><Profiles><Profile Name="x64 attribute contract" Guid="00000000-0000-0000-0000-0000000000A1" MainMenu="false"><Parameter></Parameter><Location>ja-JP</Location><Timezone>Tokyo Standard Time</Timezone><RunAsAdmin>false</RunAsAdmin><RedirectRegistry>true</RedirectRegistry><IsAdvancedRedirection>false</IsAdvancedRedirection><RunWithSuspend>false</RunWithSuspend></Profile></Profiles></LEConfig>'
-$attributeConfig | Set-Content -LiteralPath ($attributeTarget + '.le.config') -Encoding utf8NoBOM
-$attributeStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $x64AttributeSmoke 'LEProc.exe'))
-$attributeStart.UseShellExecute = $false
-$attributeStart.CreateNoWindow = $true
-$attributeStart.WorkingDirectory = $x64AttributeSmoke
-[void]$attributeStart.ArgumentList.Add('-run')
-[void]$attributeStart.ArgumentList.Add($attributeTarget)
-$attributeProcess = [Diagnostics.Process]::Start($attributeStart)
+$attributeProcess = $null
 try {
+    foreach ($name in @('LEProc.exe', 'LEProc.exe.config', 'LECommonLibrary.dll', 'LEVersion.xml')) {
+        Copy-Item -LiteralPath (Join-Path $managedX64Root $name) -Destination $x64AttributeSmoke -Force
+    }
+    foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll', 'X64AttributeContracts.exe')) {
+        Copy-Item -LiteralPath (Join-Path $nativeX64Root $name) -Destination $x64AttributeSmoke -Force
+    }
+    $attributeTarget = Join-Path $x64AttributeSmoke 'X64AttributeContracts.exe'
+    $attributeConfig = '<LEConfig><Profiles><Profile Name="x64 attribute contract" Guid="00000000-0000-0000-0000-0000000000A1" MainMenu="false"><Parameter></Parameter><Location>ja-JP</Location><Timezone>Tokyo Standard Time</Timezone><RunAsAdmin>false</RunAsAdmin><RedirectRegistry>true</RedirectRegistry><IsAdvancedRedirection>false</IsAdvancedRedirection><RunWithSuspend>false</RunWithSuspend></Profile></Profiles></LEConfig>'
+    $attributeConfig | Set-Content -LiteralPath ($attributeTarget + '.le.config') -Encoding utf8NoBOM
+    $attributeStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $x64AttributeSmoke 'LEProc.exe'))
+    $attributeStart.UseShellExecute = $false
+    $attributeStart.CreateNoWindow = $true
+    $attributeStart.WorkingDirectory = $x64AttributeSmoke
+    [void]$attributeStart.ArgumentList.Add('-run')
+    [void]$attributeStart.ArgumentList.Add($attributeTarget)
+    $attributeProcess = [Diagnostics.Process]::Start($attributeStart)
     if (-not $attributeProcess.WaitForExit(60000)) {
         $attributeProcess.Kill($true)
         $attributeProcess.WaitForExit()
@@ -69,13 +70,17 @@ try {
         throw "x64 属性表边界探针失败，退出码 $($attributeProcess.ExitCode)。"
     }
 } finally {
-    if (-not $attributeProcess.HasExited) {
-        $attributeProcess.Kill($true)
-        $attributeProcess.WaitForExit()
+    if ($null -ne $attributeProcess) {
+        if (-not $attributeProcess.HasExited) {
+            $attributeProcess.Kill($true)
+            $attributeProcess.WaitForExit()
+        }
+        $attributeProcess.Dispose()
     }
-    $attributeProcess.Dispose()
+    if (Test-Path -LiteralPath $x64AttributeSmoke) {
+        Remove-Item -LiteralPath $x64AttributeSmoke -Recurse -Force
+    }
 }
-Remove-Item -LiteralPath $x64AttributeSmoke -Recurse -Force
 
 [xml]$versionFile = Get-Content -Raw -LiteralPath (Join-Path $releaseRoot 'LEVersion.xml')
 $version = [version]$versionFile.LEVersion.Version
