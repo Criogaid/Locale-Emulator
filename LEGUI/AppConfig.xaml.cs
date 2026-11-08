@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices.ComTypes;
 using System.Windows;
 using LECommonLibrary;
@@ -22,6 +21,17 @@ namespace LEGUI
         private string ApplicationPath
         {
             get { return App.StandaloneFilePath.Substring(0, App.StandaloneFilePath.Length - ".le.config".Length); }
+        }
+
+        private string LauncherPath
+        {
+            get
+            {
+                var launcher = GlobalHelper.GetLauncherPath(ApplicationPath);
+                if (launcher == null)
+                    throw new InvalidDataException(LECommonLibrary.Localization.GetString("LauncherArchitectureMismatch"));
+                return launcher;
+            }
         }
 
         public AppConfig()
@@ -85,8 +95,7 @@ namespace LEGUI
             {
                 var link = (IShellLink)new ShellLink();
 
-                link.SetPath(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
-                                          "LEProc.exe"));
+                link.SetPath(LauncherPath);
                 link.SetArguments(WindowsCommandLine.JoinArguments(new[] { "-run", path }));
                 link.SetIconLocation(AssociationReader.GetAssociatedIcon(Path.GetExtension(path)).Replace("%1", path), 0);
 
@@ -108,7 +117,7 @@ namespace LEGUI
         private void RunAndShutdown()
         {
             //Run the application.
-            Process.Start(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "LEProc.exe"),
+            Process.Start(LauncherPath,
                           WindowsCommandLine.JoinArguments(new[] { "-run", ApplicationPath }));
 
             Application.Current.Shutdown();

@@ -56,6 +56,7 @@ path    按应用配置、首个全局配置或默认 ja-JP 配置运行应用�
   <ProcessWaitError>目标进程返回了意外状态：{0}</ProcessWaitError>
   <ApplicationNameMissing>ApplicationName 不能为空。</ApplicationNameMissing>
   <MissingTargetPath>请指定目标程序路径。</MissingTargetPath>
+  <LauncherArchitectureMismatch>当前 Locale Emulator 安装包没有与目标程序架构匹配的启动器。</LauncherArchitectureMismatch>
   <InvalidXmlText>配置包含 XML 不允许的字符，请检查配置名称和参数。</InvalidXmlText>
   <NullCharacterArgument>参数不能包含空字符。</NullCharacterArgument>
 </Strings>

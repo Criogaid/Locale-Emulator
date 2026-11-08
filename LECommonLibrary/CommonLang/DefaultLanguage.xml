@@ -56,6 +56,7 @@ The executable will start after you click Yes, but it will run as a background p
   <ProcessWaitError>The target process returned an unexpected status: {0}</ProcessWaitError>
   <ApplicationNameMissing>ApplicationName cannot be null or empty.</ApplicationNameMissing>
   <MissingTargetPath>Please specify the target program path.</MissingTargetPath>
+  <LauncherArchitectureMismatch>The installed Locale Emulator package has no launcher matching the target program architecture.</LauncherArchitectureMismatch>
   <InvalidXmlText>Configuration contains characters that XML does not allow. Please check profile names and parameters.</InvalidXmlText>
   <NullCharacterArgument>Arguments cannot contain a null character.</NullCharacterArgument>
 </Strings>

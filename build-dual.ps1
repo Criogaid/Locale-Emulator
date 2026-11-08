@@ -180,24 +180,25 @@ Assert-Machine (Join-Path $x86.Package 'LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'LEProc.exe') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LoaderDll.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LocaleEmulator.dll') 'x64'
-function Assert-ShellHelperSelection {
+function Assert-LauncherSelection {
     param([string]$Package)
     $commonAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LECommonLibrary.dll'))
-    $shellAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LEContextMenuHandler.dll'))
-    $method = $shellAssembly.GetType('LEContextMenuHandler.FileContextMenuExt', $true).GetMethod(
-        'GetLauncherPath', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
-    $peType = $commonAssembly.GetType('LECommonLibrary.PEType', $true)
-    foreach ($name in @('X32', 'X64')) {
-        $value = [Enum]::Parse($peType, $name)
-        $selected = [string]$method.Invoke($null, @($value))
-        $expected = if ($name -eq 'X32') { Join-Path $Package 'x86/LEProc.exe' } else { Join-Path $Package 'LEProc.exe' }
+    $helperType = $commonAssembly.GetType('LECommonLibrary.GlobalHelper', $true)
+    $method = $helperType.GetMethod(
+        'GetLauncherPath', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::Public)
+    foreach ($target in @('LEProc.exe', 'x86/LEProc.exe')) {
+        $targetPath = Join-Path $Package $target
+        $invokeArguments = [object[]]::new(1)
+        $invokeArguments[0] = [string]$targetPath
+        $selected = [string]$method.Invoke($null, $invokeArguments)
+        $expected = if ($target -like 'x86/*') { $targetPath } else { Join-Path $Package 'LEProc.exe' }
         if (-not [StringComparer]::OrdinalIgnoreCase.Equals([IO.Path]::GetFullPath($selected), [IO.Path]::GetFullPath($expected))) {
-            throw "Shell helper 选择错误：$name -> $selected，期望 $expected"
+            throw "Launcher 选择错误：$target -> $selected，期望 $expected"
         }
     }
-    Write-Host 'PASS ShellHelperSelection x86/x64'
+    Write-Host 'PASS LauncherSelection x86/x64'
 }
-Assert-ShellHelperSelection $x64.Package
+Assert-LauncherSelection $x64.Package
 Assert-Machine (Join-Path $x64.Package 'x86/LEProc.exe') 'x86'
 Assert-Machine (Join-Path $x64.Package 'x86/LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'x86/LocaleEmulator.dll') 'x86'

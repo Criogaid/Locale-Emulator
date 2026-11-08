@@ -64,7 +64,7 @@
 | 发行包复测 | 从实际 ZIP 解包，逐文件 SHA256 验证，再通过相同产品运行回归 |
 | 干净检出集成 | 在没有 Build、bin 或 artifacts 的独立工作树运行完整构建及发行包复测 |
 
-双包入口的 x64 验收检查根目录与 `x86/` 子目录中各自的 `LEProc.exe`、`LoaderDll.dll` 和 `LocaleEmulator.dll` 的 PE machine、ASLR/NX 属性，并在解包后的 x64 包中分别用私有临时副本启动 x64 与 x86 `cmd.exe`。Shell 扩展根据目标 PE 架构选择根目录或 `x86/` helper；GUI、安装器和 Shell 托管程序集是 AnyCPU 且关闭 Prefer32Bit。
+双包入口的 x64 验收检查根目录与 `x86/` 子目录中各自的 `LEProc.exe`、`LoaderDll.dll` 和 `LocaleEmulator.dll` 的 PE machine、ASLR/NX 属性，并在解包后的 x64 包中分别用私有临时副本启动 x64 与 x86 `cmd.exe`。Shell 扩展、GUI 保存后运行和桌面快捷方式根据目标 PE 架构选择根目录或 `x86/` helper；GUI、安装器和 Shell 托管程序集是 AnyCPU 且关闭 Prefer32Bit。
 
 本机运行报告位于 `artifacts/tests/`：`environment.json` 记录环境和产品哈希；`managed.log`、`shell64.log` 记录双架构检查；`native-contracts.log`、`native-directory.log`、`hardening-check.log` 和 `hardening-*.txt` 记录边界及防护；`native-932.txt`/`native-936.txt` 与 `.child` 记录父子结果；`ui-smoke.json` 记录窗口。`result.json` 仅在整轮成功后生成。包内 `build-info.json` 区分提交构建与有未提交修改的开发构建。
 

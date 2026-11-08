@@ -11,7 +11,7 @@ namespace LECommonLibrary
 {
     public static class GlobalHelper
     {
-        public static string RuntimeDirectory =
+        public static readonly string RuntimeDirectory =
             Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         public static string ProductDirectory
         {
@@ -24,6 +24,40 @@ namespace LECommonLibrary
                     ? parent.FullName
                     : runtimeDirectory;
             }
+        }
+
+        public static string GetLauncherPath(string targetPath)
+        {
+            var targetType = GetTargetPEType(targetPath);
+            if (targetType == PEType.Unknown)
+                return null;
+
+            var launcher = targetType == PEType.X64
+                ? Path.Combine(ProductDirectory, "LEProc.exe")
+                : Path.Combine(ProductDirectory, "x86", "LEProc.exe");
+            if (targetType == PEType.X32 && !File.Exists(launcher))
+                launcher = Path.Combine(ProductDirectory, "LEProc.exe");
+
+            return File.Exists(launcher) && PEFileReader.GetPEType(launcher) == targetType
+                ? launcher
+                : null;
+        }
+
+        private static PEType GetTargetPEType(string targetPath)
+        {
+            if (string.IsNullOrEmpty(targetPath))
+                return PEType.Unknown;
+
+            var executable = targetPath;
+            if (!string.Equals(Path.GetExtension(targetPath), ".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                var associated = AssociationReader.GetAssociatedProgram(Path.GetExtension(targetPath));
+                executable = associated == null ? string.Empty : associated[0];
+                if (SystemHelper.Is64BitOS())
+                    executable = SystemHelper.RedirectToWow64(executable);
+            }
+
+            return PEFileReader.GetPEType(executable);
         }
         public static string GlobalVersionPath =
             Path.Combine(ProductDirectory, "LEVersion.xml");

@@ -21,7 +21,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
@@ -140,27 +139,9 @@ namespace LEContextMenuHandler
 
                     _selectedFile = fileName.ToString();
 
-                    // Check exe binary type
-                    var path = string.Empty;
-                    var ext = Path.GetExtension(_selectedFile).ToLower();
-
-                    if (ext == ".exe")
-                    {
-                        path = _selectedFile;
-                    }
-                    else
-                    {
-                        path = AssociationReader.HaveAssociatedProgram(ext)
-                                   ? AssociationReader.GetAssociatedProgram(ext)[0]
-                                   : string.Empty;
-
-                        if (SystemHelper.Is64BitOS())
-                        {
-                            path = SystemHelper.RedirectToWow64(path);
-                        }
-                    }
-                    var peType = PEFileReader.GetPEType(path);
-                    _selectedLauncher = GetLauncherPath(peType);
+                    _selectedLauncher = GlobalHelper.GetLauncherPath(_selectedFile);
+                    if (_selectedLauncher == null)
+                        Marshal.ThrowExceptionForHR(WinError.E_FAIL);
                 }
                 else
                 {
@@ -175,22 +156,6 @@ namespace LEContextMenuHandler
 
         #endregion
 
-        private static string GetLauncherPath(PEType targetType)
-        {
-            if (targetType == PEType.Unknown)
-                Marshal.ThrowExceptionForHR(WinError.E_FAIL);
-
-            var root = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var launcher = targetType == PEType.X64
-                ? Path.Combine(root, "LEProc.exe")
-                : Path.Combine(root, "x86", "LEProc.exe");
-            if (targetType == PEType.X32 && !File.Exists(launcher))
-                launcher = Path.Combine(root, "LEProc.exe");
-
-            if (!File.Exists(launcher) || PEFileReader.GetPEType(launcher) != targetType)
-                Marshal.ThrowExceptionForHR(WinError.E_FAIL);
-            return launcher;
-        }
 
 
         ~FileContextMenuExt()
