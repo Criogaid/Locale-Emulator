@@ -178,6 +178,10 @@ ForceInline BOOL IsReadableMemory(PVOID Address, ULONG_PTR Size)
 {
     return IsMemoryAccessible(Address, Size, FALSE);
 }
+ForceInline BOOL IsWritableMemory(PVOID Address, ULONG_PTR Size)
+{
+    return IsMemoryAccessible(Address, Size, TRUE);
+}
 
 typedef struct THREAD_LOCAL_BUFFER : public lep::ActiveFrame
 {

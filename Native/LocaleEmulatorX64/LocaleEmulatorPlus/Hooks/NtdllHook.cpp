@@ -648,6 +648,11 @@ static NTSTATUS LepWriteVirtualKeyValue(
         default:
             return STATUS_INVALID_INFO_CLASS;
     }
+    if (ResultLength != nullptr && IsWritableMemory(ResultLength, sizeof(*ResultLength)) == FALSE)
+        return STATUS_ACCESS_VIOLATION;
+    if (Length >= MinimumLength && KeyValueInformation != nullptr &&
+        IsWritableMemory(KeyValueInformation, Length) == FALSE)
+        return STATUS_ACCESS_VIOLATION;
 
     if (ResultLength != nullptr)
         *ResultLength = RequiredLength;
@@ -1013,12 +1018,12 @@ LepNtQuerySystemInformation(
     switch (SystemInformationClass)
     {
         case SystemCurrentTimeZoneInformation:
-            if (SystemInformation == nullptr)
+            if (SystemInformation == nullptr ||
+                SystemInformationLength < sizeof(GlobalData->GetEnvironment()->Timezone) ||
+                IsWritableMemory(SystemInformation, sizeof(GlobalData->GetEnvironment()->Timezone)) == FALSE)
                 break;
-
-            if (SystemInformationLength < sizeof(GlobalData->GetEnvironment()->Timezone))
+            if (ReturnLength != nullptr && IsWritableMemory(ReturnLength, sizeof(*ReturnLength)) == FALSE)
                 break;
-
             CopyMemory(SystemInformation, &GlobalData->GetEnvironment()->Timezone, sizeof(GlobalData->GetEnvironment()->Timezone));
 
             if (ReturnLength != nullptr)
@@ -1435,13 +1440,12 @@ LepNtClose(
 )
 {
     PLepGlobalData GlobalData = (PLepGlobalData)HpGetFilterContext();
-
-    if (LepRemoveVirtualMuiKeyHandle(GlobalData, Handle))
-    {
-        WriteLog(L"virtual MUI key close: %p", Handle);
-    }
-
-    return STATUS_SUCCESS;
+    if (!LepRemoveVirtualMuiKeyHandle(GlobalData, Handle))
+        return STATUS_SUCCESS;
+    HpSetFilterAction(BlockSystemCall);
+    NTSTATUS Status = HpCallSysCall(NtClose, Handle);
+    WriteLog(L"virtual MUI key close: %p status=%08X", Handle, Status);
+    return Status;
 }
 
 NTSTATUS
@@ -1533,6 +1537,11 @@ LepNtEnumerateKey(
     NameLength = GlobalData->HookRoutineData.Ntdll.MuiLanguageNameLength;
     MinimumLength = FIELD_OFFSET(KEY_BASIC_INFORMATION, Name);
     RequiredLength = MinimumLength + NameLength;
+    if (ResultLength != nullptr && IsWritableMemory(ResultLength, sizeof(*ResultLength)) == FALSE)
+        return STATUS_ACCESS_VIOLATION;
+    if (Length >= MinimumLength && KeyInformation != nullptr &&
+        IsWritableMemory(KeyInformation, Length) == FALSE)
+        return STATUS_ACCESS_VIOLATION;
     if (ResultLength != nullptr)
         *ResultLength = RequiredLength;
     if (Length < MinimumLength)
@@ -1583,6 +1592,11 @@ LepNtQueryKey(
     {
         MinimumLength = FIELD_OFFSET(KEY_NAME_INFORMATION, Name);
         RequiredLength = MinimumLength + FullPath.Length;
+        if (ResultLength != nullptr && IsWritableMemory(ResultLength, sizeof(*ResultLength)) == FALSE)
+            return STATUS_ACCESS_VIOLATION;
+        if (Length >= MinimumLength && KeyInformation != nullptr &&
+            IsWritableMemory(KeyInformation, Length) == FALSE)
+            return STATUS_ACCESS_VIOLATION;
         if (ResultLength != nullptr)
             *ResultLength = RequiredLength;
         if (Length < MinimumLength)
@@ -1603,6 +1617,11 @@ LepNtQueryKey(
         ULONG NameLength = GlobalData->HookRoutineData.Ntdll.MuiLanguageNameLength;
         MinimumLength = FIELD_OFFSET(KEY_BASIC_INFORMATION, Name);
         RequiredLength = MinimumLength + NameLength;
+        if (ResultLength != nullptr && IsWritableMemory(ResultLength, sizeof(*ResultLength)) == FALSE)
+            return STATUS_ACCESS_VIOLATION;
+        if (Length >= MinimumLength && KeyInformation != nullptr &&
+            IsWritableMemory(KeyInformation, Length) == FALSE)
+            return STATUS_ACCESS_VIOLATION;
         if (ResultLength != nullptr)
             *ResultLength = RequiredLength;
         if (Length < MinimumLength)
@@ -1644,6 +1663,8 @@ LepNtEnumerateValueKey(
 
     if (!LepIsVirtualMuiKeyHandle(GlobalData, KeyHandle))
         return STATUS_SUCCESS;
+    if (ResultLength != nullptr && IsWritableMemory(ResultLength, sizeof(*ResultLength)) == FALSE)
+        return STATUS_ACCESS_VIOLATION;
 
     HpSetFilterAction(BlockSystemCall);
     switch (Index)
@@ -1931,6 +1952,8 @@ LepNtQueryDefaultLocale(
     PLCID   DefaultLocaleId
 )
 {
+    if (IsWritableMemory(DefaultLocaleId, sizeof(*DefaultLocaleId)) == FALSE)
+        return 0;
     HpSetFilterAction(BlockSystemCall);
 
     *DefaultLocaleId = ((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
@@ -1944,6 +1967,8 @@ LepNtQueryDefaultUILanguage(
     LANGID *DefaultUILanguageId
 )
 {
+    if (IsWritableMemory(DefaultUILanguageId, sizeof(*DefaultUILanguageId)) == FALSE)
+        return 0;
     HpSetFilterAction(BlockSystemCall);
 
     *DefaultUILanguageId = (LANGID)((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
@@ -1957,6 +1982,8 @@ LepNtQueryInstallUILanguage(
     LANGID *InstallUILanguageId
 )
 {
+    if (IsWritableMemory(InstallUILanguageId, sizeof(*InstallUILanguageId)) == FALSE)
+        return 0;
     HpSetFilterAction(BlockSystemCall);
 
     *InstallUILanguageId = (LANGID)((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
