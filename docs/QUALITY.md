@@ -74,6 +74,7 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - R13：x64 User32 的 `EM_GETSEL` 输出、`OUTSTRING`/`INCNTOUTSTRING`/`OUTCBOXSTRING` 消息转换、创建结构和字符串路径原先缺少 x86 已有的可读/可写边界；x86/x64 CBT 创建回调也直接解引用外部结构，影子映像内的 SEH 不能作为保护。现在统一使用页权限验证、拒绝无效输出并保护 CBT 结构读写；x64 守护页消息探针、x86 CBT 守护页回归、x86 完整回归和双包验收通过。
 - R14：User32 消息长度来自调用方或被控件过程返回时，宽字符乘法、负长度和 `ULONG` 窄化原先没有统一上限，异常值可能回绕为错误缓冲区大小或越过临时转换缓冲。现在在乘法、返回长度判断、列表框容量和宽窄转换前统一拒绝负值/超界值，并限制内核回调返回不超过已分配容量；x86/x64 双包完整回归和烟测通过。
 - R15：x86/x64 `CBTProc` 与 `CBTProcU` 保留未使用的 UnicodeWindow、OriginalProcW、CreateWnd 和 CreateParam 局部状态，增加维护噪声且容易掩盖真实生命周期；删除未使用局部变量，保留实际回调和清理流程，完整双包回归通过。
+- R16：x86/x64 公共查询辅助中的 `QuerySystemObjectTypes`、`QuerySystemHandles`、`Nt_QueryDosDevice`、`QueryCsrssProcessId` 及遍历宏在仓库内没有调用者，也不属于 DLL 导出；删除声明、实现和宏，保留仍被 `HookPort` 使用的 `ReleaseSystemInformation`。行为无变化，减少不可达代码和旧分配路径。完整双包回归通过。
 
 ## 多语言里程碑
 

@@ -22163,30 +22163,10 @@ Nt_DeleteFile(
 );
 
 /************************************************************************
-  common path
-************************************************************************/
-
-ULONG_PTR
-Nt_QueryDosDevice(
-    PCWSTR      DeviceName,
-    PWSTR       TargetPath,
-    ULONG_PTR   PathSize
-);
-
-
-/************************************************************************
   common query api
 ************************************************************************/
 
-#define FOR_EACH_PROCESS_INFO(_Info) for (ULONG_PTR NextOffset = ULONG_PTR_MAX; NextOffset != 0; NextOffset = (_Info)->NextEntryOffset, (_Info) = PtrAdd((_Info), NextOffset))
-#define FOR_EACH_PROCESS_THREAD(_Process, _Thread) for (ULONG_PTR ThreadCount = (((_Thread) = (_Process)->Threads), (_Process)->NumberOfThreads); ThreadCount; ++(_Thread), --ThreadCount)
-
-POBJECT_TYPES_INFORMATION       QuerySystemObjectTypes();
-PSYSTEM_HANDLE_INFORMATION_EX   QuerySystemHandles();
-
 BOOL ReleaseSystemInformation(PVOID Processes);
-
-HANDLE QueryCsrssProcessId(ULONG_PTR DEF_VAL(Session, 1));
 
 /************************************************************************
   common callback

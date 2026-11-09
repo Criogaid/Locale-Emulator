@@ -133,117 +133,12 @@ NTSTATUS Nt_DeleteFile(PCWSTR FileName)
 }
 
 /************************************************************************
-  common path
+  common query api
 ************************************************************************/
-
-ULONG_PTR
-Nt_QueryDosDevice(
-    PCWSTR      DeviceName,
-    PWSTR       TargetPath,
-    ULONG_PTR   PathSize
-)
-{
-    NTSTATUS        Status;
-    UNICODE_STRING  Target;
-
-    Status = Io::QueryDosDevice(DeviceName, &Target);
-    if (NT_FAILED(Status))
-        return 0;
-
-    PathSize = InternalCopyUnicodeString(&Target, TargetPath, PathSize);
-    RtlFreeUnicodeString(&Target);
-
-    return PathSize;
-}
-
-/************************************************************************
-  common query
-************************************************************************/
-
-POBJECT_TYPES_INFORMATION QuerySystemObjectTypes()
-{
-    ULONG                       Size, Length;
-    NTSTATUS                    Status;
-    POBJECT_TYPES_INFORMATION   ObjectTypes, StackPointer;
-
-    Size = sizeof(*ObjectTypes);
-    ObjectTypes = (POBJECT_TYPES_INFORMATION)AllocStack(Size);
-    StackPointer = ObjectTypes;
-
-    LOOP_FOREVER
-    {
-
-        Status = NtQueryObject(NULL, ObjectTypesInformation, ObjectTypes, Size, &Length);
-        if (Status != STATUS_INFO_LENGTH_MISMATCH)
-            break;
-
-        if (ObjectTypes == StackPointer)
-            ObjectTypes = NULL;
-
-        ObjectTypes = (POBJECT_TYPES_INFORMATION)ReAllocateMemoryP(ObjectTypes, Length);
-
-
-        if (ObjectTypes == NULL)
-            return NULL;
-
-        Size = Length;
-    }
-
-    if (!NT_SUCCESS(Status))
-    {
-        FreeMemoryP(ObjectTypes);
-        ObjectTypes = NULL;
-    }
-
-    return ObjectTypes;
-}
-
-PSYSTEM_HANDLE_INFORMATION_EX QuerySystemHandles()
-{
-    ULONG                           Size, Length;
-    NTSTATUS                        Status;
-    PSYSTEM_HANDLE_INFORMATION_EX   SystemHandles;
-
-    Size = sizeof(*SystemHandles) * 2;
-
-    SystemHandles = (PSYSTEM_HANDLE_INFORMATION_EX)AllocateMemoryP(Size);
-    if (SystemHandles == nullptr)
-        return nullptr;
-
-    LOOP_FOREVER
-    {
-
-
-        Status = NtQuerySystemInformation(SystemExtendedHandleInformation, SystemHandles, Size, &Length);
-        if (Status != STATUS_INFO_LENGTH_MISMATCH)
-            break;
-
-        SystemHandles = (PSYSTEM_HANDLE_INFORMATION_EX)ReAllocateMemoryP(SystemHandles, Length);
-
-
-        if (SystemHandles == nullptr)
-            return nullptr;
-
-        Size = Length;
-    }
-
-    if (!NT_SUCCESS(Status))
-    {
-        FreeMemoryP(SystemHandles);
-        SystemHandles = nullptr;
-    }
-
-    return SystemHandles;
-}
 
 BOOL ReleaseSystemInformation(PVOID Processes)
 {
     return FreeMemoryP(Processes);
-}
-
-HANDLE QueryCsrssProcessId(ULONG_PTR Session)
-{
-    return NULL;
 }
 
 /************************************************************************
