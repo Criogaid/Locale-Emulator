@@ -11,6 +11,18 @@ namespace
         SYSTEMTIME DaylightDate;
     };
 
+    BOOL ValidTimezoneId(PCWSTR Id)
+    {
+        if (Id == nullptr || Id[0] == 0)
+            return FALSE;
+        for (PCWSTR Current = Id; *Current != 0; ++Current)
+        {
+            if (*Current == L'\\' || *Current == L'/')
+                return FALSE;
+        }
+        return TRUE;
+    }
+
     NTSTATUS OpenTimeZone(PCWSTR Id, HANDLE* Key)
     {
         static const WCHAR Prefix[] = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Time Zones\\";
@@ -90,7 +102,7 @@ NTSTATUS ResolveRuntimeTimeZone(PCWSTR Id, PLE_RUNTIME_TIME_ZONE_INFORMATION Zon
     ULONG Length = 0;
     NTSTATUS Status;
 
-    if (Id == nullptr || Id[0] == 0)
+    if (!ValidTimezoneId(Id))
         return STATUS_INVALID_PARAMETER;
     Status = OpenTimeZone(Id, &Key);
     if (NT_FAILED(Status))

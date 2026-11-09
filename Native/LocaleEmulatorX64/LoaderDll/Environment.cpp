@@ -178,6 +178,9 @@ NTSTATUS LepResolveEnvironment(const void* Input, PLE_RUNTIME_CONFIG Output)
         return STATUS_INVALID_PARAMETER;
 
     Environment = (const LE_RUNTIME_INPUT*)Input;
+    if (!ValidTimezoneId((PCWSTR)(Base + Environment->TimezoneIdOffset),
+        Environment->TimezoneIdLength / sizeof(WCHAR) + 1))
+        return STATUS_INVALID_PARAMETER;
     if (Environment->RegistryEntriesCount != 0)
         return STATUS_NOT_SUPPORTED;
 

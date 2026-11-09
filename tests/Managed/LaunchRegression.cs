@@ -158,6 +158,8 @@ namespace ManagedRegression
             Throws<ArgumentException>(() => Invoke(type.GetMethod("Serialize", Instance), invalid));
             type.GetProperty("StandardNameOverride", Instance).SetValue(invalid, "bad\0name", null);
             Throws<ArgumentException>(() => Invoke(type.GetMethod("Serialize", Instance), invalid));
+            type.GetProperty("TimezoneId", Instance).SetValue(invalid, "Tokyo/Standard", null);
+            Throws<ArgumentException>(() => Invoke(type.GetMethod("Serialize", Instance), invalid));
         }
 
         private static object ElevationRequest(string[] args)
