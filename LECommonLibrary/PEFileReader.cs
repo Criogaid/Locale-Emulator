@@ -27,12 +27,14 @@ namespace LECommonLibrary
                         return PEType.Unknown;
 
                     br.BaseStream.Seek(0x3C, SeekOrigin.Begin);
-                    var pos = br.ReadUInt32() + 4;
-
-                    if (pos + 2 > br.BaseStream.Length)
+                    var ntOffset = (long)br.ReadUInt32();
+                    if (ntOffset > br.BaseStream.Length - sizeof(uint) - sizeof(ushort))
                         return PEType.Unknown;
 
-                    br.BaseStream.Seek(pos, SeekOrigin.Begin);
+                    br.BaseStream.Seek(ntOffset, SeekOrigin.Begin);
+                    if (br.ReadUInt32() != 0x00004550)
+                        return PEType.Unknown;
+
                     var machine = br.ReadUInt16();
 
                     if (machine == 0x014C)

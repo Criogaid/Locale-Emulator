@@ -64,6 +64,8 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - R03：公共目录识别在运行目录名为 `x86` 且父目录也有 `LEGUI.exe` 时，原先无法区分独立 x86 包根目录与 x64 包的兼容子目录；现在要求兼容子目录自身缺少 `LEGUI.exe`，并用临时隔离子进程回归。x86 完整回归通过。
 - R04：x64 构建脚本原先硬编码 VS2019 Build Tools 默认目录，而 x86/双包入口使用 `vswhere`；现在统一由 `vswhere` 定位 VS2019 官方组件，v142 与 Windows SDK 版本仍由构建契约固定。
 - R05：x64 双包的目标 PE 选择器现在把 x86 目标交给 `x86\LEProc.exe`，并校验 helper 的 PE 架构；x64 Core 对自身创建的 x86 子进程不再调用不兼容的 x86 Loader broker，而是快速返回 `STATUS_NOT_SUPPORTED` 让系统继续创建，避免挂死。双包最终烟测分别验证 x64 根链和 `x86\` 兼容链的真实启动与区域模拟；跨架构子进程继承不作为支持承诺。
+- R06：PE 架构选择器只检查 DOS 头偏移后的 machine，伪造 DOS 文件或溢出 `e_lfanew` 可被错误归类为 x86；现在验证 `PE\0\0` 签名并以 64 位边界检查读取，右键/双包 Launcher 选择回归通过。
+- R07：x86/x64 两份 HandleTable 用数组 new 分配却用标量 delete 销毁，运行时销毁路径具有未定义行为；统一改用 `delete[]`，分配合同覆盖删除后复用和最终销毁。
 
 ## 多语言里程碑
 
@@ -114,6 +116,7 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 | 受限权限创建 | 注入期间持有私有操作句柄；对外句柄权限/继承与系统基线一致，失败不遗留挂起子进程 |
 
 | 超大 name 表字体 | 枚举改用堆缓冲，不再因大表耗尽线程栈；分配失败保留原始字体数据 |
+| PE 架构识别与原生表销毁 | 伪 PE 不再获得错误架构 Launcher；HandleTable 数组按匹配的 `delete[]` 释放，双包选择和原生分配合同保持通过 |
 | 野 lParam 消息编组 | WM_CREATE/WM_MDICREATE/WM_SETTEXT 等编组先验证 lParam 可读再解引用，不可读时透传，与原生行为对齐 |
 | 野 ValueName 注册表过滤 | 过滤入口先验证 `UNICODE_STRING` 结构及 Buffer 可读，不可读时交给原生系统调用返回访问冲突 |
 | 可读性探针边界 | 使用减法检查避免地址终点溢出，并拒绝 `PAGE_EXECUTE`、`PAGE_NOACCESS`、`PAGE_GUARD` |

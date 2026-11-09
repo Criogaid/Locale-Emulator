@@ -174,11 +174,11 @@ DestroyHandleTable(
             if (Callback != NULL)
                 Callback(MidLevel->Entries, LOW_LEVEL_ENTRIES, Context);
 
-            delete MidLevel->Entries;
+            delete[] MidLevel->Entries;
         }
 
-        delete HighLevel->NextLevel;
+        delete[] HighLevel->NextLevel;
     }
 
-    delete HandleTable;
+    delete[] HandleTable;
 }

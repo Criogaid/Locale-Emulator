@@ -58,6 +58,7 @@ namespace ManagedRegression
                 RuntimeProductAssembliesAreAdjacent,
                 StandaloneX86DirectoryKeepsProductRoot,
                 LocalizationRegression.InstallerAndCommonResourcesUseUiCulture,
+                PEFileReaderRejectsInvalidHeaders,
                 RuntimeConfigurationsMatchFrameworkTargets,
                 WindowsArgumentsRoundTrip,
                 QuoteArgumentRejectsUnrepresentableInput,
@@ -213,6 +214,33 @@ namespace ManagedRegression
             EqualArguments(new[] { "two words", "", "a\"b", "trailing space \\" },
                 Parse(CreateLaunchPlan(executable, null,
                     new[] { "two words", "", "a\"b", "trailing space \\" }).CommandLine));
+        }
+
+        private static void PEFileReaderRejectsInvalidHeaders()
+        {
+            InTemporaryDirectory(directory =>
+            {
+                var invalidSignature = new byte[64];
+                invalidSignature[0] = (byte)'M';
+                invalidSignature[1] = (byte)'Z';
+                BitConverter.GetBytes(0x20u).CopyTo(invalidSignature, 0x3C);
+                BitConverter.GetBytes((ushort)0x014C).CopyTo(invalidSignature, 0x24);
+                var signaturePath = Path.Combine(directory, "invalid-signature.exe");
+                File.WriteAllBytes(signaturePath, invalidSignature);
+                Check(PEFileReader.GetPEType(signaturePath) == PEType.Unknown,
+                    "A DOS file without a PE signature was classified as x86.");
+
+                var overflowingOffset = new byte[64];
+                overflowingOffset[0] = (byte)'M';
+                overflowingOffset[1] = (byte)'Z';
+                overflowingOffset[3] = 0x4C;
+                overflowingOffset[4] = 0x01;
+                BitConverter.GetBytes(uint.MaxValue).CopyTo(overflowingOffset, 0x3C);
+                var overflowPath = Path.Combine(directory, "overflowing-offset.exe");
+                File.WriteAllBytes(overflowPath, overflowingOffset);
+                Check(PEFileReader.GetPEType(overflowPath) == PEType.Unknown,
+                    "An overflowing PE offset was classified as x86.");
+            });
         }
 
         private static void TargetWorkingDirectoryAndArgumentsReachChild()

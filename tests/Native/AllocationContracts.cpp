@@ -26,6 +26,7 @@ VOID TestFree(PVOID block)
 ML_OVERLOAD_NEW
 #undef FreeMemoryP
 #undef AllocateMemoryP
+#include "../../Native/LocaleEmulator/HandleTable.cpp"
 
 struct Object {
     Object() { ++constructed; }
@@ -62,6 +63,15 @@ int __cdecl main()
     ::operator delete(nullptr);
     ::operator delete[](nullptr, std::nothrow);
     if (allocated != 6 || freed != allocated) return 8;
+    HANDLE testHandle = reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(0x1234));
+    PML_HANDLE_TABLE handleTable = CreateHandleTable();
+    if (handleTable == nullptr) return 9;
+    if (CreateHandle(handleTable, testHandle) == nullptr) return 10;
+    RemoveHandle(handleTable, testHandle);
+    if (LookupHandleTable(handleTable, testHandle) != nullptr) return 11;
+    if (CreateHandle(handleTable, testHandle) == nullptr) return 12;
+    DestroyHandleTable(handleTable);
+    puts("handle_table=remove_reuse_and_array_destroy_ok");
     puts("allocation_failure=null constructor_skipped=ok retry=ok zero_size=ok destructors=ok delete_pairs=ok");
     return 0;
 }
