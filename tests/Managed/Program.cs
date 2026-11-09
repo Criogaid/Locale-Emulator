@@ -59,6 +59,7 @@ namespace ManagedRegression
                 StandaloneX86DirectoryKeepsProductRoot,
                 LocalizationRegression.InstallerAndCommonResourcesUseUiCulture,
                 PEFileReaderRejectsInvalidHeaders,
+                AssociationCommandWithoutArgumentsIsAccepted,
                 RuntimeConfigurationsMatchFrameworkTargets,
                 WindowsArgumentsRoundTrip,
                 QuoteArgumentRejectsUnrepresentableInput,
@@ -241,6 +242,15 @@ namespace ManagedRegression
                 Check(PEFileReader.GetPEType(overflowPath) == PEType.Unknown,
                     "An overflowing PE offset was classified as x86.");
             });
+        }
+
+        private static void AssociationCommandWithoutArgumentsIsAccepted()
+        {
+            var parser = typeof(AssociationReader).GetMethod("SplitExecutableAndArgument",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var result = (string[])parser.Invoke(null, new object[] { "\"C:\\Program Files\\app.exe\"" });
+            Check(result != null && result.Length == 2 && result[0] == @"C:\Program Files\app.exe" && result[1] == string.Empty,
+                "A file association command without arguments was rejected.");
         }
 
         private static void TargetWorkingDirectoryAndArgumentsReachChild()

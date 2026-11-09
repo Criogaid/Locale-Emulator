@@ -70,14 +70,14 @@ namespace LECommonLibrary
                     executableEnd = line.IndexOf(' ');
             }
 
-            if (executableEnd <= 0 || executableEnd >= line.Length - 1)
+            if (executableEnd <= 0)
                 return null;
 
             var executablePath = executable
                 ? line.Substring(1, executableEnd - 1)
                 : line.Substring(0, executableEnd);
             var arguments = line.Substring(executable ? executableEnd + 1 : executableEnd).TrimStart();
-            return arguments.Length == 0 ? null : new[] { executablePath, arguments };
+            return new[] { executablePath, arguments };
         }
 
         private static string GetAssociatedProgramFromRegistry(string ext)

@@ -66,6 +66,7 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - R05：x64 双包的目标 PE 选择器现在把 x86 目标交给 `x86\LEProc.exe`，并校验 helper 的 PE 架构；x64 Core 对自身创建的 x86 子进程不再调用不兼容的 x86 Loader broker，而是快速返回 `STATUS_NOT_SUPPORTED` 让系统继续创建，避免挂死。双包最终烟测分别验证 x64 根链和 `x86\` 兼容链的真实启动与区域模拟；跨架构子进程继承不作为支持承诺。
 - R06：PE 架构选择器只检查 DOS 头偏移后的 machine，伪造 DOS 文件或溢出 `e_lfanew` 可被错误归类为 x86；现在验证 `PE\0\0` 签名并以 64 位边界检查读取，右键/双包 Launcher 选择回归通过。
 - R07：x86/x64 两份 HandleTable 用数组 new 分配却用标量 delete 销毁，运行时销毁路径具有未定义行为；统一改用 `delete[]`，分配合同覆盖删除后复用和最终销毁。
+- R08：合法的文件关联 `Open\Command` 只有可执行文件而没有参数时，解析器返回空关联，非 EXE 目标无法启动或显示 LE 菜单；保留可执行文件并返回空参数，新增托管回归。
 
 ## 多语言里程碑
 
@@ -117,6 +118,7 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 
 | 超大 name 表字体 | 枚举改用堆缓冲，不再因大表耗尽线程栈；分配失败保留原始字体数据 |
 | PE 架构识别与原生表销毁 | 伪 PE 不再获得错误架构 Launcher；HandleTable 数组按匹配的 `delete[]` 释放，双包选择和原生分配合同保持通过 |
+| 文件关联无参数 | 合法的无参数 `Open\Command` 仍能识别关联程序并进入统一启动路径 |
 | 野 lParam 消息编组 | WM_CREATE/WM_MDICREATE/WM_SETTEXT 等编组先验证 lParam 可读再解引用，不可读时透传，与原生行为对齐 |
 | 野 ValueName 注册表过滤 | 过滤入口先验证 `UNICODE_STRING` 结构及 Buffer 可读，不可读时交给原生系统调用返回访问冲突 |
 | 可读性探针边界 | 使用减法检查避免地址终点溢出，并拒绝 `PAGE_EXECUTE`、`PAGE_NOACCESS`、`PAGE_GUARD` |
@@ -148,3 +150,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 当前复审修复：x64 `NtCreateUserProcess` 属性表边界与所有权，新增 `X64AttributeContracts` 仅使用 x64 ABI，避免把 x86 专用创建信息布局带入 x64 测试。
 - 当前复审修复：独立 x86 包根目录与 x64 兼容子目录的 `ProductDirectory` 判定，新增临时隔离子进程回归；行为变化仅限目录名为 `x86` 且父目录含 `LEGUI.exe` 的边界布局。
 - 当前复审修复：x64 原生构建入口改用与 x86 入口一致的 VS2019 实例发现方式；固定工具集和 SDK 版本不变。
+- 当前复审修复：文件关联命令允许无参数形式；非 EXE 目标仍使用统一的关联程序选择和空参数启动语义。
