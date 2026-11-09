@@ -51,6 +51,12 @@ try {
     foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll', 'X64AttributeContracts.exe')) {
         Copy-Item -LiteralPath (Join-Path $nativeX64Root $name) -Destination $x64AttributeSmoke -Force
     }
+    Copy-Item -LiteralPath (Join-Path $releaseRoot 'NativeProbe.exe') -Destination $x64AttributeSmoke -Force
+    $x86AttributeSmoke = Join-Path $x64AttributeSmoke 'x86'
+    New-Item -ItemType Directory -Path $x86AttributeSmoke -Force | Out-Null
+    foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll')) {
+        Copy-Item -LiteralPath (Join-Path $releaseRoot $name) -Destination $x86AttributeSmoke -Force
+    }
     $attributeTarget = Join-Path $x64AttributeSmoke 'X64AttributeContracts.exe'
     $attributeConfig = '<LEConfig><Profiles><Profile Name="x64 attribute contract" Guid="00000000-0000-0000-0000-0000000000A1" MainMenu="false"><Parameter></Parameter><Location>ja-JP</Location><Timezone>Tokyo Standard Time</Timezone><RunAsAdmin>false</RunAsAdmin><RedirectRegistry>true</RedirectRegistry><IsAdvancedRedirection>false</IsAdvancedRedirection><RunWithSuspend>false</RunWithSuspend></Profile></Profiles></LEConfig>'
     $attributeConfig | Set-Content -LiteralPath ($attributeTarget + '.le.config') -Encoding utf8NoBOM

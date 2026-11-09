@@ -38,39 +38,93 @@ static ULONG LepCurrentTimeMs()
     return (ULONG)NtGetTickCount();
 }
 
+static BOOL LepIsX86Directory(PCWSTR Source, ULONG_PTR NamePosition)
+{
+    static const WCHAR X86Directory[] = L"x86\\";
+    ULONG_PTR DirectoryLength = CONST_STRLEN(X86Directory);
+    return NamePosition >= DirectoryLength &&
+        StrNICompareW(Source + NamePosition - DirectoryLength, X86Directory, DirectoryLength) == 0;
+}
+
 static BOOL LepBuildArchitecturePath(PCWSTR Source, BOOL TargetWow64, PWSTR Destination, ULONG Capacity)
 {
     static const WCHAR X86[] = L"_x86.dll";
     static const WCHAR X64[] = L"_x64.dll";
+    static const WCHAR CoreName[] = L"LocaleEmulator.dll";
+    static const WCHAR X86Directory[] = L"x86\\";
     PCWSTR Replacement = TargetWow64 ? X86 : X64;
-    ULONG_PTR Length = StrLengthW(Source), SuffixLength = CONST_STRLEN(X86);
-    ULONG_PTR Position = Length;
+    ULONG_PTR Length, Position, SuffixLength, DirectoryLength;
+    BOOL InX86Directory;
 
-    if (Length + 1 > Capacity)
+    if (Source == nullptr || Destination == nullptr || Capacity == 0)
         return FALSE;
-    CopyMemory(Destination, Source, (Length + 1) * sizeof(WCHAR));
-    while (Position >= SuffixLength)
+
+    Length = StrLengthW(Source);
+    SuffixLength = CONST_STRLEN(X86);
+    if (Length >= SuffixLength &&
+        (StrNICompareW(Source + Length - SuffixLength, X86, SuffixLength) == 0 ||
+         StrNICompareW(Source + Length - SuffixLength, X64, SuffixLength) == 0))
     {
-        Position--;
-        if (StrICompareW(&Destination[Position], X86) == 0 || StrICompareW(&Destination[Position], X64) == 0)
-        {
-            CopyMemory(&Destination[Position], Replacement, (SuffixLength + 1) * sizeof(WCHAR));
-            return TRUE;
-        }
+        if (Length + 1 > Capacity)
+            return FALSE;
+        CopyMemory(Destination, Source, (Length + 1) * sizeof(WCHAR));
+        CopyMemory(Destination + Length - SuffixLength, Replacement, (SuffixLength + 1) * sizeof(WCHAR));
+        return TRUE;
     }
-    return FALSE;
+
+    Position = Length;
+    while (Position != 0 && Source[Position - 1] != L'\\')
+        --Position;
+    if (StrICompareW(Source + Position, CoreName) != 0)
+        return FALSE;
+
+    DirectoryLength = CONST_STRLEN(X86Directory);
+    InX86Directory = LepIsX86Directory(Source, Position);
+    if (TargetWow64 == InX86Directory)
+    {
+        if (Length + 1 > Capacity)
+            return FALSE;
+        CopyMemory(Destination, Source, (Length + 1) * sizeof(WCHAR));
+        return TRUE;
+    }
+
+    if (TargetWow64)
+    {
+        if (Length > MAXULONG_PTR - DirectoryLength - 1 || Length + DirectoryLength + 1 > Capacity)
+            return FALSE;
+        CopyMemory(Destination, Source, Position * sizeof(WCHAR));
+        CopyMemory(Destination + Position, X86Directory, DirectoryLength * sizeof(WCHAR));
+        CopyMemory(Destination + Position + DirectoryLength, Source + Position, (Length - Position + 1) * sizeof(WCHAR));
+        return TRUE;
+    }
+
+    if (Length < DirectoryLength || Length - DirectoryLength + 1 > Capacity)
+        return FALSE;
+    CopyMemory(Destination, Source, (Position - DirectoryLength) * sizeof(WCHAR));
+    CopyMemory(Destination + Position - DirectoryLength, Source + Position, (Length - Position + 1) * sizeof(WCHAR));
+    return TRUE;
 }
 
 static BOOL LepBuildLoaderPath(PCWSTR CorePath, BOOL TargetWow64, PWSTR Destination, ULONG Capacity)
 {
-    ULONG_PTR Length = StrLengthW(CorePath), End = Length;
+    static const WCHAR CoreName[] = L"LocaleEmulator.dll";
+    static const WCHAR LoaderName[] = L"LoaderDll.dll";
     static const WCHAR NameX86[] = L"LoaderDll_x86.dll";
     static const WCHAR NameX64[] = L"LoaderDll_x64.dll";
-    PCWSTR Name = TargetWow64 ? NameX86 : NameX64;
-    ULONG_PTR NameLength = StrLengthW(Name);
+    ULONG_PTR Length, End, NameLength;
+    PCWSTR Name;
 
+    if (CorePath == nullptr || Destination == nullptr || Capacity == 0)
+        return FALSE;
+
+    Length = StrLengthW(CorePath);
+    End = Length;
     while (End != 0 && CorePath[End - 1] != L'\\')
         --End;
+    Name = StrICompareW(CorePath + End, CoreName) == 0
+        ? LoaderName
+        : (TargetWow64 ? NameX86 : NameX64);
+    NameLength = StrLengthW(Name);
     if (End + NameLength + 1 > Capacity)
         return FALSE;
     CopyMemory(Destination, CorePath, End * sizeof(WCHAR));
