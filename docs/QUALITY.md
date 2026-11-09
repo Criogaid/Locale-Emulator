@@ -61,6 +61,7 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 ## 第 4 轮复审
 - R01：x64 双包初版只让 Shell 扩展选择 x86/x64 helper，GUI 保存后运行和桌面快捷方式仍硬编码包根目录 `LEProc.exe`；在 x64 包中处理 x86 目标时会错误启动 x64 Loader。将目标 PE 识别、关联程序解析和 helper 校验集中到 `LECommonLibrary.GlobalHelper.GetLauncherPath`，Shell、GUI 运行和快捷方式共用；x64 包公共选择器、x86 单包回退、完整源码回归及双包烟测通过。
 - R02：x64 Core 的 `NtCreateUserProcess` 原先仍用调用方 `TotalLength` 做 `AllocStack`，与 x86 已完成的 N18 修复不一致；现在补齐共享可读性验证、溢出检查和堆副本清理。x86 原生契约与 x64 专用 1MiB 属性表探针均验证为拒绝非法创建且进程存活，双包完整构建与烟测通过。
+- R03：公共目录识别在运行目录名为 `x86` 且父目录也有 `LEGUI.exe` 时，原先无法区分独立 x86 包根目录与 x64 包的兼容子目录；现在要求兼容子目录自身缺少 `LEGUI.exe`，并用临时隔离子进程回归。x86 完整回归通过。
 
 ## 多语言里程碑
 
@@ -106,7 +107,7 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 | 启动与 SDK 边界 | 提权保留当前目录，关联程序保留参数；原生命令行可写，结构大小和失败资源回收正确 |
 | 原生故障 | 注入失败终止本次子进程并返回失败；完整/部分补丁失败恢复原字节并释放 shadow；成功路径继续传播区域模拟 |
 | 原生构建防护 | 两产品 W4/WX、GS、ASLR、DEP、SafeSEH，无 RWX 节；跳板发布为 RX，Loader 启用 CFG，核心的实际 CFG 限制独立记录 |
-| x64 双包兼容链 | x64 包根目录与 `x86/` 分别携带匹配的 LEProc/Loader/Core；Shell、GUI 保存运行和快捷方式按目标 PE 架构自动选择，x64 与 x86 `cmd.exe` 双烟测通过 |
+| x64 双包兼容链 | x64 包根目录与 `x86/` 分别携带匹配的 LEProc/Loader/Core；Shell、GUI 保存运行和桌面快捷方式按目标 PE 架构自动选择，独立 x86 包根目录不会因目录名为 `x86` 而误用父目录；x64 与 x86 `cmd.exe` 双烟测通过 |
 | SDK 分配与格式化边界 | 普通可失败分配显式 nothrow，失败仍可恢复且配对释放；格式化携带真实容量并拒绝缺少 NUL 的路径结果；PE 依赖集合与自定义入口不变 |
 | 受限权限创建 | 注入期间持有私有操作句柄；对外句柄权限/继承与系统基线一致，失败不遗留挂起子进程 |
 
@@ -140,3 +141,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - `b947b23`：x86/x64 双包发布入口；x86 完整回归（34 项托管、8 项 x64 Shell、原生契约/目录/防护、CP932/936）与 x64 原生 W4/WX、PE machine/ASLR/NX、x64 LEProc 和 Loader 启动烟测均通过，生成 `artifacts/package-dual/Locale.Emulator.2.5.1.0-x86.zip` 与 `Locale.Emulator.2.5.1.0-x64.zip`。
 - 当前业务目的研究与 LEProc 契约重构：公开 Locale/UI/UTF-8 API 无法替代非合作旧程序的完整区域模拟；保留必要的 x86/x64 Loader/Core 边界。LEProc 启动失败、提权失败和无文件关联现在返回非零退出码，同一启动路径只解析一次 `CultureInfo`；目标进程的区域模拟和成功路径保持不变。
 - 当前复审修复：x64 `NtCreateUserProcess` 属性表边界与所有权，新增 `X64AttributeContracts` 仅使用 x64 ABI，避免把 x86 专用创建信息布局带入 x64 测试。
+- 当前复审修复：独立 x86 包根目录与 x64 兼容子目录的 `ProductDirectory` 判定，新增临时隔离子进程回归；行为变化仅限目录名为 `x86` 且父目录含 `LEGUI.exe` 的边界布局。

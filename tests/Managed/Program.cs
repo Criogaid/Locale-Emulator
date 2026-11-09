@@ -36,6 +36,12 @@ namespace ManagedRegression
                 catch (Exception error) { Console.Error.WriteLine(error); return 1; }
             }
 
+            if (args.Length == 1 && args[0] == "--product-directory-probe")
+            {
+                Console.WriteLine(GlobalHelper.ProductDirectory);
+                return 0;
+            }
+
             if (args.Length == 1 && args[0] == "--localization-probe")
             {
                 try { LocalizationRegression.RunLanguageProbe(); return 0; }
@@ -50,6 +56,7 @@ namespace ManagedRegression
             var tests = new Action[]
             {
                 RuntimeProductAssembliesAreAdjacent,
+                StandaloneX86DirectoryKeepsProductRoot,
                 LocalizationRegression.InstallerAndCommonResourcesUseUiCulture,
                 RuntimeConfigurationsMatchFrameworkTargets,
                 WindowsArgumentsRoundTrip,
@@ -108,6 +115,44 @@ namespace ManagedRegression
                     directory, StringComparison.OrdinalIgnoreCase),
                     "Runtime product assembly resolved outside the harness directory: "
                     + product.FullName + " at " + product.Location);
+        }
+
+        private static void StandaloneX86DirectoryKeepsProductRoot()
+        {
+            InTemporaryDirectory(directory =>
+            {
+                var standalone = Path.Combine(directory, "x86");
+                Directory.CreateDirectory(standalone);
+                File.WriteAllText(Path.Combine(directory, "LEGUI.exe"), string.Empty);
+                File.WriteAllText(Path.Combine(standalone, "LEGUI.exe"), string.Empty);
+                var source = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                foreach (var name in new[] { "ManagedRegression.exe", "ManagedRegression.exe.config", "LECommonLibrary.dll" })
+                    File.Copy(Path.Combine(source, name), Path.Combine(standalone, name));
+
+                var start = new ProcessStartInfo
+                {
+                    FileName = Path.Combine(standalone, "ManagedRegression.exe"),
+                    Arguments = "--product-directory-probe",
+                    WorkingDirectory = standalone,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using (var child = Process.Start(start))
+                {
+                    if (!child.WaitForExit(10000))
+                    {
+                        child.Kill();
+                        child.WaitForExit();
+                        throw new Exception("Product directory probe timed out.");
+                    }
+                    var error = child.StandardError.ReadToEnd();
+                    Check(child.ExitCode == 0, "Product directory probe failed: " + error);
+                    Check(string.Equals(child.StandardOutput.ReadToEnd().Trim(), standalone, StringComparison.OrdinalIgnoreCase),
+                        "Standalone x86 package resolved its product directory from the parent directory.");
+                }
+            });
         }
 
         private static void RuntimeConfigurationsMatchFrameworkTargets()

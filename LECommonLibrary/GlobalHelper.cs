@@ -19,10 +19,10 @@ namespace LECommonLibrary
             {
                 var runtimeDirectory = RuntimeDirectory;
                 var parent = Directory.GetParent(runtimeDirectory);
-                return string.Equals(Path.GetFileName(runtimeDirectory), "x86", StringComparison.OrdinalIgnoreCase)
-                       && parent != null && File.Exists(Path.Combine(parent.FullName, "LEGUI.exe"))
-                    ? parent.FullName
-                    : runtimeDirectory;
+                var isCompatibilityDirectory = string.Equals(Path.GetFileName(runtimeDirectory), "x86", StringComparison.OrdinalIgnoreCase)
+                    && !File.Exists(Path.Combine(runtimeDirectory, "LEGUI.exe"))
+                    && parent != null && File.Exists(Path.Combine(parent.FullName, "LEGUI.exe"));
+                return isCompatibilityDirectory ? parent.FullName : runtimeDirectory;
             }
         }
 
