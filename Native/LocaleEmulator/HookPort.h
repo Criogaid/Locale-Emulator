@@ -62,22 +62,6 @@ NtCloseFilter(
 #define HpSetFilterAction(_action) HPARG_FLTINFO->Action = _action
 #define HpGetFilterContext() HPARG_FLTINFO->FilterContext
 
-typedef struct
-{
-    USHORT  ServiceIndex        : 12;
-    USHORT  ServiceTableIndex   : 4;
-    USHORT  ArgumentSize;
-    ULONG   Hash;
-
-} HP_SYSTEM_SERVICE_ENTRY, *PHP_SYSTEM_SERVICE_ENTRY;
-
-typedef struct
-{
-    ULONG_PTR                   Number;
-    PHP_SYSTEM_SERVICE_ENTRY    Entries;
-
-} HP_SYSTEM_SERVICE_TABLE, *PHP_SYSTEM_SERVICE_TABLE;
-
 typedef enum
 {
     ContinueSystemCall,               // call next filter if exists, default, and must be zero
@@ -294,16 +278,6 @@ NTSTATUS
 InstallHookPort(
     PLDR_MODULE SysCallModule = NULL,
     ULONG       Flags = 0
-);
-
-NTSTATUS
-HpInitializeWin32kPort(
-    VOID
-);
-
-NTSTATUS
-HpAddSystemServiceTable(
-    PHP_SYSTEM_SERVICE_TABLE ServiceTable
 );
 
 PVOID

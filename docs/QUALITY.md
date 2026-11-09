@@ -76,6 +76,7 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - R15：x86/x64 `CBTProc` 与 `CBTProcU` 保留未使用的 UnicodeWindow、OriginalProcW、CreateWnd 和 CreateParam 局部状态，增加维护噪声且容易掩盖真实生命周期；删除未使用局部变量，保留实际回调和清理流程，完整双包回归通过。
 - R16：x86/x64 公共查询辅助中的 `QuerySystemObjectTypes`、`QuerySystemHandles`、`Nt_QueryDosDevice`、`QueryCsrssProcessId` 及遍历宏在仓库内没有调用者，也不属于 DLL 导出；删除声明、实现和宏，保留仍被 `HookPort` 使用的 `ReleaseSystemInformation`。行为无变化，减少不可达代码和旧分配路径。完整双包回归通过。
 - R17：x86/x64 `NativeLoaderAdapter` 源文件内容完全相同，x64 项目条件组只是移除一个文件再加入重复副本；统一保留 `NativeLoaderAdapter.cs`，删除重复文件和条件替换。P/Invoke ABI 与 x86/x64 双包行为不变，托管双架构构建通过。
+- R18：x86 `HookPort` 保留未启用的 WOW64 汇编实现、Win32k 服务表初始化和对应的空实现导出声明；当前安装路径从未调用，相关类型和服务表转换函数也只有这条停用路径使用。删除不可达旧契约及注释调用，保留现行系统调用哈希路径；完整双包构建与回归通过。
 
 ## 多语言里程碑
 

@@ -703,113 +703,6 @@ _SYSTEM_CALL_PERMIT:
     }
 }
 
-#if 0
-
-NAKED VOID HookSysEnter_Wow64_xxx()
-{
-    INLINE_ASM
-    {
-        push StubSysEnter;
-        pushfd;
-        pushad;
-
-        cmp     ax, MAX_SERVICE_INDEX
-        jae     _SYSTEM_CALL_PERMIT;
-
-        mov     ebx, g_GlobalInfo;
-        or      ebx, ebx;
-        je      _SYSTEM_CALL_PERMIT;
-
-        and     eax, 0FFFFh;
-        shl     eax, 5;
-        add     eax, [ebx]HOOK_PORT_GLOBAL_INFO.SystemCallInfo;
-
-        cmp     dword ptr [ebx]HOOK_PORT_GLOBAL_INFO.User.GlobalFilter, 0;
-        je      NO_GLOBAL_FILTER;
-
-        pushad;
-
-        mov     ebp, esp;
-        lea     esp, [esp - 10h];
-        mov     ecx, eax;
-        movzx   eax, [eax]SYSCALL_INFO.ServiceIndex;
-        push    edx;
-        push    eax;
-        lea     edi, [esp + 08h];
-        mov     edx, edi;
-        and     [edx]SYSCALL_FILTER_INFO.Action, 0;
-        mov     eax, [ebx]HOOK_PORT_GLOBAL_INFO.GlobalFilterContext;
-        mov     [edx]SYSCALL_FILTER_INFO.FilterContext, eax;
-        call    [ebx]HOOK_PORT_GLOBAL_INFO.User.GlobalFilter;
-        mov     esp, ebp;
-        cmp     [edi]SYSCALL_FILTER_INFO.Action, BlockSystemCall
-        jne     GLOBAL_FILTER_PERMIT;
-
-        mov     ecx, [esp + 1Ch];
-        mov     [esp + 18h], ecx;
-        mov     [esp + 1Ch], eax;
-        popad;
-        jmp     GLOBAL_FILTER_BLOCK;
-
-GLOBAL_FILTER_PERMIT:
-
-        popad;
-
-NO_GLOBAL_FILTER:
-
-        mov     ebx, eax;
-        xor     eax, eax;
-        or      eax, [ebx]SYSCALL_INFO.FilterCallbacks;
-        je      _SYSTEM_CALL_PERMIT;
-        test    byte ptr [ebx]SYSCALL_INFO.Flags, SystemCallFilterEnable
-        je      _SYSTEM_CALL_PERMIT;
-
-        lea     esp, [esp - 08h];
-        and     dword ptr [esp], 0;     // ContinueSystemCall
-        mov     dword ptr [esp + 04h], ecx;
-        mov     edi, esp;
-        mov     ecx, ebx;
-        call    HpCallSysCallFilters;
-
-        mov     ecx, dword ptr [esp];
-        lea     esp, [esp + 08h];
-
-        jecxz   _SYSTEM_CALL_PERMIT;    // SYSTEM_CALL_CONTINUE
-        dec     ecx;
-        jnz     _SYSTEM_CALL_PERMIT;
-//        jz      _SYSTEM_CALL_BLOCK;     // SYSTEM_CALL_BLOCK
-//        jmp     _SYSTEM_CALL_PERMIT;
-//        dec     ecx;
-//        jz      _SYSTEM_CALL_PERMIT;    // SYSTEM_CALL_PERMIT
-
-// _SYSTEM_CALL_BLOCK:
-
-        mov     ecx, ebx;
-
-GLOBAL_FILTER_BLOCK:
-
-        mov     edx, esp;
-        mov     edi, [edx + 00h];
-        mov     esi, [edx + 04h];
-        mov     ebp, [edx + 08h];
-        mov     esp, [edx + 0Ch];
-        mov     ebx, [edx + 10h];
-
-        popfd;
-
-        lea     esp, [esp + 0x08];
-        jmp     [ecx]SYSCALL_INFO.ReturnOpAddress;
-
-_SYSTEM_CALL_PERMIT:
-
-        popad;
-        popfd;
-        ret;
-    }
-}
-
-#endif
-
 PVOID GetWow64SyscallJumpStub()
 {
     PVOID NtCancelTimer;
@@ -1183,25 +1076,6 @@ BOOL HpFreeCallbackArray(PSYSTEM_CALL_FILTER CallbackFilters)
 }
 
 NTSTATUS
-HppInitializeSystemCallByEntry(
-    PHOOK_PORT_GLOBAL_INFO      GlobalInfo,
-    PSYSCALL_INFO               SysCall,
-    PHP_SYSTEM_SERVICE_ENTRY    Entry
-)
-{
-    ZeroMemory(SysCall, sizeof(*SysCall));
-
-    SysCall->FunctionAddress    = NULL;
-    SysCall->ArgumentSize       = Entry->ArgumentSize;
-    SysCall->ReturnOpAddress    = NULL;
-    SysCall->NameHash           = Entry->Hash;
-    SysCall->ServiceIndex       = Entry->ServiceIndex;
-    SysCall->ServiceTableIndex  = Entry->ServiceTableIndex;
-
-    return STATUS_SUCCESS;
-}
-
-NTSTATUS
 HppInitializeSystemCallByRoutine(
     PHOOK_PORT_GLOBAL_INFO  GlobalInfo,
     PSYSCALL_INFO           SysCall,
@@ -1542,70 +1416,6 @@ HpAddSystemCall(
 )
 {
     return HppAddSystemCall(HppGetGlobalInfo(), SystemCall, Count);
-}
-
-NTSTATUS HppAddSystemServiceTable(PHOOK_PORT_GLOBAL_INFO Info, PHP_SYSTEM_SERVICE_TABLE ServiceTable)
-{
-    NTSTATUS                    Status;
-    PSYSCALL_INFO               SysCallBase, SysCall;
-    PHP_SYSTEM_SERVICE_ENTRY    Entry;
-
-    SysCallBase = (PSYSCALL_INFO)HpAlloc(ServiceTable->Number * sizeof(*SysCallBase));
-    if (SysCallBase == NULL)
-        return STATUS_NO_MEMORY;
-
-    SysCall = SysCallBase;
-    FOR_EACH(Entry, ServiceTable->Entries, ServiceTable->Number)
-    {
-        HppInitializeSystemCallByEntry(Info, SysCall, Entry);
-        ++SysCall;
-    }
-
-    Status = HppAddSystemCall(Info, SysCallBase, SysCall - SysCallBase);
-
-    HpFree(SysCallBase);
-
-    return Status;
-}
-
-NTSTATUS HppInitializeWin32kPort(PHOOK_PORT_GLOBAL_INFO Info)
-{
-
-#if 0
-
-#include "Win32kTable/win32k_table_7601.h"
-
-    HP_SYSTEM_SERVICE_TABLE ServiceTable;
-
-    switch (CurrentPeb()->OSBuildNumber)
-    {
-        case 7601:
-            ServiceTable.Entries = Win32kServiceTable_7601;
-            ServiceTable.Number = countof(Win32kServiceTable_7601);
-            break;
-
-        default:
-            return STATUS_HOOK_PORT_UNSUPPORTED_SYSTEM;
-    }
-
-    return HppAddSystemServiceTable(Info, &ServiceTable);
-
-#else
-
-    return STATUS_NOT_IMPLEMENTED;
-
-#endif
-
-}
-
-NTSTATUS HpAddSystemServiceTable(PHP_SYSTEM_SERVICE_TABLE ServiceTable)
-{
-    return HppAddSystemServiceTable(HppGetGlobalInfo(), ServiceTable);
-}
-
-NTSTATUS HpInitializeWin32kPort()
-{
-    return HppInitializeWin32kPort(HppGetGlobalInfo());
 }
 
 NTSTATUS
@@ -2321,8 +2131,6 @@ InstallHookPort(
     }
 
     UnloadPeImage((PVOID)BaseAddress);
-
-    //HppInitializeWin32kPort(GlobalInfo);
 
     HashTableCount = SysCallHash - GlobalInfo->HashTable.Entry;
     GlobalInfo->HashTable.Count = HashTableCount;
