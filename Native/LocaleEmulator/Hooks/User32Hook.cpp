@@ -794,9 +794,8 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 
     if (nCode == HCBT_CREATEWND) LOOP_ONCE
     {
-        BOOL            UnicodeWindow;
         HWND            hWnd;
-        WNDPROC         OriginalProcA, OriginalProcW;
+        WNDPROC         OriginalProcA;
         PLeGlobalData   GlobalData;
 
         hWnd        = (HWND)wParam;
@@ -830,14 +829,11 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK CBTProcU(int nCode, WPARAM wParam, LPARAM lParam)
 {
-
     LRESULT             Result;
     PCBT_PROC_PARAM     CbtParam = (PCBT_PROC_PARAM)FindThreadFrame(CBT_PROC_PARAM_CONTEXT);
 
     if (CbtParam == nullptr)
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
-    LPCBT_CREATEWND     CreateWnd;
-    PCBT_CREATE_PARAM   CreateParam;
 
     Result = CallNextHookEx(CbtParam->Hook, nCode, wParam, lParam);
 

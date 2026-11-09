@@ -1940,9 +1940,8 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 
     if (nCode == HCBT_CREATEWND) LOOP_ONCE
     {
-        BOOL            UnicodeWindow;
         HWND            hWnd;
-        WNDPROC         OriginalProcA, OriginalProcW;
+        WNDPROC         OriginalProcA;
         PLepGlobalData   GlobalData;
 
         hWnd        = (HWND)wParam;
@@ -1982,8 +1981,6 @@ LRESULT CALLBACK CBTProcU(int nCode, WPARAM wParam, LPARAM lParam)
 {
     LRESULT             Result;
     PCBT_PROC_PARAM     CbtParam = (PCBT_PROC_PARAM)lep::ActiveFrame::Find(CBT_PROC_PARAM_CONTEXT);
-    LPCBT_CREATEWND     CreateWnd;
-    PCBT_CREATE_PARAM   CreateParam;
 
     if (CbtParam == nullptr)
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
