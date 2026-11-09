@@ -158,6 +158,16 @@ namespace ManagedRegression
             }
         }
 
+        internal static void ShortcutWithoutAssociatedIconUsesShellDefault()
+        {
+            var method = typeof(AppConfig).GetMethod("GetShortcutIconPath",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var extension = ".le-no-icon-" + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(Path.GetTempPath(), "target" + extension);
+            Check((string)method.Invoke(null, new object[] { path }) == null,
+                "A missing associated icon should leave the Shell Link default icon unchanged.");
+        }
+
         internal static void RunLanguageProbe()
         {
             System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("zh-CN");

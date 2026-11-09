@@ -97,7 +97,9 @@ namespace LEGUI
 
                 link.SetPath(LauncherPath);
                 link.SetArguments(WindowsCommandLine.JoinArguments(new[] { "-run", path }));
-                link.SetIconLocation(AssociationReader.GetAssociatedIcon(Path.GetExtension(path)).Replace("%1", path), 0);
+                var iconPath = GetShortcutIconPath(path);
+                if (!string.IsNullOrEmpty(iconPath))
+                    link.SetIconLocation(iconPath, 0);
 
                 link.SetDescription(string.Format(I18n.GetString("ShortcutDescription"), Path.GetFileName(path)));
                 link.SetWorkingDirectory(Path.GetDirectoryName(path));
@@ -112,6 +114,12 @@ namespace LEGUI
             {
                 MessageBox.Show(e.Message + "\r\n\r\n" + e.StackTrace);
             }
+        }
+
+        private static string GetShortcutIconPath(string path)
+        {
+            var icon = AssociationReader.GetAssociatedIcon(Path.GetExtension(path));
+            return string.IsNullOrEmpty(icon) ? null : icon.Replace("%1", path);
         }
 
         private void RunAndShutdown()

@@ -86,7 +86,8 @@ namespace ManagedRegression
                 WpfRegression.GlobalSaveFailureKeepsSelectedProfile,
                 WpfRegression.GlobalSaveAsFailureKeepsProfiles,
                 WpfRegression.UnavailableProfileSelectionPreservesConfiguration,
-                WpfRegression.ReadOnlyLanguageLoadsAndReleasesFile
+                WpfRegression.ReadOnlyLanguageLoadsAndReleasesFile,
+                WpfRegression.ShortcutWithoutAssociatedIconUsesShellDefault
             }).ToArray();
             var failures = 0;
             foreach (var test in tests)
