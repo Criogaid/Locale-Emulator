@@ -6,7 +6,7 @@ ownerdraw 修复参考 [Cliff-Yang 的崩溃修补](https://github.com/Cliff-Yan
 
 ## 构建
 
-安装 Visual Studio 2019 Build Tools 的 C++ 构建工具。工具集 v142 和 Windows SDK 10.0.19041.0 的版本统一定义在 [Toolchain.props](Toolchain.props)；已验证 MSVC 14.29.30133。内核仅构建 `Release|Win32`，不支持原生 x64 目标。产品启动器为托管 LEProc，旧独立 Loader 项目已退役。
+安装 Visual Studio 2019 Build Tools 的 C++ 构建工具。工具集 v142 和 Windows SDK 10.0.19041.0 的版本统一定义在 [Toolchain.props](Toolchain.props)；已验证 MSVC 14.29.30133。x86 原生项目通过 MSBuild 构建；x64 原生 Core 和 Loader 通过仓库提供的 `LocaleEmulatorX64/build-x64.ps1` 使用官方 Hostx86\x64 工具链构建。产品启动器为托管 LEProc，旧独立 Loader 项目已退役。
 
 从仓库根目录执行（PowerShell）：
 
@@ -17,6 +17,12 @@ $msbuild = "C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/MSBui
 & $msbuild tests/Native/NativeProbe.vcxproj /p:Configuration=Release /p:Platform=Win32
 & $msbuild tests/Native/NativeLaunch.vcxproj /p:Configuration=Release /p:Platform=Win32
 ```
+
+x64 原生构建入口（从仓库根目录执行）为：
+```powershell
+pwsh -NoProfile -File ./Native/LocaleEmulatorX64/build-x64.ps1 -Clean
+```
+需要同时生成 x86 和 x64 发行包时使用根目录的 `build-dual.ps1`；它先完成 x86 完整回归，再构建 x64 原生组件和托管启动器并验证两个包。x64 目录不再保留未接入当前构建链的独立 `.vcxproj`。
 
 DLL、测试程序与符号输出到 `Build/Release`；中间产物按项目隔离在 `Build/obj`。`OfficialToolchain.targets` 使用已安装的官方 `lib.exe` 从 `NativeNtdll.def` 生成系统 ntdll 的补充导入库。没有外部二进制库下载步骤。NLS 结构使用源码原有定义并检查 Win32 布局，Mount Manager 协议仅保留源码实际使用的结构。
 
