@@ -5,7 +5,6 @@
     <ClCompile Include="Environment.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BrokerProtocol.h" />
     <ClInclude Include="Environment.h" />
     <ClInclude Include="LoaderDll.h" />
   </ItemGroup>
