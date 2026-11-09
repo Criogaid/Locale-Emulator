@@ -173,9 +173,9 @@ function New-Package {
     }
     foreach ($nameToCopy in @('LoaderDll.dll', 'LocaleEmulator.dll')) {
         Copy-RequiredFile $NativeRoot $package $nameToCopy
+    }
     if ($IncludeX86Compatibility) {
         Copy-X86Compatibility $package $releaseRoot $releaseRoot
-    }
     }
 
     $commit = & git -C $repository rev-parse HEAD
