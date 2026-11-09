@@ -143,7 +143,7 @@ VOID RemoveHandle(PML_HANDLE_TABLE HandleTable, HANDLE Handle)
 
     if (--MidLevel->Count == 0)
     {
-        SafeDeleteT(MidLevel->Entries);
+        SafeDeleteArrayT(MidLevel->Entries);
     }
 }
 
