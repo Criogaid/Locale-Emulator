@@ -344,14 +344,12 @@ NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_CONFIG Conf
 {
     NTSTATUS Status;
     PREGISTRY_REDIRECTION_ENTRY Entry;
-    PLEPEB LePeb;
 
     if (Config == nullptr && Count != 0)
         return STATUS_INVALID_PARAMETER;
     if (Count == 0)
         return STATUS_SUCCESS;
 
-    LePeb = this->GetLePeb();
     REGISTRY_REDIRECTION_ENTRY LocalEntry;
     FOR_EACH(Config, Config, Count)
     {
@@ -423,7 +421,6 @@ NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_CONFIG Conf
             CopyMemory(Entry->Redirected.Data, Config->Redirected.Data, Entry->Redirected.DataSize);
         }
     }
-    UNREFERENCED_PARAMETER(LePeb);
     return STATUS_SUCCESS;
 }
 

@@ -233,7 +233,6 @@ NTSTATUS LeGlobalData::HackAnsiOemCodeHashNodes() {
 
 NTSTATUS LeGlobalData::HookKernel32Routines(PVOID Kernel32)
 {
-    PVOID GetCurrentNlsCache;
     NTSTATUS Status;
 
     Status = this->HackUserDefaultLCID2(Kernel32);

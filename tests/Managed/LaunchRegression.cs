@@ -168,8 +168,6 @@ namespace ManagedRegression
                 Assembly.GetExecutingAssembly().Location, args);
         }
 
-        [DllImport("advapi32.dll")]
-        private static extern int RegOverridePredefKey(IntPtr key, IntPtr replacement);
 
         private static Type ProductType(string name)
         {
@@ -185,18 +183,6 @@ namespace ManagedRegression
 
         private static object Field(object value, string name) { return value.GetType().GetField(name, Instance).GetValue(value); }
         private static object Property(object value, string name) { return value.GetType().GetProperty(name, Instance).GetValue(value, null); }
-        private static string Name(object timezone, string field) { return Encoding.Unicode.GetString((byte[])Field(timezone, field)).TrimEnd('\0'); }
-        private static string BoundedName(string name)
-        {
-            var length = Math.Min(31, name.Length);
-            if (length > 0 && char.IsHighSurrogate(name[length - 1])) length--;
-            return name.Substring(0, length);
-        }
-
-        private static string ReadUnicodeString(byte[] bytes, object value, int lebSize)
-        {
-            return Encoding.Unicode.GetString(bytes, checked((int)(long)Field(value, "Buffer") - lebSize), (ushort)Field(value, "Length"));
-        }
 
         private static string RemoveExecutable(string commandLine)
         {
