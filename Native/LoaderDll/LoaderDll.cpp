@@ -14,7 +14,7 @@ static NTSTATUS PrepareRuntimeEnvironment(PLE_RUNTIME_INPUT Input, PLEPEB LePeb)
     const BYTE* Base = (const BYTE*)Input;
     ULONG TimezoneCharacters;
 
-    if (Input == nullptr || LePeb == nullptr || !LeValidateRuntimeInput(Input))
+    if (LePeb == nullptr)
         return STATUS_INVALID_PARAMETER;
     if (Input->RegistryEntriesCount != 0)
         return STATUS_NOT_SUPPORTED;
