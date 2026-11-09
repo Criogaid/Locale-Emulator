@@ -6,6 +6,13 @@
 
 VOID ResetDCCharset(PLepGlobalData GlobalData, HWND hWnd);
 
+template<typename CHARACTER>
+ForceInline BOOL IsReadableClassName(const CHARACTER* Name)
+{
+    return Name == nullptr || reinterpret_cast<ULONG_PTR>(Name) <= MAX_USHORT ||
+        IsReadableNullTerminatedString(Name);
+}
+
 static BOOL ContainsByteSequence(PBYTE Begin, PBYTE End, const BYTE *Sequence, ULONG_PTR Size)
 {
     if (Size == 0 || Begin >= End || (ULONG_PTR)(End - Begin) < Size)
@@ -672,6 +679,10 @@ static LRESULT UserfnEDIT_GETSEL(WNDPROC PrevProc, HWND Window, UINT Message, WP
     PSTR      Text;
     ULONG_PTR Length;
 
+    if ((wParam != 0 && !IsWritableMemory((PVOID)wParam, sizeof(DWORD))) ||
+        (lParam != 0 && !IsWritableMemory((PVOID)lParam, sizeof(DWORD))))
+        return 0;
+
     Result = CallWindowProcA(PrevProc, Window, Message, (WPARAM)&StartA, (LPARAM)&EndA);
 
     if (CaptureEditTextA(PrevProc, Window, &Text, &Length))
@@ -794,6 +805,10 @@ static LRESULT KernelfnEDIT_GETSEL(HWND Window, UINT Message, WPARAM wParam, LPA
     PWSTR     TextW;
     ULONG_PTR LengthW;
     PSTR      TextA;
+
+    if ((wParam != 0 && !IsWritableMemory((PVOID)wParam, sizeof(DWORD))) ||
+        (lParam != 0 && !IsWritableMemory((PVOID)lParam, sizeof(DWORD))))
+        return 0;
 
     OutputStart = wParam;
     OutputEnd = lParam;
@@ -993,9 +1008,11 @@ UserMessageCall(INLPCREATESTRUCT)
     {
         LOOP_ONCE
         {
-            if (!CreateStructW) break;
+            if (!CreateStructW ||
+                !IsReadableMemory((PVOID)CreateStructW, sizeof(*CreateStructW))) break;
             PCBT_CREATE_PARAM CbtCreateParam = (PCBT_CREATE_PARAM)CreateStructW->lpCreateParams;
             if (!CbtCreateParam) break;
+            if (!IsReadableMemory(CbtCreateParam, sizeof(*CbtCreateParam))) break;
             if (CbtCreateParam->Magic == CBT_PROC_PARAM_CONTEXT)
                 CreateStructW->lpCreateParams = CbtCreateParam->CreateParams;
         }
@@ -1010,7 +1027,11 @@ UserMessageCall(INLPCREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (CreateStructW == nullptr)
+        if (CreateStructW == nullptr ||
+            !IsReadableMemory((PVOID)CreateStructW, sizeof(*CreateStructW)))
+            break;
+        if (!IsReadableClassName(CreateStructW->lpszClass) ||
+            !IsReadableNullTerminatedString(CreateStructW->lpszName))
             break;
 
         CreateStructA = *(LPCREATESTRUCTA)CreateStructW;
@@ -1053,7 +1074,11 @@ UserMessageCall(INLPMDICREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (MdiCreateStructW == nullptr)
+        if (MdiCreateStructW == nullptr ||
+            !IsReadableMemory((PVOID)MdiCreateStructW, sizeof(*MdiCreateStructW)))
+            break;
+        if (!IsReadableClassName(MdiCreateStructW->szClass) ||
+            !IsReadableNullTerminatedString(MdiCreateStructW->szTitle))
             break;
 
         MdiCreateStructA = *(LPMDICREATESTRUCTA)MdiCreateStructW;
@@ -1092,7 +1117,7 @@ UserMessageCall(INSTRINGNULL)
 
     LOOP_ONCE
     {
-        if (lParam == 0)
+        if (lParam == 0 || !IsReadableNullTerminatedString((PCWSTR)lParam))
             break;
 
         Length = StrLengthW((PWSTR)lParam);
@@ -1121,6 +1146,10 @@ UserMessageCall(OUTSTRING)
 
     OutputSize = wParam;
     OutputBuffer = (PWSTR)lParam;
+
+    if (OutputSize < 0 || (OutputSize != 0 &&
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR))))
+        return 0;
 
     Length = OutputSize * sizeof(WCHAR);
     Ansi = AllocAnsi(Length);
@@ -1154,9 +1183,14 @@ UserMessageCall(INCNTOUTSTRING)
     PMSG_INPUT_COUNT_OUPUT_STRING ParamA, ParamW;
 
     ParamW = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
+    if (!IsReadableMemory(ParamW, sizeof(*ParamW)))
+        return 0;
 
     OutputSize = ParamW->BufferSize;
     OutputBuffer = ParamW->UnicodeBuffer;
+    if (OutputSize != 0 &&
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR)))
+        return 0;
 
     Length = OutputSize * sizeof(WCHAR);
     Ansi = AllocAnsi(Length);
@@ -1199,6 +1233,9 @@ UserMessageCall(OUTCBOXSTRING)
 
     OutputBuffer = (PWSTR)lParam;
     ++OutputSize;
+    if (OutputSize < 0 ||
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR)))
+        return 0;
     Ansi = AllocAnsi(OutputSize);
     if (Ansi == nullptr)
         return 0;
@@ -1270,8 +1307,10 @@ struct DBCS_CHARACTER_MESSAGE
 BOOL WINAPI LepPeekMessageA(LPMSG Msg, HWND Window, UINT Min, UINT Max, UINT Remove)
 {
     lep::ActiveFrame *Frame = lep::ActiveFrame::Find(DBCS_CHARACTER_CONTEXT);
-    if (Frame != nullptr && Msg != nullptr)
+    if (Frame != nullptr)
     {
+        if (Msg == nullptr || !IsWritableMemory(Msg, sizeof(*Msg)))
+            return FALSE;
         auto Pending = (DBCS_CHARACTER_MESSAGE *)Frame->Data;
         if (!Pending->Consumed && (Window == nullptr || Window == Pending->Message.hwnd) &&
             ((Min == 0 && Max == 0) || (Min <= WM_CHAR && Max >= WM_CHAR)))
@@ -1496,7 +1535,11 @@ KernelMessageCall(INLPCREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (CreateStructA == nullptr)
+        if (CreateStructA == nullptr ||
+            !IsReadableMemory((PVOID)CreateStructA, sizeof(*CreateStructA)))
+            break;
+        if (!IsReadableClassName(CreateStructA->lpszClass) ||
+            !IsReadableNullTerminatedString(CreateStructA->lpszName))
             break;
 
         CreateStructW = *(LPCREATESTRUCTW)CreateStructA;
@@ -1539,7 +1582,11 @@ KernelMessageCall(INLPMDICREATESTRUCT)
 
     LOOP_ONCE
     {
-        if (MdiCreateStructA == nullptr)
+        if (MdiCreateStructA == nullptr ||
+            !IsReadableMemory((PVOID)MdiCreateStructA, sizeof(*MdiCreateStructA)))
+            break;
+        if (!IsReadableClassName(MdiCreateStructA->szClass) ||
+            !IsReadableNullTerminatedString(MdiCreateStructA->szTitle))
             break;
 
         MdiCreateStructW = *(LPMDICREATESTRUCTW)MdiCreateStructA;
@@ -1579,7 +1626,7 @@ KernelMessageCall(INSTRINGNULL)
 
     LOOP_ONCE
     {
-        if (lParam == 0)
+        if (lParam == 0 || !IsReadableNullTerminatedString((PCSTR)lParam))
             break;
 
         Length = StrLengthA((PSTR)lParam);
@@ -1613,6 +1660,9 @@ KernelMessageCall(OUTSTRING)
 
     OutputBuffer = (PSTR)lParam;
     OutputSize = wParam;
+    if (OutputSize < 0 || (OutputSize != 0 &&
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize))))
+        return 0;
 
     Length = GlobalData->NtUserMessageCall(Window, Message + 1, wParam, lParam, xParam, xpfnProc, Flags);
     if (Length == 0)
@@ -1639,33 +1689,36 @@ KernelMessageCall(INSTRING)
 
 KernelMessageCall(INCNTOUTSTRING)
 {
-    LRESULT OutputSize, Length;
-    PSTR    OutputBuffer;
-    PWSTR   Unicode;
-
     PMSG_INPUT_COUNT_OUPUT_STRING ParamA, ParamW;
+    USHORT OutputSize;
+    PSTR OutputBuffer;
+    USHORT Capacity;
+    PWSTR Unicode;
+    LRESULT Length;
+    ULONG Written = 0;
 
     ParamA = (PMSG_INPUT_COUNT_OUPUT_STRING)lParam;
-
+    if (!IsReadableMemory(ParamA, sizeof(*ParamA)))
+        return 0;
     OutputSize = ParamA->BufferSize;
     OutputBuffer = ParamA->AnsiBuffer;
-
-    Unicode = AllocUnicode(OutputSize);
+    if (OutputSize != 0 && !IsWritableMemory(OutputBuffer, OutputSize))
+        return 0;
+    Capacity = static_cast<USHORT>(ML_MIN(OutputSize, MAX_USHORT / sizeof(WCHAR)));
+    Unicode = AllocUnicode(ML_MAX(Capacity, 1));
     if (Unicode == nullptr)
         return 0;
 
     ParamW = (PMSG_INPUT_COUNT_OUPUT_STRING)Unicode;
-    ParamW->BufferSize = (USHORT)OutputSize;
+    ParamW->BufferSize = Capacity;
     lParam = (LPARAM)ParamW;
 
     Length = CallNtUserMessageCallW();
-
-    if (Length != 0)
-        UnicodeToAnsi(OutputBuffer, OutputSize, Unicode, Length, (PULONG_PTR)&Length);
-
+    if (Length > 0 && static_cast<ULONG_PTR>(Length) <= Capacity)
+        RtlUnicodeToMultiByteN(OutputBuffer, OutputSize, &Written, Unicode,
+            static_cast<ULONG>(Length) * sizeof(WCHAR));
     FreeString(Unicode);
-
-    return Length;
+    return Written;
 }
 
 KernelMessageCall(INCBOXSTRING)
@@ -1697,7 +1750,22 @@ KernelMessageCall(OUTCBOXSTRING)
     Length = GlobalData->NtUserMessageCall(Window, Message, wParam, (LPARAM)Unicode, xParam, xpfnProc, Flags);
 
     if (Length != 0 && Length != LB_ERR)
-        UnicodeToAnsi(OutputBuffer, (ULONG_PTR)-1, Unicode, Length, (PULONG_PTR)&Length);
+    {
+        ULONG RequiredBytes = 0;
+        if (NT_SUCCESS(RtlUnicodeToMultiByteSize(&RequiredBytes, Unicode,
+            static_cast<ULONG>(Length) * sizeof(WCHAR))) &&
+            RequiredBytes < ULONG_MAX)
+        {
+            if (IsWritableMemory(OutputBuffer, RequiredBytes + 1))
+                UnicodeToAnsi(OutputBuffer, RequiredBytes + 1, Unicode, Length, (PULONG_PTR)&Length);
+            else
+                Length = 0;
+        }
+        else
+        {
+            Length = 0;
+        }
+    }
 
     FreeString(Unicode);
 
@@ -1821,16 +1889,10 @@ LepNtUserDefSetText(
 
 BOOL VerifyWindowParam(PCBT_CREATE_PARAM CbtCreateParam, PCBT_PROC_PARAM CbtParam)
 {
-    SEH_TRY
-    {
-        // FIXME: SEH DOESN'T work
-        if (!CbtCreateParam || !CbtParam) return FALSE;
-        return CbtCreateParam->StackPointer == CbtParam->StackPointer;
-    }
-    SEH_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
-    {
+    if (!IsReadableMemory(CbtCreateParam, sizeof(*CbtCreateParam)) ||
+        !IsReadableMemory(CbtParam, sizeof(*CbtParam)))
         return FALSE;
-    }
+    return CbtCreateParam->StackPointer == CbtParam->StackPointer;
 }
 
 VOID ResetDCCharset(PLepGlobalData GlobalData, HWND hWnd)
@@ -1865,6 +1927,9 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
     LPCBT_CREATEWND     CreateWnd;
     PCBT_CREATE_PARAM   CreateParam;
 
+    if (CbtParam == nullptr)
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+
     if (nCode == HCBT_CREATEWND) LOOP_ONCE
     {
         BOOL            UnicodeWindow;
@@ -1874,9 +1939,15 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 
         hWnd        = (HWND)wParam;
         CreateWnd   = (LPCBT_CREATEWND)lParam;
+        if (!IsReadableMemory(CreateWnd, sizeof(*CreateWnd)) ||
+            CreateWnd->lpcs == nullptr ||
+            !IsReadableMemory(CreateWnd->lpcs, sizeof(*CreateWnd->lpcs)))
+            break;
         CreateParam = (PCBT_CREATE_PARAM)CreateWnd->lpcs->lpCreateParams;
 
         if (VerifyWindowParam(CreateParam, CbtParam) == FALSE)
+            break;
+        if (!IsWritableMemory(CreateWnd->lpcs, sizeof(*CreateWnd->lpcs)))
             break;
 
         CreateWnd->lpcs->lpCreateParams = CreateParam->CreateParams;
@@ -1905,6 +1976,9 @@ LRESULT CALLBACK CBTProcU(int nCode, WPARAM wParam, LPARAM lParam)
     PCBT_PROC_PARAM     CbtParam = (PCBT_PROC_PARAM)lep::ActiveFrame::Find(CBT_PROC_PARAM_CONTEXT);
     LPCBT_CREATEWND     CreateWnd;
     PCBT_CREATE_PARAM   CreateParam;
+
+    if (CbtParam == nullptr)
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
 
     Result = CallNextHookEx(CbtParam->Hook, nCode, wParam, lParam);
 
@@ -2610,7 +2684,8 @@ static BOOL LepFixDefaultInputLanguage(BOOL Result, UINT uiAction, PVOID pvParam
 {
     if (Result &&
         uiAction == SPI_GETDEFAULTINPUTLANG &&
-        pvParam != nullptr)
+        pvParam != nullptr &&
+        IsWritableMemory(pvParam, sizeof(HKL)))
     {
         *(HKL *)pvParam = (HKL)LEP_JAPANESE_DEFAULT_INPUT_LANG;
     }

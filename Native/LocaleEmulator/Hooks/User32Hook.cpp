@@ -742,16 +742,10 @@ LeNtUserDefSetText(
 
 BOOL VerifyWindowParam(PCBT_CREATE_PARAM CbtCreateParam, PCBT_PROC_PARAM CbtParam)
 {
-    SEH_TRY
-    {
-        // Upstream note: SEH was observed not to catch here; keep derefs minimal and treat FALSE as "not an LE window".
-        if (!CbtCreateParam || !CbtParam) return FALSE;
-        return CbtCreateParam->StackPointer == CbtParam->StackPointer;
-    }
-    SEH_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
-    {
+    if (!IsReadableMemory(CbtCreateParam, sizeof(*CbtCreateParam)) ||
+        !IsReadableMemory(CbtParam, sizeof(*CbtParam)))
         return FALSE;
-    }
+    return CbtCreateParam->StackPointer == CbtParam->StackPointer;
 }
 
 VOID ResetDCCharset(PLeGlobalData GlobalData, HWND hWnd)
@@ -786,6 +780,9 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
     LPCBT_CREATEWND     CreateWnd;
     PCBT_CREATE_PARAM   CreateParam;
 
+    if (CbtParam == nullptr)
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+
     if (nCode == HCBT_CREATEWND) LOOP_ONCE
     {
         BOOL            UnicodeWindow;
@@ -795,9 +792,15 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 
         hWnd        = (HWND)wParam;
         CreateWnd   = (LPCBT_CREATEWND)lParam;
+        if (!IsReadableMemory(CreateWnd, sizeof(*CreateWnd)) ||
+            CreateWnd->lpcs == nullptr ||
+            !IsReadableMemory(CreateWnd->lpcs, sizeof(*CreateWnd->lpcs)))
+            break;
         CreateParam = (PCBT_CREATE_PARAM)CreateWnd->lpcs->lpCreateParams;
 
         if (VerifyWindowParam(CreateParam, CbtParam) == FALSE)
+            break;
+        if (!IsWritableMemory(CreateWnd->lpcs, sizeof(*CreateWnd->lpcs)))
             break;
 
         CreateWnd->lpcs->lpCreateParams = CreateParam->CreateParams;
@@ -818,8 +821,12 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK CBTProcU(int nCode, WPARAM wParam, LPARAM lParam)
 {
+
     LRESULT             Result;
     PCBT_PROC_PARAM     CbtParam = (PCBT_PROC_PARAM)FindThreadFrame(CBT_PROC_PARAM_CONTEXT);
+
+    if (CbtParam == nullptr)
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
     LPCBT_CREATEWND     CreateWnd;
     PCBT_CREATE_PARAM   CreateParam;
 

@@ -183,6 +183,45 @@ ForceInline BOOL IsWritableMemory(PVOID Address, ULONG_PTR Size)
     return IsMemoryAccessible(Address, Size, TRUE);
 }
 
+template<typename CHARACTER>
+ForceInline BOOL IsReadableNullTerminatedString(const CHARACTER* String)
+{
+    PBYTE Address;
+
+    if (String == nullptr)
+        return TRUE;
+
+    Address = reinterpret_cast<PBYTE>(const_cast<CHARACTER*>(String));
+    for (;;)
+    {
+        MEMORY_BASIC_INFORMATION MemoryInfo;
+        ULONG_PTR AddressValue;
+        ULONG_PTR RegionBase;
+        ULONG_PTR RegionEnd;
+
+        if (NT_FAILED(NtQueryVirtualMemory(CurrentProcess, Address, MemoryBasicInformation,
+                                          &MemoryInfo, sizeof(MemoryInfo), nullptr)))
+            return FALSE;
+        if (!IsReadableMemory(Address, sizeof(CHARACTER)))
+            return FALSE;
+
+        AddressValue = reinterpret_cast<ULONG_PTR>(Address);
+        RegionBase = reinterpret_cast<ULONG_PTR>(MemoryInfo.BaseAddress);
+        if (AddressValue < RegionBase || MemoryInfo.RegionSize > MAXULONG_PTR - RegionBase)
+            return FALSE;
+        RegionEnd = RegionBase + MemoryInfo.RegionSize;
+        while (AddressValue <= RegionEnd && sizeof(CHARACTER) <= RegionEnd - AddressValue)
+        {
+            if (*reinterpret_cast<const CHARACTER*>(AddressValue) == 0)
+                return TRUE;
+            AddressValue += sizeof(CHARACTER);
+        }
+        if (AddressValue != RegionEnd)
+            return FALSE;
+        Address = reinterpret_cast<PBYTE>(RegionEnd);
+    }
+}
+
 typedef struct THREAD_LOCAL_BUFFER : public lep::ActiveFrame
 {
     // BYTE Buffer[MEMORY_PAGE_SIZE * 2];

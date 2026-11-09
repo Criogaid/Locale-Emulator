@@ -11,6 +11,21 @@ using NtQueryDefaultLanguageFn = LONG(NTAPI*)(USHORT*);
 constexpr ULONG SystemCurrentTimeZoneInformationClass = 44;
 
 static int failures;
+static WNDPROC messageProbePrevious;
+static LPMSG messageProbeInvalid;
+static bool messageProbeCalled;
+
+static LRESULT CALLBACK MessageProbeWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    if (message == WM_CHAR && messageProbeInvalid != nullptr)
+    {
+        messageProbeCalled = true;
+        PeekMessageA(messageProbeInvalid, nullptr, 0, 0, PM_NOREMOVE);
+    }
+    return messageProbePrevious != nullptr ?
+        CallWindowProcA(messageProbePrevious, window, message, wParam, lParam) :
+        DefWindowProcA(window, message, wParam, lParam);
+}
 
 static void Check(bool condition, const char* name)
 {
@@ -69,10 +84,55 @@ static void InvalidOutputContracts()
 }
 
 
+static void MessagePointerContracts()
+{
+    HWND edit = CreateWindowExA(0, "EDIT", "abc", WS_POPUP, 0, 0, 0, 0,
+        nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    Check(edit != nullptr, "x64 message contract edit control");
+    if (edit == nullptr)
+        return;
+
+    SYSTEM_INFO system = {};
+    GetSystemInfo(&system);
+    const SIZE_T pageSize = system.dwPageSize;
+    auto memory = static_cast<BYTE*>(VirtualAlloc(nullptr, pageSize * 2,
+        MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    Check(memory != nullptr, "x64 message contract allocation");
+    if (memory != nullptr)
+    {
+        DWORD previous = 0;
+        Check(VirtualProtect(memory + pageSize, pageSize, PAGE_NOACCESS, &previous) != FALSE,
+            "x64 message contract guard page");
+        BYTE* invalid = memory + pageSize - 1;
+        messageProbeInvalid = reinterpret_cast<LPMSG>(invalid);
+        messageProbeCalled = false;
+        messageProbePrevious = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(edit, GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(MessageProbeWindowProc)));
+        Check(messageProbePrevious != nullptr, "x64 message contract subclass");
+        if (messageProbePrevious != nullptr)
+        {
+            SendMessageW(edit, WM_CHAR, static_cast<WPARAM>(0x3042), 0);
+            Check(messageProbeCalled, "x64 message contract pending peek");
+            SetWindowLongPtrA(edit, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(messageProbePrevious));
+        }
+        messageProbeInvalid = nullptr;
+        messageProbePrevious = nullptr;
+        SendMessageA(edit, EM_GETSEL, reinterpret_cast<WPARAM>(invalid), 0);
+        SendMessageA(edit, EM_GETSEL, 0, reinterpret_cast<LPARAM>(invalid));
+        SendMessageA(edit, WM_GETTEXT, 2, reinterpret_cast<LPARAM>(invalid));
+        SendMessageA(edit, EM_GETLINE, 0, reinterpret_cast<LPARAM>(invalid));
+        SendMessageA(edit, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(invalid));
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+    DestroyWindow(edit);
+}
+
+
 int wmain()
 {
     static_assert(sizeof(void*) == 8, "x64 attribute contract requires a 64-bit test host");
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    MessagePointerContracts();
     InvalidOutputContracts();
 
     auto create = reinterpret_cast<NativeCreate>(

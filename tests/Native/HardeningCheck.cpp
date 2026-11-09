@@ -79,6 +79,27 @@ static bool CheckLineThunks() {
     return true;
 }
 
+static bool CheckCbtPointerContracts()
+{
+    SYSTEM_INFO system = {};
+    GetSystemInfo(&system);
+    const SIZE_T pageSize = system.dwPageSize;
+    PBYTE pages = static_cast<PBYTE>(VirtualAlloc(nullptr, pageSize * 2,
+        MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    if (!pages) return false;
+    DWORD previous = 0;
+    if (!VirtualProtect(pages + pageSize, pageSize, PAGE_NOACCESS, &previous)) {
+        VirtualFree(pages, 0, MEM_RELEASE);
+        return false;
+    }
+    CBT_PROC_PARAM cbt = {};
+    PCBT_CREATE_PARAM invalid = reinterpret_cast<PCBT_CREATE_PARAM>(
+        pages + pageSize - sizeof(ULONG));
+    const bool rejected = !VerifyWindowParam(invalid, &cbt);
+    VirtualFree(pages, 0, MEM_RELEASE);
+    return rejected;
+}
+
 static bool CheckBoundedFormatting()
 {
     WCHAR section[MAX_NTPATH];
@@ -165,10 +186,11 @@ int __cdecl main()
     ConvertUnicodeTextMetricToAnsi(&metricA, &metricW);
     if (metricA.tmFirstChar != 'A' || metricA.tmLastChar != 255 || metricA.tmDefaultChar != '?' || metricA.tmBreakChar != ' ') return 20;
     if (!CheckLineThunks()) return 21;
-    if (!CheckBoundedFormatting()) return 22;
+    if (!CheckCbtPointerContracts()) return 22;
+    if (!CheckBoundedFormatting()) return 23;
     puts("bounded_format_count_terminator_truncation_and_nt_unicode=ok");
     puts("getline_thunk_word_bounds_and_no_terminator=ok");
-    puts("leb_bounds=ok large_string_bounds=ok explicit_length_guard_pages=ok textmetric_first_char=ok");
+    puts("leb_bounds=ok large_string_bounds=ok explicit_length_guard_pages=ok cbt_pointer_guard_pages=ok textmetric_first_char=ok");
     puts("patch=ok trampoline=RX source=RX restore=ok freed=ok unicode_length=ok");
     return 0;
 }
