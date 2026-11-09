@@ -183,7 +183,9 @@ UserMessageCall(OUTSTRING)
 
     OutputSize = wParam;
     OutputBuffer = (PWSTR)lParam;
-    if (OutputSize < 0 || (OutputSize != 0 &&
+    if (OutputSize < 0 ||
+        static_cast<ULONG_PTR>(OutputSize) > MAXULONG_PTR / sizeof(WCHAR) ||
+        (OutputSize != 0 &&
         !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR))))
         return 0;
 
@@ -197,7 +199,8 @@ UserMessageCall(OUTSTRING)
 
     Length = CallUserMessageCallA();
 
-    if (Length != 0)
+    if (Length > 0 &&
+        static_cast<ULONG_PTR>(Length) <= static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR))
         AnsiToUnicode(OutputBuffer, OutputSize, Ansi, Length, (PULONG_PTR)&Length);
 
     FreeString(Ansi);
@@ -253,7 +256,9 @@ UserMessageCall(OUTCBOXSTRING)
 
     OutputBuffer = (PWSTR)lParam;
     ++OutputSize;
-    if (OutputSize < 0 || !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR)))
+    if (OutputSize < 0 ||
+        static_cast<ULONG_PTR>(OutputSize) > MAXULONG_PTR / sizeof(WCHAR) ||
+        !IsWritableMemory(OutputBuffer, static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR)))
         return 0;
     Ansi = AllocAnsi(OutputSize);
     if (Ansi == nullptr)
@@ -261,7 +266,8 @@ UserMessageCall(OUTCBOXSTRING)
 
     Length = CallWindowProcA(PrevProc, Window, Message, wParam, (LPARAM)Ansi);
 
-    if (Length != 0 && Length != LB_ERR)
+    if (Length > 0 &&
+        static_cast<ULONG_PTR>(Length) <= static_cast<ULONG_PTR>(OutputSize) * sizeof(WCHAR))
         AnsiToUnicode(OutputBuffer, OutputSize, Ansi, Length, (PULONG_PTR)&Length);
 
     FreeString(Ansi);
@@ -290,7 +296,7 @@ UserMessageCall(GETDBCSTEXTLENGTHS)
     LRESULT Length;
 
     Length = CallUserMessageCallA();
-    if (Length == 0 || Length == LB_ERR)
+    if (Length <= 0)
         return 0;
 
     ++Length;
@@ -303,7 +309,7 @@ UserMessageCall(GETDBCSTEXTLENGTHS)
     --Message;
     Length = CallUserMessageCallA();
 
-    if (Length != 0 && Length != LB_ERR)
+    if (Length > 0)
     {
         ULONG UnicodeBytes;
         RtlMultiByteToUnicodeSize(&UnicodeBytes, Ansi, Length);
@@ -515,7 +521,7 @@ KernelMessageCall(INSTRINGNULL)
 
 KernelMessageCall(OUTSTRING)
 {
-    LRESULT Length, OutputSize;
+    LRESULT Length, OutputSize, Capacity;
     PWSTR   Unicode;
     PSTR    OutputBuffer;
 
@@ -529,17 +535,18 @@ KernelMessageCall(OUTSTRING)
         return 0;
 
     Length = GlobalData->NtUserMessageCall(Window, Message + 1, wParam, lParam, xParam, xpfnProc, Flags);
-    if (Length == 0)
+    if (Length <= 0)
         return 0;
 
     ++Length;
-    Unicode = AllocUnicode(Length);
+    Capacity = Length;
+    Unicode = AllocUnicode(Capacity);
     if (Unicode == nullptr)
         return 0;
 
-    Length = GlobalData->NtUserMessageCall(Window, Message, Length, (LPARAM)Unicode, xParam, xpfnProc, Flags);
-
-    UnicodeToAnsi(OutputBuffer, OutputSize, Unicode, Length, (PULONG_PTR)&Length);
+    Length = GlobalData->NtUserMessageCall(Window, Message, Capacity, (LPARAM)Unicode, xParam, xpfnProc, Flags);
+    if (Length > 0 && Length <= Capacity)
+        UnicodeToAnsi(OutputBuffer, OutputSize, Unicode, Length, (PULONG_PTR)&Length);
 
     FreeString(Unicode);
 
@@ -595,20 +602,22 @@ KernelMessageCall(OUTCBOXSTRING)
     OutputBuffer = (PSTR)lParam;
 
     Length = GlobalData->NtUserMessageCall(Window, Message + 1, wParam, lParam, xParam, xpfnProc, Flags);
-    if (Length == 0 || Length == LB_ERR)
+    if (Length <= 0)
         return 0;
 
     ++Length;
-    Unicode = AllocUnicode(Length);
+    OutputSize = Length;
+    Unicode = AllocUnicode(OutputSize);
     if (Unicode == nullptr)
         return 0;
 
     Length = GlobalData->NtUserMessageCall(Window, Message, wParam, (LPARAM)Unicode, xParam, xpfnProc, Flags);
 
-    if (Length != 0 && Length != LB_ERR)
+    if (Length > 0 && Length <= OutputSize)
     {
         ULONG RequiredBytes = 0;
-        if (NT_SUCCESS(RtlUnicodeToMultiByteSize(&RequiredBytes, Unicode, static_cast<ULONG>(Length) * sizeof(WCHAR))) &&
+        if (static_cast<ULONG_PTR>(Length) <= ULONG_MAX / sizeof(WCHAR) &&
+            NT_SUCCESS(RtlUnicodeToMultiByteSize(&RequiredBytes, Unicode, static_cast<ULONG>(Length) * sizeof(WCHAR))) &&
             RequiredBytes < ULONG_MAX)
         {
             // LB_GETTEXT/CB_GETLBTEXT 无容量参数；调用者按 GETTEXTLEN 结果分配。
@@ -649,7 +658,7 @@ KernelMessageCall(GETDBCSTEXTLENGTHS)
     PWSTR   Unicode;
 
     Length = CallNtUserMessageCallW();
-    if (Length == 0 || Length == LB_ERR)
+    if (Length <= 0)
         return 0;
 
     ++Length;
@@ -662,7 +671,7 @@ KernelMessageCall(GETDBCSTEXTLENGTHS)
     --Message;
     Length = CallNtUserMessageCallW();
 
-    if (Length != 0 && Length != LB_ERR)
+    if (Length > 0)
     {
         ULONG AnsiBytes;
         RtlUnicodeToMultiByteSize(&AnsiBytes, Unicode, Length * sizeof(WCHAR));
