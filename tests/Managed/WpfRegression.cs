@@ -164,8 +164,19 @@ namespace ManagedRegression
                 BindingFlags.Static | BindingFlags.NonPublic);
             var extension = ".le-no-icon-" + Guid.NewGuid().ToString("N");
             var path = Path.Combine(Path.GetTempPath(), "target" + extension);
-            Check((string)method.Invoke(null, new object[] { path }) == null,
+            var arguments = new object[] { path, 0 };
+            Check((string)method.Invoke(null, arguments) == null,
                 "A missing associated icon should leave the Shell Link default icon unchanged.");
+        }
+
+        internal static void AssociatedIconPathAndIndexAreParsed()
+        {
+            var parser = typeof(AssociationReader).GetMethod("ParseAssociatedIcon",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var arguments = new object[] { "\"C:\\Program Files\\wordicon.exe\",13", 0 };
+            var path = (string)parser.Invoke(null, arguments);
+            Check(path == @"C:\Program Files\wordicon.exe" && (int)arguments[1] == 13,
+                "A registry DefaultIcon path and index were not separated for Shell Link.");
         }
 
         internal static void RunLanguageProbe()

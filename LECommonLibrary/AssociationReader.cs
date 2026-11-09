@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using Microsoft.Win32;
 
 namespace LECommonLibrary
@@ -25,15 +26,13 @@ namespace LECommonLibrary
             return jb;
         }
 
-        public static string GetAssociatedIcon(string ext)
+        public static string GetAssociatedIcon(string ext, out int iconIndex)
         {
-            var prog = GetAssociatedIconFromRegistry(ext);
-
-            if (prog == null)
-                return null;
-
-            return prog;
+            iconIndex = 0;
+            var value = GetAssociatedIconFromRegistry(ext);
+            return value == null ? null : ParseAssociatedIcon(value, out iconIndex);
         }
+
 
         private static string GetAssociatedIconFromRegistry(string ext)
         {
@@ -46,6 +45,26 @@ namespace LECommonLibrary
                 (string)Registry.GetValue($"HKEY_CLASSES_ROOT\\{d}\\DefaultIcon", null, null);
 
             return prog;
+        }
+        private static string ParseAssociatedIcon(string value, out int iconIndex)
+        {
+            iconIndex = 0;
+            value = value.Trim();
+            if (value.Length == 0)
+                return null;
+
+            var separator = value.LastIndexOf(',');
+            int parsedIndex;
+            if (separator > 0 && int.TryParse(value.Substring(separator + 1).Trim(),
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedIndex))
+            {
+                iconIndex = parsedIndex;
+                value = value.Substring(0, separator).Trim();
+            }
+
+            if (value.Length >= 2 && value[0] == '"' && value[value.Length - 1] == '"')
+                value = value.Substring(1, value.Length - 2);
+            return value.Length == 0 ? null : value;
         }
 
         private static string[] SplitExecutableAndArgument(string line)
