@@ -2785,44 +2785,6 @@ PWChar StringUpperW(PWChar String, ULong Length)
 
 Long_Ptr FASTCALL StrLengthA(PCChar pString)
 {
-#if 0
-
-    PCChar s;
-    ULong quad, v1, flag;
-
-    if (pString == NULL)
-        return 0;
-
-    s = pString;
-    while ((Long_Ptr)(s) & 3)
-    {
-        if (*s++ == 0)
-        {
-            --s;
-            return s - pString;
-        }
-    }
-
-    do
-    {
-        quad = *(PULong)s;
-        s += sizeof(quad);
-
-        quad = ((quad + 0xFEFEFEFF) & ~quad) & 0x80808080;
-
-    } while (quad == 0);
-
-    v1 = quad >> 16;
-    flag = quad & 0x8080;
-
-    quad = flag ? quad: (v1);
-    s += flag ? 0 : 2;
-
-    s -= 3 + ((quad >> 7) & 1);
-
-    return s - pString;
-
-#else
 
     Long ch;
     Long_Ptr SizeOfUnit;
@@ -2879,7 +2841,6 @@ Long_Ptr FASTCALL StrLengthA(PCChar pString)
 end_of_calc:
     return pBuffer - pString;
 
-#endif
 }
 
 Long_Ptr FASTCALL StrLengthW(PCWChar pString)
@@ -3112,20 +3073,6 @@ Long_Ptr FASTCALL StrNICompareW(PCWChar pString1, PCWChar pString2, SizeT Length
         }
 
 
-#if 0
-        ch1 >>= 16;
-        ch2 >>= 16;
-        if ((ch1 | ch2) & 0xFF80)
-        {
-            if (ch1 != ch2)
-                break;
-        }
-        else if (((ch1 ^ ch2) & 0xFFDF) != 0)
-            break;
-
-        pString1 = (PCWChar)((PByte)pString1 + sizeof(ch1));
-        pString2 = (PCWChar)((PByte)pString2 + sizeof(ch1));
-#endif
         ++pString1;
         ++pString2;
     } while (--LengthToCompare != 0 && ch1);
@@ -3240,7 +3187,6 @@ Long_Ptr FASTCALL StrNCompareA(PCChar pString1, PCChar pString2, SizeT LengthToC
 Long_Ptr FASTCALL StrNCompareW(PCWChar pString1, PCWChar pString2, SizeT LengthToCompare)
 {
     Long ch1, ch2;
-//    WChar ch1, ch2;
 
     if (LengthToCompare == 0)
         return 0;
@@ -3256,7 +3202,6 @@ Long_Ptr FASTCALL StrNCompareW(PCWChar pString1, PCWChar pString2, SizeT LengthT
         {
             ch1 = (Long)(Int16)(ch1 - ch2);
             return ch1 < 0 ? -1 : ch1 > 0 ? 1 : 0;
-//            return (Int)(Int16)(ch1 - ch2);
         }
 
         if (ch1 == 0)
@@ -3268,26 +3213,12 @@ Long_Ptr FASTCALL StrNCompareW(PCWChar pString1, PCWChar pString2, SizeT LengthT
 
     do
     {
-#if  0
-        ch1 = pString1[0];
-        if (ch1 != pString2[0])
-            return ch1 - pString2[0];
-        if (ch1 == 0)
-            return 0;
-
-        ch1 = pString1[1];
-        if (ch1 != pString2[1])
-            return ch1 - pString2[1];
-        if (ch1 == 0)
-            return 0;
-#else
         ch1 = *(PInt32)pString1;
         ch2 = *(PInt32)pString2;
         if (LoWord(ch1) != LoWord(ch2))
         {
             ch1 = (Int)(Int16)((ch1 - ch2) & 0xFFFF);
             return ch1 < 0 ? -1 : ch1 > 0 ? 1 : 0;
-//            return (Int)(Int16)(ch1 - ch2);
         }
 
         if (LoWord(ch1) == 0)
@@ -3299,12 +3230,10 @@ Long_Ptr FASTCALL StrNCompareW(PCWChar pString1, PCWChar pString2, SizeT LengthT
         {
             ch1 = (Int)(Int16)(ch1 - ch2);
             return ch1 < 0 ? -1 : ch1 > 0 ? 1 : 0;
-//            return (Int)(Int16)(ch1 - ch2);
         }
 
         if (ch1 == 0)
             return 0;
-#endif
         pString1 = (PCWChar)((PByte)pString1 + sizeof(ch1));
         pString2 = (PCWChar)((PByte)pString2 + sizeof(ch2));
 
