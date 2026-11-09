@@ -2,7 +2,10 @@
 #define _LOCALEEMULATOR_H_cd444a0d_c7f9_44b2_aac8_8107e9a07ca2_
 
 #include "ml.h"
+#include "../RuntimeEnvironment.h"
 #include <limits.h>
+
+NTSTATUS ResolveRuntimeTimeZone(PCWSTR Id, PLE_RUNTIME_TIME_ZONE_INFORMATION Zone);
 
 
 #define ROOTDIR_SYSTEM32            L"\\SystemRoot\\system32\\"
@@ -14,6 +17,7 @@
 #define REGKEY_ACP                  L"ACP"
 #define REGKEY_OEMCP                L"OEMCP"
 #define REGKEY_DEFAULT_LANGUAGE     L"Default"
+#define REGKEY_INSTALL_LANGUAGE    L"InstallLanguage"
 
 #define PROP_WINDOW_ANSI_PROC       L"Asuna"
 
@@ -195,45 +199,7 @@ ForceInline BOOL IsReadableNullTerminatedString(const CHARACTER* String)
     }
 }
 
-typedef struct
-{
-    ULONG64             Root;
-    UNICODE_STRING64    SubKey;
-    UNICODE_STRING64    ValueName;
-    ULONG               DataType;
-    PVOID64             Data;
-    ULONG64             DataSize;
 
-} REGISTRY_ENTRY64;
-
-typedef struct
-{
-    REGISTRY_ENTRY64 Original;
-    REGISTRY_ENTRY64 Redirected;
-
-} REGISTRY_REDIRECTION_ENTRY64, *PREGISTRY_REDIRECTION_ENTRY64;
-
-typedef struct
-{
-    ULONG                           AnsiCodePage;
-    ULONG                           OemCodePage;
-    ULONG                           LocaleID;
-    ULONG                           DefaultCharset;
-    ULONG                           HookUILanguageApi;
-    WCHAR                           DefaultFaceName[LF_FACESIZE];
-    RTL_TIME_ZONE_INFORMATION       Timezone;
-    ULONG64                         NumberOfRegistryRedirectionEntries;
-    REGISTRY_REDIRECTION_ENTRY64    RegistryReplacement[1];
-
-} LOCALE_ENUMLATOR_ENVIRONMENT_BLOCK, *PLOCALE_ENUMLATOR_ENVIRONMENT_BLOCK, LEB, *PLEB;
-
-inline NTSTATUS ValidateLeb(const LEB& Leb)
-{
-    if (Leb.DefaultCharset > MAXBYTE || Leb.AnsiCodePage > MAX_USHORT || Leb.OemCodePage > MAX_USHORT)
-        return STATUS_INVALID_PARAMETER;
-
-    return STATUS_SUCCESS;
-}
 
 #define LDR_LOAD_DLL_BACKUP_SIZE 5
 
@@ -275,21 +241,37 @@ typedef struct
 
 } REGISTRY_REDIRECTION_ENTRY, *PREGISTRY_REDIRECTION_ENTRY;
 
+// 配置项只借用调用方的只读字符串和数据；运行时 REGISTRY_ENTRY 才拥有复制后的数据。
+typedef struct
+{
+    HKEY        Root;
+    PCWSTR      SubKey;
+    PCWSTR      ValueName;
+    ULONG       DataType;
+    LPCVOID     Data;
+    ULONG_PTR   DataSize;
+} REGISTRY_ENTRY_CONFIG;
+
+typedef struct
+{
+    REGISTRY_ENTRY_CONFIG Original;
+    REGISTRY_ENTRY_CONFIG Redirected;
+} REGISTRY_REDIRECTION_CONFIG, *PREGISTRY_REDIRECTION_CONFIG;
+
 typedef struct
 {
     ULONG_PTR   OriginalCharset;
     ULONG_PTR   OriginalLocaleID;
     CHAR        ScriptNameA[LF_FACESIZE];
     WCHAR       ScriptNameW[LF_FACESIZE];
-
     HANDLE      Section;
     PVOID       LdrLoadDllAddress;
     ULONG_PTR   LdrLoadDllBackupSize;
     BYTE        LdrLoadDllBackup[16];
     WCHAR       LeDllFullPath[MAX_NTPATH];
     WCHAR       LeDllDirPath[MAX_NTPATH];
-    LEB         Leb;
-
+    LE_RUNTIME_CONFIG Environment;
+    WCHAR       TimezoneId[128];
 } LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, *PLOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, LEPEB, *PLEPEB;
 
 inline
@@ -305,45 +287,35 @@ GetLePebSectionName(
 
 inline NTSTATUS CloseLePeb(PLEPEB LePeb)
 {
-    return LePeb == nullptr ? STATUS_INVALID_PARAMETER : NtUnmapViewOfSection(CurrentProcess, LePeb);
+    if (LePeb == nullptr)
+        return STATUS_INVALID_PARAMETER;
+    return NtUnmapViewOfSection(CurrentProcess, LePeb);
 }
 
-inline VOID InitDefaultLeb(PLEB Leb)
+inline VOID InitDefaultEnvironment(PLE_RUNTIME_CONFIG Environment, PWSTR TimezoneId, ULONG TimezoneCapacity)
 {
-    static WCHAR StandardName[] = L"@tzres.dll,-632";
-    static WCHAR DaylightName[] = L"@tzres.dll,-631";
+    static const WCHAR Timezone[] = L"Tokyo Standard Time";
+    static const WCHAR StandardName[] = L"@tzres.dll,-632";
+    static const WCHAR DaylightName[] = L"@tzres.dll,-631";
 
-    ZeroMemory(Leb, sizeof(*Leb));
-
-#if 1
-
-    static WCHAR FaceName[]     = L"MS Gothic";
-
-    Leb->AnsiCodePage      = CP_SHIFTJIS;
-    Leb->OemCodePage       = CP_SHIFTJIS;
-    Leb->LocaleID          = 0x411;
-    Leb->DefaultCharset    = SHIFTJIS_CHARSET;
-	Leb->HookUILanguageApi = 0;
-
-#else
-
-    static WCHAR FaceName[]     = L"Microsoft YaHei";
-
-    Leb->AnsiCodePage      = CP_GB2312;
-    Leb->OemCodePage       = CP_GB2312;
-    Leb->LocaleID          = 0x804;
-    Leb->DefaultCharset    = GB2312_CHARSET;
-	Leb->HookUILanguageApi = 0;
-
-#endif
-
-    CopyStruct(Leb->DefaultFaceName, FaceName, sizeof(FaceName));
-
-    NtQuerySystemInformation(SystemCurrentTimeZoneInformation, &Leb->Timezone, sizeof(Leb->Timezone), nullptr);
-
-    Leb->Timezone.Bias = -540;
-    CopyStruct(Leb->Timezone.StandardName, StandardName, sizeof(StandardName));
-    CopyStruct(Leb->Timezone.DaylightName, DaylightName, sizeof(DaylightName));
+    ZeroMemory(Environment, sizeof(*Environment));
+    Environment->Size = sizeof(*Environment);
+    Environment->Version = LE_RUNTIME_CONFIG_VERSION;
+    Environment->AnsiCodePage = CP_SHIFTJIS;
+    Environment->OemCodePage = CP_SHIFTJIS;
+    Environment->LocaleID = 0x411;
+    Environment->FontCharset = SHIFTJIS_CHARSET;
+    Environment->RegistryMode = LE_RUNTIME_REGISTRY_MODE_NONE;
+    Environment->HookUILanguageMode = LE_RUNTIME_UI_LANGUAGE_MODE_NONE;
+    Environment->Timezone.Bias = -540;
+    CopyStruct(Environment->Timezone.StandardName, StandardName, sizeof(StandardName));
+    CopyStruct(Environment->Timezone.DaylightName, DaylightName, sizeof(DaylightName));
+    if (TimezoneCapacity != 0)
+    {
+        ULONG Length = ML_MIN(countof(Timezone), TimezoneCapacity) - 1;
+        CopyMemory(TimezoneId, Timezone, Length * sizeof(WCHAR));
+        TimezoneId[Length] = 0;
+    }
 }
 
 inline
@@ -652,6 +624,7 @@ class LeGlobalData
 protected:
     BOOLEAN Wow64 : 1;
     BOOLEAN HasWin32U : 1; //windows 10.0.14295 or higher
+    BOOLEAN AdvancedRegistryInitialized : 1;
 
     LEPEB LePeb;
 
@@ -777,9 +750,9 @@ public:
         return &LePeb;
     }
 
-    PLEB GetLeb()
+    PLE_RUNTIME_CONFIG GetEnvironment()
     {
-        return &LePeb.Leb;
+        return &LePeb.Environment;
     }
 
     VOID InitFontCharsetInfo()
@@ -790,12 +763,12 @@ public:
         DC = HookStub.StubGetDC == nullptr ? ::GetDC(nullptr) : this->GetDC(nullptr);
         GetLePeb()->OriginalCharset = GetTextCharset(DC);
 
-        if (GetLeb()->DefaultCharset > MAXBYTE)
+        if (GetEnvironment()->FontCharset > MAXBYTE)
         {
             ReleaseDC(nullptr, DC);
             return;
         }
-        lf.lfCharSet = static_cast<BYTE>(GetLeb()->DefaultCharset);
+        lf.lfCharSet = static_cast<BYTE>(GetEnvironment()->FontCharset);
         lf.lfFaceName[0] = 0;
 
         auto EnumFontCallback = [] (CONST LOGFONTW *lf, CONST TEXTMETRICW *, DWORD, LPARAM Param)
@@ -823,7 +796,9 @@ public:
 
     NTSTATUS Initialize();
     NTSTATUS UnInitialize();
-    NTSTATUS InitRegistryRedirection(PREGISTRY_REDIRECTION_ENTRY64 Entry64, ULONG_PTR Count, PVOID BaseAddress);
+    NTSTATUS InitRegistryRedirection(PREGISTRY_REDIRECTION_CONFIG Config, ULONG_PTR Count);
+    NTSTATUS InitAdvancedRegistryRedirection();
+    NTSTATUS InitRegistryRedirectionMode(ULONG Mode);
 
     VOID DllNotification(ULONG NotificationReason, PCLDR_DLL_NOTIFICATION_DATA NotificationData);
     VOID HookModule(PVOID DllBase, PCUNICODE_STRING DllName, BOOL DllLoad);

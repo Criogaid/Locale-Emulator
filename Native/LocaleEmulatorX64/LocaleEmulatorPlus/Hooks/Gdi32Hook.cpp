@@ -400,7 +400,7 @@ NTSTATUS LepGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                 Table,
                 TableSize,
                 Gdi::TT_NAME_ID_FACENAME,
-                this->GetRuntimeState()->OriginalLocaleId,
+                this->GetRuntimeState()->OriginalLocaleID,
                 &FaceName
             );
 
@@ -417,7 +417,7 @@ NTSTATUS LepGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                 Table,
                 TableSize,
                 Gdi::TT_NAME_ID_FACENAME,
-                this->GetEnvironment()->LocaleId,
+                this->GetEnvironment()->LocaleID,
                 &FaceName
             );
 
@@ -426,7 +426,7 @@ NTSTATUS LepGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                     Table,
                     TableSize,
                     Gdi::TT_NAME_ID_FULLNAME,
-                    this->GetEnvironment()->LocaleId,
+                    this->GetEnvironment()->LocaleID,
                     &FullName)
                 : Status;
 

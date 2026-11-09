@@ -1,17 +1,10 @@
 #ifndef _LOADERDLL_H_586bc656_348b_4b12_ba74_d39366b67f23_
 #define _LOADERDLL_H_586bc656_348b_4b12_ba74_d39366b67f23_
 
-#include <Windows.h>
-
-// such stupid link.exe error
-#if !defined(_M_AMD64) && !defined(_M_X64)
-extern "C" __declspec(noreturn) void __cdecl __std_terminate() {}
-#endif
-
-
 #include "../LocaleEmulatorPlus/LocaleEmulatorPlus.h"
-#define LEP_API EXTC
+#include "../../RuntimeEnvironment.h"
 
+#define LEP_API EXTC
 
 #if !LEP_LOADER_DLL
 #undef LEP_API
@@ -21,36 +14,18 @@ extern "C" __declspec(noreturn) void __cdecl __std_terminate() {}
 LEP_API
 NTSTATUS
 WINAPI
-LepCreateProcess(
-	PLEPB                    EnvironmentBlock,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine = nullptr,
-	PCWSTR                  CurrentDirectory = nullptr,
-	ULONG                   CreationFlags = 0,
-	LPSTARTUPINFOW          StartupInfo = nullptr,
-	LPPROCESS_INFORMATION ProcessInformation = nullptr,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes = nullptr,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes = nullptr,
-	PVOID                   Environment = nullptr,
-	HANDLE                  Token = nullptr
-	);
-
-LEP_API
-NTSTATUS
-WINAPI
-LepCreateProcess2(
-	PLEPB                    EnvironmentBlock,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine = nullptr,
-	PCWSTR                  CurrentDirectory = nullptr,
-	ULONG                   CreationFlags = 0,
-	LPSTARTUPINFOW          StartupInfo = nullptr,
-	LPPROCESS_INFORMATION ProcessInformation = nullptr,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes = nullptr,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes = nullptr,
-	PVOID                   Environment = nullptr,
-	HANDLE                  Token = nullptr
-	);
-
+LeCreateProcess(
+    PLE_RUNTIME_INPUT       Environment,
+    PCWSTR                  ApplicationName,
+    PWSTR                   CommandLine = nullptr,
+    PCWSTR                  CurrentDirectory = nullptr,
+    ULONG                   CreationFlags = 0,
+    LPSTARTUPINFOW          StartupInfo = nullptr,
+    LPPROCESS_INFORMATION   ProcessInformation = nullptr,
+    LPSECURITY_ATTRIBUTES   ProcessAttributes = nullptr,
+    LPSECURITY_ATTRIBUTES   ThreadAttributes = nullptr,
+    PVOID                   EnvironmentBlock = nullptr,
+    HANDLE                  Token = nullptr
+    );
 
 #endif // _LOADERDLL_H_586bc656_348b_4b12_ba74_d39366b67f23_

@@ -12,7 +12,7 @@ using namespace Mp;
 
 LCID NTAPI LeGetUserDefaultLCID()
 {
-    return LeGetGlobalData()->GetLeb()->LocaleID;
+    return LeGetGlobalData()->GetEnvironment()->LocaleID;
 }
 
 NTSTATUS LeGlobalData::HackUserDefaultLCID(PVOID Kernel32)
@@ -51,7 +51,7 @@ NTSTATUS LeGlobalData::HackUserDefaultLCID(PVOID Kernel32)
     );
 
     //if (gNlsProcessLocalCache != nullptr)
-        //*(PLCID)(((PULONG_PTR)gNlsProcessLocalCache)[2]) = GetLeb()->LocaleID;
+        //*(PLCID)(((PULONG_PTR)gNlsProcessLocalCache)[2]) = GetEnvironment()->LocaleID;
 
     return STATUS_SUCCESS;
 }
@@ -75,7 +75,7 @@ PVOID FASTCALL LeGetNamedLocaleHashNode(PWSTR LocaleName, LANGID LangId)
 
     *(PVOID *)&LCIDToLocaleName = LookupExportTable(Kernel->DllBase, KERNEL32_LCIDToLocaleName);
 
-    LocaleName[-1] = (USHORT)(LCIDToLocaleName(GlobalData->GetLeb()->LocaleID, LocaleName, 0xAC, 0) - 1);
+    LocaleName[-1] = (USHORT)(LCIDToLocaleName(GlobalData->GetEnvironment()->LocaleID, LocaleName, 0xAC, 0) - 1);
 
     return StubGetNamedLocaleHashNode(LocaleName, LangId);
 }
@@ -223,10 +223,10 @@ NTSTATUS LeSetupAnsiOemCodeHashNodes() {
 NTSTATUS LeGlobalData::HackAnsiOemCodeHashNodes() {
     PLeGlobalData GlobalData = LeGetGlobalData();
 
-    // ValidateLeb 已检查代码页范围；这两个私有 x86 PEB 字段为 USHORT。
+    // 公共运行时环境校验已检查代码页范围；这两个私有 x86 PEB 字段为 USHORT。
     PBYTE pPeb = (PBYTE)CurrentPeb();
-    *(PUSHORT)(pPeb + 0x228) = static_cast<USHORT>(GlobalData->GetLeb()->AnsiCodePage);
-    *(PUSHORT)(pPeb + 0x22a) = static_cast<USHORT>(GlobalData->GetLeb()->OemCodePage);
+    *(PUSHORT)(pPeb + 0x228) = static_cast<USHORT>(GlobalData->GetEnvironment()->AnsiCodePage);
+    *(PUSHORT)(pPeb + 0x22a) = static_cast<USHORT>(GlobalData->GetEnvironment()->OemCodePage);
 
     return LeSetupAnsiOemCodeHashNodes();
 }
@@ -239,6 +239,10 @@ NTSTATUS LeGlobalData::HookKernel32Routines(PVOID Kernel32)
     Status = this->HackUserDefaultLCID2(Kernel32);
 
     Status = this->HackAnsiOemCodeHashNodes();
+    if (this->GetEnvironment()->RegistryMode == LE_RUNTIME_REGISTRY_MODE_ADVANCED)
+    {
+        Status = this->InitAdvancedRegistryRedirection();
+    }
 
     WriteLog(L"hook k32: %p", Status);
 

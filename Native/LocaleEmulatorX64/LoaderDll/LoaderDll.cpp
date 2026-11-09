@@ -35,7 +35,7 @@ static NTSTATUS LepFillFirstDllBootstrapData(
 }
 
 static NTSTATUS LepCreateBootstrapPayload(
-    PLEPB Environment,
+    PLE_RUNTIME_INPUT Environment,
     PCWSTR DllPath,
     PLEP_BOOTSTRAP_PAYLOAD* Payload,
     PULONG PayloadSize
@@ -43,7 +43,7 @@ static NTSTATUS LepCreateBootstrapPayload(
 {
     if (Environment == nullptr || DllPath == nullptr || Payload == nullptr || PayloadSize == nullptr)
         return STATUS_INVALID_PARAMETER;
-    LEP_RUNTIME_ENVIRONMENT Resolved;
+    LE_RUNTIME_CONFIG Resolved;
     NTSTATUS Status = LepResolveEnvironment(Environment, &Resolved);
     if (NT_FAILED(Status))
         return Status;
@@ -101,18 +101,18 @@ static NTSTATUS LepCreateBootstrapPayload(
 // mapped LoadFirstDll trampoline, which restores the original bytes and runs
 // LEP initialization before continuing the loader call.
 static NTSTATUS LepCreateProcessWithHook(
-	PLEPB                   EnvironmentBlock,
-	PCWSTR                  DllPath,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine,
-	PCWSTR                  CurrentDirectory,
-	ULONG                   CreationFlags,
-	LPSTARTUPINFOW          StartupInfo,
-	LPPROCESS_INFORMATION   ProcessInformation,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes,
-	PVOID                   Environment,
-	HANDLE                  Token
+    PLE_RUNTIME_INPUT      EnvironmentBlock,
+    PCWSTR                 DllPath,
+    PCWSTR                 ApplicationName,
+    PWSTR                 CommandLine,
+    PCWSTR                CurrentDirectory,
+    ULONG                 CreationFlags,
+    LPSTARTUPINFOW        StartupInfo,
+    LPPROCESS_INFORMATION ProcessInformation,
+    LPSECURITY_ATTRIBUTES ProcessAttributes,
+    LPSECURITY_ATTRIBUTES ThreadAttributes,
+    PVOID                 Environment,
+    HANDLE                Token
 )
 {
 	PLEP_BOOTSTRAP_PAYLOAD Payload = nullptr;
@@ -236,148 +236,45 @@ FAIL_NEW_NO_LOCAL:
 }
 
 
+
 EXTC
 NTSTATUS
 NTAPI
-LepCreateProcess2(
-	PLEPB                   EnvironmentBlock,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine,
-	PCWSTR                  CurrentDirectory,
-	ULONG                   CreationFlags,
-	LPSTARTUPINFOW          StartupInfo,
-	LPPROCESS_INFORMATION   ProcessInformation,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes,
-	PVOID                   Environment,
-	HANDLE                  Token
-	)
+LeCreateProcess(
+    PLE_RUNTIME_INPUT       EnvironmentBlock,
+    PCWSTR                  ApplicationName,
+    PWSTR                   CommandLine,
+    PCWSTR                  CurrentDirectory,
+    ULONG                   CreationFlags,
+    LPSTARTUPINFOW          StartupInfo,
+    LPPROCESS_INFORMATION   ProcessInformation,
+    LPSECURITY_ATTRIBUTES   ProcessAttributes,
+    LPSECURITY_ATTRIBUTES   ThreadAttributes,
+    PVOID                   Environment,
+    HANDLE                  Token
+ )
 {
-	ULONG_PTR               Length;
-	PWSTR                   DllFullPath;
-	PLDR_MODULE             Module;
-	NTSTATUS                Status;
-	PROCESS_INFORMATION     ProcessInfo;
+    static WCHAR Dll[] = LEP_CORE_DLL_NAME;
+    PLDR_MODULE Module = FindLdrModuleByHandle(&__ImageBase);
+    if (Module == nullptr || Module->FullDllName.Length < Module->BaseDllName.Length)
+        return STATUS_DLL_INIT_FAILED;
 
-	static WCHAR Dll[] = LEP_CORE_DLL_NAME;
+    ULONG_PTR Length = Module->FullDllName.Length - Module->BaseDllName.Length;
+    PWSTR DllFullPath = (PWSTR)AllocStack(Length + sizeof(Dll));
+    CopyMemory(DllFullPath, Module->FullDllName.Buffer, Length);
+    CopyStruct(PtrAdd(DllFullPath, Length), Dll, sizeof(Dll));
 
-	Module = FindLdrModuleByHandle(&__ImageBase);
-
-	Length = Module->FullDllName.Length - Module->BaseDllName.Length;
-	DllFullPath = (PWSTR)AllocStack(Length + sizeof(Dll));
-	CopyMemory(DllFullPath, Module->FullDllName.Buffer, Length);
-	CopyStruct(PtrAdd(DllFullPath, Length), Dll, sizeof(Dll));
-
-	    Status = LepCreateProcessWithHook(
-		EnvironmentBlock,
+    return LepCreateProcessWithHook(
+        EnvironmentBlock,
         DllFullPath,
         ApplicationName,
         CommandLine,
         CurrentDirectory,
-        CreationFlags | CREATE_SUSPENDED,
+        CreationFlags,
         StartupInfo,
-        &ProcessInfo,
+        ProcessInformation,
         ProcessAttributes,
         ThreadAttributes,
-		Environment,
-		Token
-    );
-
-	if (NT_FAILED(Status))
-		return Status;
-
-	if (NT_SUCCESS(Status) && FLAG_OFF(CreationFlags, CREATE_SUSPENDED))
-		Status = NtResumeProcess(ProcessInfo.hProcess);
-
-	if (NT_FAILED(Status))
-	{
-		NtTerminateProcess(ProcessInfo.hProcess, Status);
-		NtClose(ProcessInfo.hProcess);
-		NtClose(ProcessInfo.hThread);
-	}
-	else if (ProcessInformation != nullptr)
-	{
-		*ProcessInformation = ProcessInfo;
-	}
-	else
-	{
-		NtClose(ProcessInfo.hProcess);
-		NtClose(ProcessInfo.hThread);
-	}
-
-	return Status;
-}
-
-EXTC
-NTSTATUS
-NTAPI
-LepCreateProcess(
-	PLEPB                   EnvironmentBlock,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine,
-	PCWSTR                  CurrentDirectory,
-	ULONG                   CreationFlags,
-	LPSTARTUPINFOW          StartupInfo,
-	LPPROCESS_INFORMATION   ProcessInformation,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes,
-	PVOID                   Environment,
-	HANDLE                  Token
-	)
-{
-	NTSTATUS                Status;
-	PVOID                   LepDllHandle;
-	ULONG_PTR               Length;
-	PWSTR                   DllFullPath;
-	PLDR_MODULE             Module;
-	PLEP_BOOTSTRAP_PAYLOAD  Payload;
-	ULONG                   PayloadSize;
-
-	static WCHAR Dll[] = LEP_CORE_DLL_NAME;
-
-	Module = FindLdrModuleByHandle(&__ImageBase);
-
-	Length = Module->FullDllName.Length - Module->BaseDllName.Length;
-	DllFullPath = (PWSTR)AllocStack(Length + sizeof(Dll));
-	CopyMemory(DllFullPath, Module->FullDllName.Buffer, Length);
-	CopyStruct(PtrAdd(DllFullPath, Length), Dll, sizeof(Dll));
-
-	Payload = nullptr;
-	PayloadSize = 0;
-	Status = LepCreateBootstrapPayload(EnvironmentBlock, DllFullPath, &Payload, &PayloadSize);
-	FAIL_RETURN(Status);
-
-	UNICODE_STRING DllFullPathString;
-	lep::ActiveFrame frame(LEP_LOADER_PROCESS);
-
-	frame.Data = (ULONG_PTR)Payload;
-	frame.Push();
-
-	RtlInitUnicodeString(&DllFullPathString, DllFullPath);
-
-	Status = LdrLoadDll(nullptr, nullptr, &DllFullPathString, &LepDllHandle);
-	if (frame.Data != 0)
-	{
-		FreeMemory((PVOID)frame.Data);
-		frame.Data = 0;
-	}
-	if (NT_FAILED(Status))
-	{
-		return Status;
-	}
-
-	Status = Ps::CreateProcess(
-		ApplicationName,
-		CommandLine,
-		CurrentDirectory,
-		CreationFlags,
-		StartupInfo,
-		ProcessInformation,
-		ProcessAttributes,
-		ThreadAttributes,
-		Environment,
-		Token
-		);
-
-	return Status;
+        Environment,
+        Token);
 }

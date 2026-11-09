@@ -12,17 +12,17 @@ using namespace Mp;
 
 LCID NTAPI LepGetUserDefaultLCID()
 {
-    return LepGetGlobalData()->GetEnvironment()->LocaleId;
+    return LepGetGlobalData()->GetEnvironment()->LocaleID;
 }
 
 LANGID WINAPI LepGetSystemDefaultUILanguage()
 {
-    return (LANGID)LepGetGlobalData()->GetEnvironment()->LocaleId;
+    return (LANGID)LepGetGlobalData()->GetEnvironment()->LocaleID;
 }
 
 LANGID WINAPI LepGetUserDefaultUILanguage()
 {
-    return (LANGID)LepGetGlobalData()->GetEnvironment()->LocaleId;
+    return (LANGID)LepGetGlobalData()->GetEnvironment()->LocaleID;
 }
 
 NTSTATUS LepGlobalData::HackUserDefaultLCID(PVOID Kernel32)
@@ -61,7 +61,7 @@ NTSTATUS LepGlobalData::HackUserDefaultLCID(PVOID Kernel32)
     );
 
     //if (gNlsProcessLocalCache != nullptr)
-        //*(PLCID)(((PULONG_PTR)gNlsProcessLocalCache)[2]) = GetEnvironment()->LocaleId;
+        //*(PLCID)(((PULONG_PTR)gNlsProcessLocalCache)[2]) = GetEnvironment()->LocaleID;
 
     return STATUS_SUCCESS;
 }
@@ -98,7 +98,7 @@ PVOID FASTCALL LepGetNamedLocaleHashNode(PWSTR LocaleName, LANGID LangId)
         return StubGetNamedLocaleHashNode(LocaleName, LangId);
 
     LocaleNameLength = LCIDToLocaleName(
-        GlobalData->GetEnvironment()->LocaleId,
+        GlobalData->GetEnvironment()->LocaleID,
         LocaleName,
         0xAC,
         0
@@ -117,7 +117,7 @@ NTSTATUS LepGlobalData::HackUserDefaultLCID2(PVOID Kernel32)
     PVOID GetNamedLocaleHashNode;
     PLDR_MODULE Kernel;
     API_POINTER(GetUserDefaultLCID) GetUserDefaultLCID;
-    LCID LocaleId;
+    LCID LocaleID;
     LONG Hits;
     LONG Rewrites;
     NTSTATUS Status;
@@ -160,7 +160,7 @@ NTSTATUS LepGlobalData::HackUserDefaultLCID2(PVOID Kernel32)
         return Status;
     }
 
-    LocaleId = GetUserDefaultLCID();
+    LocaleID = GetUserDefaultLCID();
     Hits = _InterlockedCompareExchange(&LepNamedLocalePrewarmHits, 0, 0);
     Rewrites = _InterlockedCompareExchange(&LepNamedLocalePrewarmRewrites, 0, 0);
     RestoreStatus = RestoreMemory(StubGetNamedLocaleHashNode);
@@ -172,7 +172,7 @@ NTSTATUS LepGlobalData::HackUserDefaultLCID2(PVOID Kernel32)
         RestoreStatus,
         (ULONG)Hits,
         (ULONG)Rewrites,
-        LocaleId
+        LocaleID
     );
 
     return RestoreStatus;

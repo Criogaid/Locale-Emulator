@@ -10,8 +10,8 @@ HFONT GetFontFromFont(PLeGlobalData GlobalData, HFONT Font)
     if (GetObjectW(Font, sizeof(LogFont), &LogFont) == 0)
         return nullptr;
 
-    // 配置入口 ValidateLeb 已拒绝无法放入 SDK BYTE 字段的字符集。
-    LogFont.lfCharSet = static_cast<BYTE>(GlobalData->GetLeb()->DefaultCharset);
+    // 公共运行时环境校验已拒绝无法放入 SDK BYTE 字段的字符集。
+    LogFont.lfCharSet = static_cast<BYTE>(GlobalData->GetEnvironment()->FontCharset);
     Font = CreateFontIndirectW(&LogFont);
 
     return Font;
@@ -355,7 +355,7 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                 Table,
                 TableSize,
                 Gdi::TT_NAME_ID_FACENAME,
-                this->GetLeb()->LocaleID,
+                this->GetEnvironment()->LocaleID,
                 &FaceName
             );
 
@@ -364,7 +364,7 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                     Table,
                     TableSize,
                     Gdi::TT_NAME_ID_FULLNAME,
-                    this->GetLeb()->LocaleID,
+                    this->GetEnvironment()->LocaleID,
                     &FullName)
                 : Status;
 
@@ -557,7 +557,7 @@ INT NTAPI LeEnumFontCallbackW(CONST LOGFONTW *lf, CONST TEXTMETRICW *TextMetricW
                 break;
             }
 
-            EnumLogFontEx->elfLogFont.lfCharSet = static_cast<BYTE>(EnumParam->GlobalData->GetLeb()->DefaultCharset);
+            EnumLogFontEx->elfLogFont.lfCharSet = static_cast<BYTE>(EnumParam->GlobalData->GetEnvironment()->FontCharset);
         }
 
         //if (wcscmp(lf->lfFaceName, L"MS Gothic") == 0) _asm int 4;
@@ -753,10 +753,10 @@ LeNtGdiHfontCreate(
 
         CopyMemory(enumlfex, EnumLogFont, SizeOfEnumLogFont);
 
-        enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet = static_cast<BYTE>(GlobalData->GetLeb()->DefaultCharset);
+        enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet = static_cast<BYTE>(GlobalData->GetEnvironment()->FontCharset);
 
         //if (GdiGetCodePage == NULL)
-        //CopyStruct(enumlfex->elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetLeb()->DefaultFaceName, LF_FACESIZE);
+        //CopyStruct(enumlfex->elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetEnvironment()->DefaultFaceName, LF_FACESIZE);
         //AllocConsole();
         //PrintConsoleW(L"%s\n", enumlfex.elfEnumLogfontEx.elfLogFont.lfFaceName);
 

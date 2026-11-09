@@ -145,20 +145,15 @@ NTSTATUS LeGlobalData::Initialize()
         LePeb = OpenOrCreateLePeb();
         if (LePeb == nullptr)
         {
-            ULONG_PTR       DefaultACPLength, DefaultLCIDLength, DefaultOEMCPLength;
-            WCHAR           DefaultACP[0x20], DefaultOEMCP[0x20], DefaultLCID[0x20];
-            PVOID           ReloadedNtdll;
-            PUNICODE_STRING FullDllName;
-            PLDR_MODULE     Ledll;
+            PLDR_MODULE Ledll;
+            PVOID ReloadedNtdll;
 
             LePeb = GetLePeb();
-
-            InitDefaultLeb(&LePeb->Leb);
-
+            InitDefaultEnvironment(&LePeb->Environment, LePeb->TimezoneId, countof(LePeb->TimezoneId));
             Ledll = FindLdrModuleByHandle(&__ImageBase);
-            if (Ledll)
+            if (Ledll != nullptr)
             {
-                FullDllName = &Ledll->FullDllName;
+                PUNICODE_STRING FullDllName = &Ledll->FullDllName;
                 CopyMemory(LePeb->LeDllFullPath, FullDllName->Buffer, FullDllName->Length + sizeof(WCHAR));
                 CopyMemory(LePeb->LeDllDirPath, FullDllName->Buffer,
                     FullDllName->Length + sizeof(WCHAR) - Ledll->BaseDllName.Length);
@@ -168,54 +163,46 @@ NTSTATUS LeGlobalData::Initialize()
             Status = LoadPeImage(Ntdll->FullDllName.Buffer, &ReloadedNtdll, nullptr, LOAD_PE_IGNORE_RELOC);
             if (NT_SUCCESS(Status))
             {
-                PVOID LdrLoadDllAddress;
-
-                LdrLoadDllAddress = LookupExportTable(ReloadedNtdll, NTDLL_LdrLoadDll);
+                PVOID LdrLoadDllAddress = LookupExportTable(ReloadedNtdll, NTDLL_LdrLoadDll);
                 LePeb->LdrLoadDllAddress = PtrAdd(LdrLoadDllAddress, PtrOffset(Ntdll->DllBase, ReloadedNtdll));
                 CopyMemory(LePeb->LdrLoadDllBackup, LdrLoadDllAddress, LDR_LOAD_DLL_BACKUP_SIZE);
                 LePeb->LdrLoadDllBackupSize = LDR_LOAD_DLL_BACKUP_SIZE;
-
                 UnloadPeImage(ReloadedNtdll);
             }
-
-            DefaultACPLength    = (_snwprintf(DefaultACP, countof(DefaultACP), L"%d", LePeb->Leb.AnsiCodePage) + 1) * sizeof(WCHAR);
-            DefaultOEMCPLength  = (_snwprintf(DefaultOEMCP, countof(DefaultOEMCP), L"%d", LePeb->Leb.OemCodePage) + 1) * sizeof(WCHAR);
-            DefaultLCIDLength   = (_snwprintf(DefaultLCID, countof(DefaultLCID), L"%d", LePeb->Leb.LocaleID) + 1) * sizeof(WCHAR);
-
-            REGISTRY_REDIRECTION_ENTRY64 *Entry, Entries[] =
-            {
-                {
-                    { (ULONG64)HKEY_LOCAL_MACHINE, USTR64(REGPATH_CODEPAGE), USTR64(REGKEY_ACP), REG_SZ, },
-                    { (ULONG64)HKEY_LOCAL_MACHINE, USTR64(REGPATH_CODEPAGE), USTR64(REGKEY_ACP), REG_SZ, DefaultACP, DefaultACPLength },
-                },
-                {
-                    { (ULONG64)HKEY_LOCAL_MACHINE, USTR64(REGPATH_CODEPAGE), USTR64(REGKEY_OEMCP), REG_SZ, },
-                    { (ULONG64)HKEY_LOCAL_MACHINE, USTR64(REGPATH_CODEPAGE), USTR64(REGKEY_OEMCP), REG_SZ, DefaultOEMCP, DefaultOEMCPLength },
-                },
-                {
-                    { (ULONG64)HKEY_LOCAL_MACHINE, USTR64(REGPATH_LANGUAGE), USTR64(REGKEY_DEFAULT_LANGUAGE), REG_SZ, },
-                    { (ULONG64)HKEY_LOCAL_MACHINE, USTR64(REGPATH_LANGUAGE), USTR64(REGKEY_DEFAULT_LANGUAGE), REG_SZ, DefaultLCID, DefaultLCIDLength },
-                },
-            };
-
-            Status = this->InitRegistryRedirection(Entries, countof(Entries), nullptr);
         }
         else
         {
-            Status = ValidateLeb(LePeb->Leb);
-            if (NT_SUCCESS(Status) && LePeb->Leb.NumberOfRegistryRedirectionEntries > MAXULONG_PTR / sizeof(REGISTRY_REDIRECTION_ENTRY64))
-                Status = STATUS_INTEGER_OVERFLOW;
+            if (LePeb->Environment.Size != sizeof(LePeb->Environment) ||
+                LePeb->Environment.Version != LE_RUNTIME_CONFIG_VERSION ||
+                LePeb->Environment.AnsiCodePage > 0xFFFFu ||
+                LePeb->Environment.OemCodePage > 0xFFFFu ||
+                LePeb->Environment.FontCharset > 0xFFu ||
+                LePeb->Environment.RegistryMode > LE_RUNTIME_REGISTRY_MODE_ADVANCED ||
+                LePeb->Environment.HookUILanguageMode > LE_RUNTIME_UI_LANGUAGE_MODE_ADVANCED)
+            {
+                Status = STATUS_INVALID_PARAMETER;
+            }
+            else
+            {
+                Status = ResolveRuntimeTimeZone(LePeb->TimezoneId, &LePeb->Environment.Timezone);
+                if (NT_SUCCESS(Status) && !LeValidateRuntimeConfig(&LePeb->Environment))
+                    Status = STATUS_INVALID_PARAMETER;
+            }
             if (NT_SUCCESS(Status))
             {
                 *GetLePeb() = *LePeb;
-                Status = this->InitRegistryRedirection(LePeb->Leb.RegistryReplacement,
-                    static_cast<ULONG_PTR>(LePeb->Leb.NumberOfRegistryRedirectionEntries), &LePeb->Leb);
+                GetLePeb()->Section = nullptr;
             }
-
             NtClose(LePeb->Section);
             CloseLePeb(LePeb);
             FAIL_RETURN(Status);
         }
+
+        Status = this->InitRegistryRedirectionMode(GetEnvironment()->RegistryMode);
+        FAIL_RETURN(Status);
+        if (IsLoader)
+            break;
+
 
         if (IsLoader)
             break;
@@ -259,17 +246,17 @@ NTSTATUS LeGlobalData::Initialize()
         }
         SCOPE_EXIT_END;
 
-        Status = GetNlsFile(&NlsFileName, GetLeb()->AnsiCodePage, REGPATH_CODEPAGE);
+        Status = GetNlsFile(&NlsFileName, GetEnvironment()->AnsiCodePage, REGPATH_CODEPAGE);
         FAIL_RETURN(Status);
 
-        Status = GetNlsFile(&OemNlsFileName, GetLeb()->OemCodePage, REGPATH_CODEPAGE);
+        Status = GetNlsFile(&OemNlsFileName, GetEnvironment()->OemCodePage, REGPATH_CODEPAGE);
         FAIL_RETURN(Status);
 
         // Windows 10 1803 removed all keys under "HKLM\SYSTEM\CurrentControlSet\Control\Nls\Language".
         // Since the value of all keys are "l_intl.nls" since Windows XP, 
         // we suppose that MS is not going to change it in the near future.
         // 
-        //Status = GetLangFile(&LangFileName, GetLeb()->LocaleID, REGPATH_LANGUAGE);
+        //Status = GetLangFile(&LangFileName, GetEnvironment()->LocaleID, REGPATH_LANGUAGE);
         //FAIL_RETURN(Status);
         RtlCreateUnicodeString(&LangFileName, L"l_intl.nls");
 
@@ -353,38 +340,30 @@ NTSTATUS LeGlobalData::Initialize()
     return Status;
 }
 
-NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_ENTRY64 Entry64, ULONG_PTR Count, PVOID BaseAddress)
+NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_CONFIG Config, ULONG_PTR Count)
 {
-    NTSTATUS    Status;
-    PLEPEB      LePeb;
+    NTSTATUS Status;
     PREGISTRY_REDIRECTION_ENTRY Entry;
+    PLEPEB LePeb;
 
+    if (Config == nullptr && Count != 0)
+        return STATUS_INVALID_PARAMETER;
     if (Count == 0)
         return STATUS_SUCCESS;
 
     LePeb = this->GetLePeb();
-
-#pragma push_macro("USTR64ToUSTR")
-#undef USTR64ToUSTR
-#define USTR64ToUSTR(ustr64) UNICODE_STRING({ ustr64.Length, ustr64.MaximumLength, PtrAdd(ustr64.Buffer, BaseAddress) });
-
     REGISTRY_REDIRECTION_ENTRY LocalEntry;
-
-    FOR_EACH(Entry64, Entry64, Count)
+    FOR_EACH(Config, Config, Count)
     {
-        ULONG_PTR       LastIndex;
-        HANDLE          OriginalKey, RedirectedKey;
-        UNICODE_STRING  KeyFullPath;
+        ULONG_PTR LastIndex;
+        HANDLE OriginalKey = nullptr, RedirectedKey = nullptr;
+        UNICODE_STRING KeyFullPath;
 
-        OriginalKey     = nullptr;
-        RedirectedKey   = nullptr;
-
-        Status = Reg::OpenKey(&OriginalKey, (HANDLE)Entry64->Original.Root, KEY_QUERY_VALUE, PtrAdd(Entry64->Original.SubKey.Buffer, BaseAddress));
+        Status = Reg::OpenKey(&OriginalKey, Config->Original.Root, KEY_QUERY_VALUE, Config->Original.SubKey);
         FAIL_CONTINUE(Status);
-
-        if (Entry64->Redirected.Root != NULL)
+        if (Config->Redirected.Root != nullptr)
         {
-            Status = Reg::OpenKey(&RedirectedKey, (HANDLE)Entry64->Redirected.Root, KEY_QUERY_VALUE, PtrAdd(Entry64->Redirected.SubKey.Buffer, BaseAddress));
+            Status = Reg::OpenKey(&RedirectedKey, Config->Redirected.Root, KEY_QUERY_VALUE, Config->Redirected.SubKey);
             if (NT_FAILED(Status))
             {
                 Reg::CloseKeyHandle(OriginalKey);
@@ -395,7 +374,6 @@ NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_ENTRY64 Ent
         this->RegistryRedirectionEntry.Add(LocalEntry);
         LastIndex = this->RegistryRedirectionEntry.GetSize() - 1;
         Entry = &this->RegistryRedirectionEntry[LastIndex];
-
         Status = QueryRegKeyFullPath(OriginalKey, &KeyFullPath);
         Reg::CloseKeyHandle(OriginalKey);
         if (NT_FAILED(Status))
@@ -404,7 +382,6 @@ NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_ENTRY64 Ent
             this->RegistryRedirectionEntry.Remove(LastIndex);
             continue;
         }
-
         Entry->Original.FullPath = KeyFullPath;
         RtlFreeUnicodeString(&KeyFullPath);
 
@@ -417,42 +394,129 @@ NTSTATUS LeGlobalData::InitRegistryRedirection(PREGISTRY_REDIRECTION_ENTRY64 Ent
                 this->RegistryRedirectionEntry.Remove(LastIndex);
                 continue;
             }
-
             Entry->Redirected.FullPath = KeyFullPath;
             RtlFreeUnicodeString(&KeyFullPath);
         }
 
-        Entry->Original.Root        = (HKEY)Entry64->Original.Root;
-        Entry->Original.SubKey      = USTR64ToUSTR(Entry64->Original.SubKey);
-        Entry->Original.ValueName   = USTR64ToUSTR(Entry64->Original.ValueName);
-        Entry->Original.DataType    = Entry64->Original.DataType;
-        Entry->Original.Data        = nullptr;
-        Entry->Original.DataSize    = 0;
+        Entry->Original.Root = Config->Original.Root;
+        Entry->Original.SubKey = Config->Original.SubKey;
+        Entry->Original.ValueName = Config->Original.ValueName;
+        Entry->Original.DataType = Config->Original.DataType;
+        Entry->Original.Data = nullptr;
+        Entry->Original.DataSize = 0;
+        Entry->Redirected.Root = Config->Redirected.Root;
+        Entry->Redirected.SubKey = Config->Redirected.SubKey;
+        Entry->Redirected.ValueName = Config->Redirected.ValueName;
+        Entry->Redirected.DataType = Config->Redirected.DataType;
+        Entry->Redirected.Data = nullptr;
+        Entry->Redirected.DataSize = 0;
 
-        Entry->Redirected.Root      = (HKEY)Entry64->Redirected.Root;
-        Entry->Redirected.SubKey    = USTR64ToUSTR(Entry64->Redirected.SubKey);
-        Entry->Redirected.ValueName = USTR64ToUSTR(Entry64->Redirected.ValueName);
-        Entry->Redirected.DataType  = Entry64->Redirected.DataType;
-        Entry->Redirected.Data      = nullptr;
-        Entry->Redirected.DataSize  = 0;
-
-        if (Entry64->Redirected.Data != nullptr && Entry64->Redirected.DataSize != 0)
+        if (Config->Redirected.Data != nullptr && Config->Redirected.DataSize != 0)
         {
-            Entry->Redirected.DataSize = (ULONG_PTR)Entry64->Redirected.DataSize;
+            Entry->Redirected.DataSize = Config->Redirected.DataSize;
             Entry->Redirected.Data = AllocateMemoryP(Entry->Redirected.DataSize);
             if (Entry->Redirected.Data == nullptr)
             {
                 this->RegistryRedirectionEntry.Remove(LastIndex);
                 continue;
             }
-
-            CopyMemory(Entry->Redirected.Data, PtrAdd(Entry64->Redirected.Data, BaseAddress), Entry->Redirected.DataSize);
+            CopyMemory(Entry->Redirected.Data, Config->Redirected.Data, Entry->Redirected.DataSize);
         }
     }
-
-#pragma pop_macro("USTR64ToUSTR")
-
+    UNREFERENCED_PARAMETER(LePeb);
     return STATUS_SUCCESS;
+}
+
+NTSTATUS LeGlobalData::InitRegistryRedirectionMode(ULONG Mode)
+{
+    NTSTATUS Status;
+    if (Mode > LE_RUNTIME_REGISTRY_MODE_ADVANCED)
+        return STATUS_INVALID_PARAMETER;
+    if (Mode == LE_RUNTIME_REGISTRY_MODE_NONE)
+        return STATUS_SUCCESS;
+
+    WCHAR Acp[16] = {}, Oemcp[16] = {}, Language[16] = {};
+    const ULONG AcpLength = (ULONG)(_snwprintf(Acp, countof(Acp), L"%u", GetEnvironment()->AnsiCodePage) + 1) * sizeof(WCHAR);
+    const ULONG OemcpLength = (ULONG)(_snwprintf(Oemcp, countof(Oemcp), L"%u", GetEnvironment()->OemCodePage) + 1) * sizeof(WCHAR);
+    const ULONG LanguageLength = (ULONG)(_snwprintf(Language, countof(Language), L"%04X", GetEnvironment()->LocaleID & 0xFFFFu) + 1) * sizeof(WCHAR);
+    const ULONG Hklm = (ULONG)(ULONG_PTR)HKEY_LOCAL_MACHINE;
+
+    REGISTRY_REDIRECTION_CONFIG Entries[8] = {};
+    auto SetEntry = [](REGISTRY_REDIRECTION_CONFIG& Entry, HKEY Root, PCWSTR SubKey, PCWSTR ValueName,
+                        PVOID Data, ULONG_PTR DataSize, ULONG DataType)
+    {
+        Entry.Original.Root = Root;
+        Entry.Original.SubKey = SubKey;
+        Entry.Original.ValueName = ValueName;
+        Entry.Original.DataType = DataType;
+        Entry.Original.Data = nullptr;
+        Entry.Original.DataSize = 0;
+        Entry.Redirected.Root = Root;
+        Entry.Redirected.SubKey = SubKey;
+        Entry.Redirected.ValueName = ValueName;
+        Entry.Redirected.DataType = DataType;
+        Entry.Redirected.Data = Data;
+        Entry.Redirected.DataSize = DataSize;
+    };
+    SetEntry(Entries[0], (HKEY)(ULONG_PTR)Hklm, REGPATH_LANGUAGE, REGKEY_INSTALL_LANGUAGE, Language, LanguageLength, REG_SZ);
+    SetEntry(Entries[1], (HKEY)(ULONG_PTR)Hklm, REGPATH_LANGUAGE, REGKEY_DEFAULT_LANGUAGE, Language, LanguageLength, REG_SZ);
+    SetEntry(Entries[2], (HKEY)(ULONG_PTR)Hklm, REGPATH_CODEPAGE, REGKEY_OEMCP, Oemcp, OemcpLength, REG_SZ);
+    SetEntry(Entries[3], (HKEY)(ULONG_PTR)Hklm, REGPATH_CODEPAGE, REGKEY_ACP, Acp, AcpLength, REG_SZ);
+
+    Status = InitRegistryRedirection(Entries, 4);
+    return Status;
+}
+
+NTSTATUS LeGlobalData::InitAdvancedRegistryRedirection()
+{
+    if (AdvancedRegistryInitialized)
+        return STATUS_SUCCESS;
+
+    PLDR_MODULE Kernel32 = GetKernel32Ldr();
+    if (Kernel32 == nullptr)
+        return STATUS_DLL_NOT_FOUND;
+    typedef INT(WINAPI* LCID_TO_LOCALE_NAME)(LCID, LPWSTR, INT, DWORD);
+    auto Convert = (LCID_TO_LOCALE_NAME)LookupExportTable(Kernel32->DllBase, KERNEL32_LCIDToLocaleName);
+    if (Convert == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    WCHAR LocaleHex[9] = {}, LocaleName[LOCALE_NAME_MAX_LENGTH] = {};
+    static const WCHAR Hex[] = L"0123456789ABCDEF";
+    for (ULONG Index = 0; Index != 8; ++Index)
+        LocaleHex[Index] = Hex[(GetEnvironment()->LocaleID >> ((7 - Index) * 4)) & 0xF];
+    const INT LocaleNameLength = Convert(GetEnvironment()->LocaleID, LocaleName, countof(LocaleName), 0);
+    if (LocaleNameLength <= 1)
+        return STATUS_INVALID_PARAMETER;
+    const ULONG LocaleNameBytes = (ULONG)LocaleNameLength * sizeof(WCHAR);
+    const ULONG PreferredBytes = LocaleNameBytes + sizeof(WCHAR);
+    const HKEY Hkcu = HKEY_CURRENT_USER;
+
+    REGISTRY_REDIRECTION_CONFIG Entries[4] = {};
+    auto SetEntry = [](REGISTRY_REDIRECTION_CONFIG& Entry, HKEY Root, PCWSTR SubKey, PCWSTR ValueName,
+                        PVOID Data, ULONG_PTR DataSize, ULONG DataType)
+    {
+        Entry.Original.Root = Root;
+        Entry.Original.SubKey = SubKey;
+        Entry.Original.ValueName = ValueName;
+        Entry.Original.DataType = DataType;
+        Entry.Original.Data = nullptr;
+        Entry.Original.DataSize = 0;
+        Entry.Redirected.Root = Root;
+        Entry.Redirected.SubKey = SubKey;
+        Entry.Redirected.ValueName = ValueName;
+        Entry.Redirected.DataType = DataType;
+        Entry.Redirected.Data = Data;
+        Entry.Redirected.DataSize = DataSize;
+    };
+    SetEntry(Entries[0], Hkcu, L"Control Panel\\International", L"Locale", LocaleHex, sizeof(LocaleHex), REG_SZ);
+    SetEntry(Entries[1], Hkcu, L"Control Panel\\International", L"LocaleName", LocaleName, LocaleNameBytes, REG_SZ);
+    SetEntry(Entries[2], Hkcu, L"Control Panel\\Desktop", L"PreferredUILanguages", LocaleName, PreferredBytes, REG_MULTI_SZ);
+    SetEntry(Entries[3], Hkcu, L"Control Panel\\Desktop\\MuiCached", L"MachinePreferredUILanguages", LocaleName, PreferredBytes, REG_MULTI_SZ);
+
+    NTSTATUS Status = InitRegistryRedirection(Entries, countof(Entries));
+    if (NT_SUCCESS(Status))
+        AdvancedRegistryInitialized = TRUE;
+    return Status;
 }
 
 typedef struct

@@ -137,11 +137,7 @@ namespace ManagedRegression
                 "Missing DLL check unexpectedly contains LoaderDll.dll.");
             var wrapper = Activator.CreateInstance(type, true);
             type.GetProperty("ApplicationName", Instance).SetValue(wrapper, "missing-native-boundary", null);
-            type.GetProperty("NumberOfRegistryRedirectionEntries", Instance).SetValue(wrapper, 1, null);
-            const int payloadCharacters = 262144;
-            Check((bool)Invoke(type.GetMethod("AddRegistryRedirectEntry", Instance), wrapper,
-                "HKEY_CURRENT_USER", "Test", "Value", "REG_SZ", new string('x', payloadCharacters)),
-                "Product registry serializer rejected the allocation test payload.");
+            type.GetProperty("RegistryMode", Instance).SetValue(wrapper, (uint) 1, null);
             var start = type.GetMethod("Start", Instance);
             Action call = () =>
             {
@@ -154,7 +150,7 @@ namespace ManagedRegression
             var before = PrivateBytes();
             for (var iteration = 0; iteration < AllocationIterations; iteration++) call();
             var retained = PrivateBytes() - before;
-            // 漏掉 FreeHGlobal 会保留约 50 MiB；16 MiB 留给 CLR 堆提交和异常处理波动。
+            // 漏掉 FreeHGlobal 会保留大量原生内存；16 MiB 留给 CLR 堆提交和异常处理波动。
             const long maxRetainedBytes = 16L * 1024 * 1024;
             Console.WriteLine("Missing DLL x" + AllocationIterations + " private byte delta: " + retained);
             Check(retained < maxRetainedBytes, "Unmanaged launch allocations were retained after missing DLL errors.");

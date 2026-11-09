@@ -14,6 +14,7 @@
     <ClCompile Include="Hooks\NtdllHook.cpp" />
     <ClCompile Include="Hooks\User32Hook.cpp" />
     <ClCompile Include="LocaleEmulator.cpp" />
+    <ClCompile Include="RuntimeEnvironment.cpp" />
     <ClCompile Include="ml.cpp" />
     <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="Utility\Utility.cpp" />

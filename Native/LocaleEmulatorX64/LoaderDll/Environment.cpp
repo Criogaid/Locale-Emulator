@@ -2,12 +2,13 @@
 
 namespace
 {
-    struct LegacyEnvironmentV3
+    bool StringTerminated(PCWSTR String, ULONG Capacity)
     {
-        LEP_RUNTIME_ENVIRONMENT Base;
-        WCHAR TimezoneId[128];
-    };
-    static_assert(sizeof(LegacyEnvironmentV3) == 460, "Legacy v3 layout mismatch");
+        for (ULONG Index = 0; Index != Capacity; ++Index)
+            if (String[Index] == 0)
+                return true;
+        return false;
+    }
 
     struct RegistryTimeZone
     {
@@ -19,9 +20,9 @@ namespace
     };
     static_assert(sizeof(RegistryTimeZone) == 44, "Registry TZI layout mismatch");
 
-    bool ValidTimezoneId(PCWSTR Id, ULONG Capacity, bool AllowEmpty)
+    bool ValidTimezoneId(PCWSTR Id, ULONG Capacity)
     {
-        if (!AllowEmpty && Id[0] == 0)
+        if (Id[0] == 0)
             return false;
         for (ULONG Index = 0; Index != Capacity; ++Index)
         {
@@ -37,11 +38,14 @@ namespace
     {
         static const WCHAR Prefix[] = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Time Zones\\";
         WCHAR Path[countof(Prefix) + 128];
-        CopyMemory(Path, Prefix, sizeof(Prefix) - sizeof(WCHAR));
-        ULONG Length = (ULONG)StrLengthW(Id);
-        CopyMemory(Path + countof(Prefix) - 1, Id, (Length + 1) * sizeof(WCHAR));
         UNICODE_STRING Name;
         OBJECT_ATTRIBUTES Attributes;
+        ULONG Length = (ULONG)StrLengthW(Id);
+
+        if (Length >= 128)
+            return STATUS_NAME_TOO_LONG;
+        CopyMemory(Path, Prefix, sizeof(Prefix) - sizeof(WCHAR));
+        CopyMemory(Path + countof(Prefix) - 1, Id, (Length + 1) * sizeof(WCHAR));
         RtlInitUnicodeString(&Name, Path);
         InitializeObjectAttributes(&Attributes, &Name, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
         return NtOpenKey(Key, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &Attributes);
@@ -53,12 +57,14 @@ namespace
         auto Value = (PKEY_VALUE_PARTIAL_INFORMATION)Storage;
         UNICODE_STRING ValueName;
         ULONG ResultLength = 0;
+        ULONG Header = FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data);
+        NTSTATUS Status;
+
         RtlInitUnicodeString(&ValueName, Name);
-        NTSTATUS Status = NtQueryValueKey(Key, &ValueName, KeyValuePartialInformation,
-                                         Value, sizeof(Storage), &ResultLength);
+        Status = NtQueryValueKey(Key, &ValueName, KeyValuePartialInformation,
+            Value, sizeof(Storage), &ResultLength);
         if (NT_FAILED(Status))
             return Status;
-        ULONG Header = FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data);
         if (ResultLength < Header || Value->DataLength > ResultLength - Header)
             return STATUS_INFO_LENGTH_MISMATCH;
         if (Value->Type != Type)
@@ -70,50 +76,71 @@ namespace
         return STATUS_SUCCESS;
     }
 
-    NTSTATUS ReadName(HANDLE Key, PCWSTR Value, WCHAR (&Name)[32])
+    NTSTATUS ReadName(HANDLE Key, PCWSTR ValueName, WCHAR (&Name)[32])
     {
-        ZeroMemory(Name, sizeof(Name));
         ULONG Length = 0;
-        NTSTATUS Status = ReadValue(Key, Value, REG_SZ, Name, sizeof(Name), &Length);
+        NTSTATUS Status;
+
+        ZeroMemory(Name, sizeof(Name));
+        Status = ReadValue(Key, ValueName, REG_SZ, Name, sizeof(Name), &Length);
         if (NT_FAILED(Status))
             return Status;
-        if ((Length & 1) != 0 || !LepStringTerminated(Name, countof(Name)))
+        if ((Length & (sizeof(WCHAR) - 1)) != 0 || !StringTerminated(Name, countof(Name)))
             return STATUS_INVALID_PARAMETER;
         return STATUS_SUCCESS;
     }
 
-    TIME_FIELDS ConvertTransition(const SYSTEMTIME& Date)
+    LE_RUNTIME_TIME_FIELDS ConvertTransition(const SYSTEMTIME& Date)
     {
-        TIME_FIELDS Fields = {};
-        Fields.Year = Date.wYear;
-        Fields.Month = Date.wMonth;
-        Fields.Day = Date.wDay;
-        Fields.Hour = Date.wHour;
-        Fields.Minute = Date.wMinute;
-        Fields.Second = Date.wSecond;
-        Fields.Milliseconds = Date.wMilliseconds;
-        Fields.Weekday = Date.wDayOfWeek;
+        LE_RUNTIME_TIME_FIELDS Fields = {};
+        Fields.Year = (SHORT)Date.wYear;
+        Fields.Month = (SHORT)Date.wMonth;
+        Fields.Day = (SHORT)Date.wDay;
+        Fields.Hour = (SHORT)Date.wHour;
+        Fields.Minute = (SHORT)Date.wMinute;
+        Fields.Second = (SHORT)Date.wSecond;
+        Fields.Milliseconds = (SHORT)Date.wMilliseconds;
+        Fields.Weekday = (SHORT)Date.wDayOfWeek;
         return Fields;
     }
 
-    void NormalizeTokyoName(PRTL_TIME_ZONE_INFORMATION Zone)
+    void NormalizeTokyoName(PLE_RUNTIME_TIME_ZONE_INFORMATION Zone)
     {
-        static const WCHAR Name[] = L"東京標準時";
+        static const WCHAR Name[] = L"东京标准时";
         ZeroMemory(Zone->StandardName, sizeof(Zone->StandardName));
         ZeroMemory(Zone->DaylightName, sizeof(Zone->DaylightName));
         CopyMemory(Zone->StandardName, Name, sizeof(Name));
         CopyMemory(Zone->DaylightName, Name, sizeof(Name));
     }
 
-    NTSTATUS ResolveTimeZone(const LEPB* Input, PRTL_TIME_ZONE_INFORMATION Zone)
+    void CopyBoundedName(PWSTR Destination, ULONG Capacity, PCWSTR Source, ULONG Bytes)
+    {
+        ULONG Characters = Bytes / sizeof(WCHAR);
+        ULONG Limit = Capacity - 1;
+
+        if (Characters > Limit)
+            Characters = Limit;
+        if (Characters != 0 && Source[Characters - 1] >= 0xD800 && Source[Characters - 1] <= 0xDBFF)
+            --Characters;
+        ZeroMemory(Destination, Capacity * sizeof(WCHAR));
+        CopyMemory(Destination, Source, Characters * sizeof(WCHAR));
+    }
+
+    NTSTATUS ResolveTimeZone(
+        PCWSTR Id,
+        PLE_RUNTIME_TIME_ZONE_INFORMATION Zone,
+        PCWSTR StandardNameOverride,
+        ULONG StandardNameBytes,
+        PCWSTR DaylightNameOverride,
+        ULONG DaylightNameBytes)
     {
         HANDLE Key = nullptr;
-        NTSTATUS Status = OpenTimeZone(Input->TimezoneId, &Key);
+        RegistryTimeZone Tzi = {};
+        ULONG Length = 0;
+        NTSTATUS Status = OpenTimeZone(Id, &Key);
         if (NT_FAILED(Status))
             return Status;
 
-        RegistryTimeZone Tzi = {};
-        ULONG Length = 0;
         Status = ReadValue(Key, L"TZI", REG_BINARY, &Tzi, sizeof(Tzi), &Length);
         if (NT_SUCCESS(Status) && Length != sizeof(Tzi))
             Status = STATUS_INFO_LENGTH_MISMATCH;
@@ -130,72 +157,50 @@ namespace
         Zone->DaylightBias = Tzi.DaylightBias;
         Zone->StandardStart = ConvertTransition(Tzi.StandardDate);
         Zone->DaylightStart = ConvertTransition(Tzi.DaylightDate);
-        if (StrICompareW(Input->TimezoneId, L"Tokyo Standard Time") == 0)
+        if (StrICompareW(Id, L"Tokyo Standard Time") == 0)
             NormalizeTokyoName(Zone);
-        if (Input->StandardNameOverride[0] != 0)
-            CopyMemory(Zone->StandardName, Input->StandardNameOverride, sizeof(Zone->StandardName));
-        if (Input->DaylightNameOverride[0] != 0)
-            CopyMemory(Zone->DaylightName, Input->DaylightNameOverride, sizeof(Zone->DaylightName));
+        if (StandardNameBytes != 0)
+            CopyBoundedName(Zone->StandardName, countof(Zone->StandardName), StandardNameOverride, StandardNameBytes);
+        if (DaylightNameBytes != 0)
+            CopyBoundedName(Zone->DaylightName, countof(Zone->DaylightName), DaylightNameOverride, DaylightNameBytes);
         return STATUS_SUCCESS;
     }
 }
 
-NTSTATUS LepResolveEnvironment(const void* Input, PLEP_RUNTIME_ENVIRONMENT Output)
+NTSTATUS LepResolveEnvironment(const void* Input, PLE_RUNTIME_CONFIG Output)
 {
-    if (Input == nullptr || Output == nullptr)
-        return STATUS_INVALID_PARAMETER;
-    const ULONG* Header = (const ULONG*)Input;
-    ULONG Size = Header[0];
-    if (Size < 2 * sizeof(ULONG))
-        return STATUS_INVALID_PARAMETER;
-    ULONG Version = Header[1];
-    LEP_RUNTIME_ENVIRONMENT Resolved = {};
+    const BYTE* Base = (const BYTE*)Input;
+    const LE_RUNTIME_INPUT* Environment;
+    LE_RUNTIME_CONFIG Resolved = {};
+    NTSTATUS Status;
 
-    if (Version == LEP_ENVIRONMENT_VERSION && Size == sizeof(LEPB))
-    {
-        auto Environment = (const LEPB*)Input;
-        if (!ValidTimezoneId(Environment->TimezoneId, countof(Environment->TimezoneId), false) ||
-            !LepStringTerminated(Environment->StandardNameOverride, countof(Environment->StandardNameOverride)) ||
-            !LepStringTerminated(Environment->DaylightNameOverride, countof(Environment->DaylightNameOverride)))
-            return STATUS_INVALID_PARAMETER;
-        CopyMemory(&Resolved.AnsiCodePage, &Environment->AnsiCodePage, 6 * sizeof(ULONG));
-        if (Resolved.RegistryRedirectionMode > LEP_REGISTRY_REDIRECTION_MODE_MAX ||
-            Resolved.HookUILanguageMode > LEP_UI_LANGUAGE_MODE_MAX)
-            return STATUS_INVALID_PARAMETER;
-        NTSTATUS Status = ResolveTimeZone(Environment, &Resolved.Timezone);
-        if (NT_FAILED(Status))
-            return Status;
-    }
-    else if ((Version == 2 && Size == sizeof(LEP_RUNTIME_ENVIRONMENT)) ||
-             (Version == 3 && Size == sizeof(LegacyEnvironmentV3)))
-    {
-        CopyMemory(&Resolved, Input, sizeof(Resolved));
-        if (Version == 3)
-        {
-            auto Environment = (const LegacyEnvironmentV3*)Input;
-            if (!ValidTimezoneId(Environment->TimezoneId, countof(Environment->TimezoneId), true))
-                return STATUS_INVALID_PARAMETER;
-            if (Environment->TimezoneId[0] != 0)
-            {
-                bool Tokyo = StrICompareW(Environment->TimezoneId, L"Tokyo Standard Time") == 0;
-                if (Tokyo && (Resolved.Timezone.Bias != -540 || Resolved.Timezone.StandardBias != 0))
-                    return STATUS_INVALID_PARAMETER;
-                HANDLE Key = nullptr;
-                NTSTATUS Status = OpenTimeZone(Environment->TimezoneId, &Key);
-                if (NT_FAILED(Status))
-                    return Status;
-                NtClose(Key);
-                if (Tokyo)
-                    NormalizeTokyoName(&Resolved.Timezone);
-            }
-        }
-    }
-    else
+    if (Output == nullptr || !LeValidateRuntimeInput(Input))
         return STATUS_INVALID_PARAMETER;
+
+    Environment = (const LE_RUNTIME_INPUT*)Input;
+    if (Environment->RegistryEntriesCount != 0)
+        return STATUS_NOT_SUPPORTED;
 
     Resolved.Size = sizeof(Resolved);
-    Resolved.Version = LEP_RUNTIME_ENVIRONMENT_VERSION;
-    if (!LepValidateRuntimeEnvironment(&Resolved))
+    Resolved.Version = LE_RUNTIME_CONFIG_VERSION;
+    Resolved.AnsiCodePage = Environment->AnsiCodePage;
+    Resolved.OemCodePage = Environment->OemCodePage;
+    Resolved.LocaleID = Environment->LocaleID;
+    Resolved.FontCharset = Environment->FontCharset;
+    Resolved.RegistryMode = Environment->RegistryMode;
+    Resolved.HookUILanguageMode = Environment->HookUILanguageMode;
+
+    Status = ResolveTimeZone(
+        (PCWSTR)(Base + Environment->TimezoneIdOffset),
+        &Resolved.Timezone,
+        (PCWSTR)(Base + Environment->StandardNameOffset),
+        Environment->StandardNameLength,
+        (PCWSTR)(Base + Environment->DaylightNameOffset),
+        Environment->DaylightNameLength);
+    if (NT_FAILED(Status))
+        return Status;
+
+    if (!LeValidateRuntimeConfig(&Resolved))
         return STATUS_INVALID_PARAMETER;
     *Output = Resolved;
     return STATUS_SUCCESS;

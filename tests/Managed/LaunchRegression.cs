@@ -74,124 +74,90 @@ namespace ManagedRegression
 
         internal static void SerializedLanguageRulesUseWindowsLanguageKey()
         {
-            foreach (var culture in new[] { CultureInfo.GetCultureInfo("ja-JP"), CultureInfo.GetCultureInfo("de-DE_phoneb") })
-            foreach (var advanced in new[] { false, true })
-            {
-                var entries = (Array)Invoke(ProductType("LEProc.RegistryEntriesLoader").GetMethod("GetRegistryEntries", Static), null, advanced);
-                var redirectorType = ProductType("LEProc.LERegistryRedirector");
-                var redirector = Activator.CreateInstance(redirectorType, Instance, null, new object[] { entries.Length }, null);
-                foreach (var entry in entries)
-                {
-                    var getValue = (Delegate)Property(entry, "GetValue");
-                    Check((bool)Invoke(redirectorType.GetMethod("AddRegistryEntry", Instance), redirector,
-                        Property(entry, "Root"), Property(entry, "Key"), Property(entry, "Name"), Property(entry, "Type"),
-                        getValue.DynamicInvoke(culture)), "Registry serialization rejected a product rule.");
-                }
-                var bytes = (byte[])Invoke(redirectorType.GetMethod("GetBinaryData", Instance), redirector);
-                Check(BitConverter.ToUInt64(bytes, 0) == (ulong)entries.Length, "Serialized rule count changed.");
-                var entryType = ProductType("LEProc.LERegistryRedirector+REGISTRY_REDIRECTION_ENTRY64");
-                var lebSize = Marshal.SizeOf(ProductType("LEProc.LoaderWrapper+LEB"));
-                var memory = Marshal.AllocHGlobal(bytes.Length);
-                try
-                {
-                    Marshal.Copy(bytes, 0, memory, bytes.Length);
-                    var found = 0;
-                    for (var index = 0; index < entries.Length; index++)
-                    {
-                        var rule = Marshal.PtrToStructure(IntPtr.Add(memory, 8 + index * Marshal.SizeOf(entryType)), entryType);
-                        foreach (var side in new[] { "Original", "Redirected" })
-                        {
-                            var native = Field(rule, side);
-                            var name = ReadUnicodeString(bytes, Field(native, "ValueName"), lebSize);
-                            var key = ReadUnicodeString(bytes, Field(native, "SubKey"), lebSize);
-                            if (name != "InstallLanguage" && name != "Default") continue;
-                            Check(key == @"System\CurrentControlSet\Control\Nls\Language", "Language rule targets CodePage instead of Language.");
-                            Check((ulong)Field(native, "Root") == 0x80000002 && (uint)Field(native, "DataType") == 1,
-                                "Language rule lost HKLM/REG_SZ.");
-                            var value = Encoding.Unicode.GetString(bytes, checked((int)(long)Field(native, "Data") - lebSize),
-                                checked((int)(ulong)Field(native, "DataSize")));
-                            Check(value == (culture.LCID & 0xffff).ToString("X4", CultureInfo.InvariantCulture),
-                                "Language value is not a four-digit hexadecimal LANGID.");
-                            found++;
-                        }
-                    }
-                    Check(found == 4, "Missing serialized language rules.");
-                }
-                finally { Marshal.FreeHGlobal(memory); }
-            }
+            var type = ProductType("LEProc.RuntimeEnvironment");
+            var environment = Activator.CreateInstance(type, true);
+            type.GetProperty("AnsiCodePage", Instance).SetValue(environment, (uint) 932, null);
+            type.GetProperty("OemCodePage", Instance).SetValue(environment, (uint) 936, null);
+            type.GetProperty("LocaleID", Instance).SetValue(environment, (uint) 0x411, null);
+            type.GetProperty("FontCharset", Instance).SetValue(environment, (uint) 128, null);
+            type.GetProperty("RegistryMode", Instance).SetValue(environment, (uint) 2, null);
+            type.GetProperty("HookUILanguageMode", Instance).SetValue(environment, (uint) 2, null);
+            type.GetProperty("TimezoneId", Instance).SetValue(environment, "Tokyo Standard Time", null);
+            var bytes = (byte[])Invoke(type.GetMethod("Serialize", Instance), environment);
+            Check(BitConverter.ToUInt32(bytes, 0) == bytes.Length, "Runtime environment size is not self describing.");
+            Check(BitConverter.ToUInt32(bytes, 4) == 1, "Runtime environment version changed.");
+            Check(BitConverter.ToUInt32(bytes, 8) == 932 && BitConverter.ToUInt32(bytes, 12) == 936,
+                "Runtime environment code pages changed.");
+            Check(BitConverter.ToUInt32(bytes, 16) == 0x411 && BitConverter.ToUInt32(bytes, 20) == 128,
+                "Runtime environment locale fields changed.");
+            Check(BitConverter.ToUInt32(bytes, 24) == 2 && BitConverter.ToUInt32(bytes, 28) == 2,
+                "Registry and UI language modes were not serialized.");
+            var timezoneOffset = checked((int) BitConverter.ToUInt32(bytes, 32));
+            var timezoneLength = checked((int) BitConverter.ToUInt32(bytes, 36));
+            Check(Encoding.Unicode.GetString(bytes, timezoneOffset, timezoneLength) == "Tokyo Standard Time",
+                "Runtime environment timezone ID changed.");
+            Check(BitConverter.ToUInt32(bytes, 56) == 0 && BitConverter.ToUInt32(bytes, 60) == 0
+                && BitConverter.ToUInt32(bytes, 64) == 0,
+                "Unused registry entry fields were not zeroed.");
         }
 
         internal static void TimezoneNamesAndStandardTimeContract()
         {
-            var zones = TimeZoneInfo.GetSystemTimeZones();
-            Check(zones.Any(zone => zone.SupportsDaylightSavingTime) && zones.Any(zone => !zone.SupportsDaylightSavingTime),
-                "This host must provide DST and non-DST time zones.");
-            foreach (var installedZone in zones)
+            var type = ProductType("LEProc.RuntimeEnvironment");
+            foreach (var installedZone in TimeZoneInfo.GetSystemTimeZones())
             {
-                var zone = TimeZoneInfo.FindSystemTimeZoneById(installedZone.Id);
-                var wrapper = Activator.CreateInstance(ProductType("LEProc.LoaderWrapper"), true);
-                ProductType("LEProc.LoaderWrapper").GetProperty("Timezone", Instance).SetValue(wrapper, zone.Id, null);
-                var timezone = Field(Field(wrapper, "_leb"), "Timezone");
-                Check(Name(timezone, "StandardName") == BoundedName(zone.StandardName), "Standard name differs from Windows for " + zone.Id + ": " + Name(timezone, "StandardName") + " / " + BoundedName(zone.StandardName));
-                Check(Name(timezone, "DaylightName") == BoundedName(zone.DaylightName), "Daylight name was replaced by the standard name for " + zone.Id);
-                Check((int)Field(timezone, "DaylightBias") == 0, "Existing standard-time profile behavior changed.");
-                foreach (var date in new[] { "StandardDate", "DaylightDate" })
-                    Check(Field(timezone, date).GetType().GetFields(Instance).All(field => (ushort)field.GetValue(Field(timezone, date)) == 0),
-                        "Existing DST suppression changed.");
+                var environment = Activator.CreateInstance(type, true);
+                type.GetProperty("TimezoneId", Instance).SetValue(environment, installedZone.Id, null);
+                var bytes = (byte[])Invoke(type.GetMethod("Serialize", Instance), environment);
+                var offset = checked((int) BitConverter.ToUInt32(bytes, 32));
+                var length = checked((int) BitConverter.ToUInt32(bytes, 36));
+                Check(Encoding.Unicode.GetString(bytes, offset, length) == installedZone.Id,
+                    "Timezone ID was changed before reaching the native boundary: " + installedZone.Id);
+                Check(bytes[offset + length] == 0 && bytes[offset + length + 1] == 0,
+                    "Timezone ID is not terminated in the runtime environment block.");
             }
         }
 
         internal static void LongValidTimezoneIdIsAccepted()
         {
-            const string zonesPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Time Zones";
-            var fixturePath = @"Software\LE Launch Regression\" + Guid.NewGuid().ToString("N");
-            var id = "LE regression valid timezone ID longer than thirty two characters";
-            var hklm = new IntPtr(unchecked((int)0x80000002));
-            try
-            {
-                using (var original = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(zonesPath + @"\Tokyo Standard Time"))
-                using (var fixture = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(fixturePath))
-                {
-                    foreach (var keyName in new[] { "Tokyo Standard Time", id })
-                    using (var key = fixture.CreateSubKey(zonesPath + "\\" + keyName))
-                    foreach (var name in new[] { "Display", "Std", "Dlt", "TZI" })
-                        key.SetValue(name, original.GetValue(name), original.GetValueKind(name));
-                    // Redirect HKLM only in this process; no machine time zones are changed.
-                    var status = RegOverridePredefKey(hklm, fixture.Handle.DangerousGetHandle());
-                    if (status != 0) throw new System.ComponentModel.Win32Exception(status);
-                    try
-                    {
-                        TimeZoneInfo.ClearCachedData();
-                        var zone = TimeZoneInfo.FindSystemTimeZoneById(id);
-                        var wrapper = Activator.CreateInstance(ProductType("LEProc.LoaderWrapper"), true);
-                        ProductType("LEProc.LoaderWrapper").GetProperty("Timezone", Instance).SetValue(wrapper, id, null);
-                        var timezone = Field(Field(wrapper, "_leb"), "Timezone");
-                        Check(Name(timezone, "StandardName") == BoundedName(zone.StandardName),
-                            "A valid long registry ID was rejected or altered the native name.");
-                    }
-                    finally
-                    {
-                        status = RegOverridePredefKey(hklm, IntPtr.Zero);
-                        TimeZoneInfo.ClearCachedData();
-                        if (status != 0) throw new System.ComponentModel.Win32Exception(status);
-                    }
-                }
-            }
-            finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(fixturePath, false); }
+            const string id = "LE regression valid timezone ID longer than thirty two characters";
+            var type = ProductType("LEProc.RuntimeEnvironment");
+            var environment = Activator.CreateInstance(type, true);
+            type.GetProperty("TimezoneId", Instance).SetValue(environment, id, null);
+            var bytes = (byte[])Invoke(type.GetMethod("Serialize", Instance), environment);
+            var offset = checked((int) BitConverter.ToUInt32(bytes, 32));
+            var length = checked((int) BitConverter.ToUInt32(bytes, 36));
+            Check(Encoding.Unicode.GetString(bytes, offset, length) == id,
+                "A valid long timezone ID was truncated by the managed ABI serializer.");
         }
 
         internal static void TimezoneNamesAreBoundedAndTerminated()
         {
-            var type = ProductType("LEProc.LoaderWrapper+RTL_TIME_ZONE_INFORMATION");
-            foreach (var name in new[] { "", new string('x', 31), new string('x', 32), new string('x', 80), new string('x', 30) + "\ud83d\ude00" })
-            foreach (var field in new[] { "StandardName", "DaylightName" })
+            var type = ProductType("LEProc.RuntimeEnvironment");
+            foreach (var name in new[] { "", new string('x', 31), new string('x', 32768 / 2) })
             {
-                var timezone = Activator.CreateInstance(type);
-                Invoke(type.GetMethod("Set" + field, Instance), timezone, name);
-                var bytes = (byte[])Field(timezone, field);
-                Check(bytes.Length == 64 && bytes[62] == 0 && bytes[63] == 0, "WCHAR[32] name has no terminator.");
-                Check(Name(timezone, field) == BoundedName(name), "Timezone name was not bounded at the native field.");
+                var environment = Activator.CreateInstance(type, true);
+                type.GetProperty("TimezoneId", Instance).SetValue(environment, "Tokyo Standard Time", null);
+                type.GetProperty("StandardNameOverride", Instance).SetValue(environment, name, null);
+                type.GetProperty("DaylightNameOverride", Instance).SetValue(environment, name, null);
+                var bytes = (byte[])Invoke(type.GetMethod("Serialize", Instance), environment);
+                var standardOffset = checked((int) BitConverter.ToUInt32(bytes, 40));
+                var standardLength = checked((int) BitConverter.ToUInt32(bytes, 44));
+                var daylightOffset = checked((int) BitConverter.ToUInt32(bytes, 48));
+                var daylightLength = checked((int) BitConverter.ToUInt32(bytes, 52));
+                Check(Encoding.Unicode.GetString(bytes, standardOffset, standardLength) == name
+                    && Encoding.Unicode.GetString(bytes, daylightOffset, daylightLength) == name,
+                    "Timezone name override was changed during serialization.");
+                Check(bytes[standardOffset + standardLength] == 0 && bytes[standardOffset + standardLength + 1] == 0
+                    && bytes[daylightOffset + daylightLength] == 0 && bytes[daylightOffset + daylightLength + 1] == 0,
+                    "Timezone name override is not terminated.");
             }
+            var invalid = Activator.CreateInstance(type, true);
+            type.GetProperty("TimezoneId", Instance).SetValue(invalid, "Tokyo Standard Time", null);
+            type.GetProperty("StandardNameOverride", Instance).SetValue(invalid, new string('x', 16385), null);
+            Throws<ArgumentException>(() => Invoke(type.GetMethod("Serialize", Instance), invalid));
+            type.GetProperty("StandardNameOverride", Instance).SetValue(invalid, "bad\0name", null);
+            Throws<ArgumentException>(() => Invoke(type.GetMethod("Serialize", Instance), invalid));
         }
 
         private static object ElevationRequest(string[] args)
@@ -275,6 +241,19 @@ namespace ManagedRegression
                 return Enumerable.Range(1, count - 1).Select(index => Marshal.PtrToStringUni(Marshal.ReadIntPtr(memory, index * IntPtr.Size))).ToArray();
             }
             finally { LocalFree(memory); }
+        }
+
+        private static void Throws<T>(Action action) where T : Exception
+        {
+            try
+            {
+                action();
+            }
+            catch (T)
+            {
+                return;
+            }
+            throw new Exception("Expected " + typeof(T).Name + ".");
         }
 
         private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }

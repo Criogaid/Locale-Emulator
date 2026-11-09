@@ -46,7 +46,7 @@ NTSTATUS LepGlobalData::BuildBootstrapPayload(
     if (FullPath == nullptr || Payload == nullptr || PayloadSize == nullptr)
         return STATUS_INVALID_PARAMETER;
 
-    PCLEP_RUNTIME_ENVIRONMENT Environment = GetEnvironment();
+    PCLE_RUNTIME_CONFIG Environment = GetEnvironment();
     if (!LepValidateRuntimeEnvironment(Environment))
         return STATUS_INVALID_PARAMETER;
     ULONG EnvironmentSize = Environment->Size;
@@ -143,7 +143,7 @@ NTSTATUS ReplaceMUIVersionLocaleInfo(PVOID& VersionData, ULONG& VersionSize)
     LangID = (PUSHORT)PtrAdd(Entry, ROUND_DOWN(CONST_STRSIZE(Translation) + 11, 4));
     CharsetID = LangID + 1;
 
-    *LangID = LepGetGlobalData()->GetEnvironment()->LocaleId;
+    *LangID = LepGetGlobalData()->GetEnvironment()->LocaleID;
 
     VersionData = TlbBuffer;
 
@@ -199,7 +199,7 @@ static const WCHAR LepNlsLanguageKeyPath[] =
 static const WCHAR LepNlsLanguageKeySuffix[] =
     L"\\Control\\NLS\\Language";
 
-typedef BOOLEAN (NTAPI *PRTL_LCID_TO_CULTURE_NAME)(LCID LocaleId, PUNICODE_STRING CultureName);
+typedef BOOLEAN (NTAPI *PRTL_LCID_TO_CULTURE_NAME)(LCID LocaleID, PUNICODE_STRING CultureName);
 
 static NTSTATUS LepReadHostInstallLanguageFallback(
     PWSTR Buffer,
@@ -266,7 +266,7 @@ static NTSTATUS LepReadHostInstallLanguageFallback(
 
 static BOOLEAN LepInitializeMuiCultureName(
     PRTL_LCID_TO_CULTURE_NAME LcidToCultureName,
-    LCID LocaleId,
+    LCID LocaleID,
     PWSTR Buffer,
     ULONG BufferSize,
     PUSHORT NameLength
@@ -277,7 +277,7 @@ static BOOLEAN LepInitializeMuiCultureName(
     CultureName.Buffer = Buffer;
     CultureName.Length = 0;
     CultureName.MaximumLength = (USHORT)BufferSize;
-    if (!LcidToCultureName(LocaleId, &CultureName) ||
+    if (!LcidToCultureName(LocaleID, &CultureName) ||
         CultureName.Length + sizeof(WCHAR) > CultureName.MaximumLength)
     {
         return FALSE;
@@ -299,7 +299,7 @@ static NTSTATUS LepInitializeAdvancedRegistryRedirection(PLepGlobalData GlobalDa
         return STATUS_PROCEDURE_NOT_FOUND;
     if (!LepInitializeMuiCultureName(
             LcidToCultureName,
-            GlobalData->GetEnvironment()->LocaleId,
+            GlobalData->GetEnvironment()->LocaleID,
             LocaleName,
             sizeof(LocaleName),
             &LocaleNameLength))
@@ -326,7 +326,7 @@ static NTSTATUS LepInitializeVirtualMuiLanguage(PLepGlobalData GlobalData, PVOID
 
     if (!LepInitializeMuiCultureName(
             LcidToCultureName,
-            GlobalData->GetEnvironment()->LocaleId,
+            GlobalData->GetEnvironment()->LocaleID,
             GlobalData->HookRoutineData.Ntdll.MuiLanguageName,
             sizeof(GlobalData->HookRoutineData.Ntdll.MuiLanguageName),
             &GlobalData->HookRoutineData.Ntdll.MuiLanguageNameLength
@@ -387,7 +387,7 @@ static NTSTATUS LepInitializeVirtualMuiLanguage(PLepGlobalData GlobalData, PVOID
 
     WriteLog(L"virtual MUI installed language: %ws (%04X), host=%ws (%04X), chain=%ws",
         GlobalData->HookRoutineData.Ntdll.MuiLanguageName,
-        GlobalData->GetEnvironment()->LocaleId,
+        GlobalData->GetEnvironment()->LocaleID,
         GlobalData->HookRoutineData.Ntdll.MuiHostLanguageName,
         HostLanguageId,
         GlobalData->HookRoutineData.Ntdll.MuiInstallFallback);
@@ -723,7 +723,7 @@ static NTSTATUS LepQueryVirtualMuiKeyValue(
 )
 {
     ULONG LanguageType = 0x92;
-    ULONG LocaleId = GlobalData->GetEnvironment()->LocaleId;
+    ULONG LocaleID = GlobalData->GetEnvironment()->LocaleID;
     UNICODE_STRING HostLanguageName;
 
     HostLanguageName.Buffer = GlobalData->HookRoutineData.Ntdll.MuiHostLanguageName;
@@ -741,7 +741,7 @@ static NTSTATUS LepQueryVirtualMuiKeyValue(
     if (RtlEqualUnicodeString(ValueName, PUSTR(L"LCID"), TRUE))
     {
         return LepWriteVirtualKeyValue(
-            ValueName, REG_DWORD, &LocaleId, sizeof(LocaleId),
+            ValueName, REG_DWORD, &LocaleID, sizeof(LocaleID),
             InformationClass, KeyValueInformation, Length, ResultLength
         );
     }
@@ -1019,7 +1019,7 @@ LepNtQuerySystemInformation(
             if (SystemInformationLength < sizeof(GlobalData->GetEnvironment()->Timezone))
                 break;
 
-            *((PRTL_TIME_ZONE_INFORMATION)SystemInformation) = GlobalData->GetEnvironment()->Timezone;
+            CopyMemory(SystemInformation, &GlobalData->GetEnvironment()->Timezone, sizeof(GlobalData->GetEnvironment()->Timezone));
 
             if (ReturnLength != nullptr)
                 *ReturnLength = sizeof(GlobalData->GetEnvironment()->Timezone);
@@ -1406,7 +1406,7 @@ LepNtInitializeNlsFiles(
 
     GlobalData = (PLepGlobalData)HpGetFilterContext();
 
-    *DefaultLocaleId = GlobalData->GetEnvironment()->LocaleId;
+    *DefaultLocaleId = GlobalData->GetEnvironment()->LocaleID;
 
     return Status;
 }
@@ -1933,7 +1933,7 @@ LepNtQueryDefaultLocale(
 {
     HpSetFilterAction(BlockSystemCall);
 
-    *DefaultLocaleId = ((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleId;
+    *DefaultLocaleId = ((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
     return STATUS_SUCCESS;
 }
 
@@ -1946,7 +1946,7 @@ LepNtQueryDefaultUILanguage(
 {
     HpSetFilterAction(BlockSystemCall);
 
-    *DefaultUILanguageId = (LANGID)((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleId;
+    *DefaultUILanguageId = (LANGID)((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
     return STATUS_SUCCESS;
 }
 
@@ -1959,7 +1959,7 @@ LepNtQueryInstallUILanguage(
 {
     HpSetFilterAction(BlockSystemCall);
 
-    *InstallUILanguageId = (LANGID)((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleId;
+    *InstallUILanguageId = (LANGID)((PLepGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
     return STATUS_SUCCESS;
 }
 
@@ -1968,7 +1968,7 @@ NTSTATUS NTAPI LepLdrInitNtContinue(PCONTEXT Context, BOOLEAN TestAlert)
 {
     PLepGlobalData GlobalData = LepGetGlobalData();
 
-    CurrentTeb()->CurrentLocale = GlobalData->GetEnvironment()->LocaleId;
+    CurrentTeb()->CurrentLocale = GlobalData->GetEnvironment()->LocaleID;
 
     return GlobalData->HookStub.StubLdrInitNtContinue(Context, TestAlert);
 }
@@ -1986,7 +1986,7 @@ LepNtContinue(
     PLepGlobalData GlobalData = (PLepGlobalData)HpGetFilterContext();
 
     if (GlobalData != nullptr)
-        CurrentTeb()->CurrentLocale = GlobalData->GetEnvironment()->LocaleId;
+        CurrentTeb()->CurrentLocale = GlobalData->GetEnvironment()->LocaleID;
 
     return 0;
 }
@@ -2557,7 +2557,7 @@ LepRtlGetThreadPreferredUILanguages(
         {
             if (ReturnLanguageIds)
             {
-                LCID LocaleId = 0;
+                LCID LocaleID = 0;
                 UNICODE_STRING LanguageName;
                 typedef BOOLEAN (NTAPI *PRTL_CULTURE_NAME_TO_LCID)(PUNICODE_STRING, PLCID);
                 PRTL_CULTURE_NAME_TO_LCID CultureNameToLcid;
@@ -2566,11 +2566,11 @@ LepRtlGetThreadPreferredUILanguages(
                     lep::HashExportName("RtlCultureNameToLCID")
                 );
                 RtlInitUnicodeString(&LanguageName, LanguageNames[Index]);
-                if (CultureNameToLcid == nullptr || !CultureNameToLcid(&LanguageName, &LocaleId))
+                if (CultureNameToLcid == nullptr || !CultureNameToLcid(&LanguageName, &LocaleID))
                     return Status;
 
                 static const WCHAR HexDigits[] = L"0123456789ABCDEF";
-                LANGID LanguageId = LANGIDFROMLCID(LocaleId);
+                LANGID LanguageId = LANGIDFROMLCID(LocaleID);
                 LanguageIds[Index][0] = HexDigits[(LanguageId >> 12) & 0xF];
                 LanguageIds[Index][1] = HexDigits[(LanguageId >> 8) & 0xF];
                 LanguageIds[Index][2] = HexDigits[(LanguageId >> 4) & 0xF];
@@ -2813,7 +2813,7 @@ NTSTATUS LepGlobalData::HookNtdllRoutines(PVOID Ntdll)
     ADD_FILTER_(NtInitializeNlsFiles,       LepNtInitializeNlsFiles,     this);
     ADD_FILTER_(NtQueryDefaultLocale,       LepNtQueryDefaultLocale,     this);
 
-    if (GetEnvironment()->RegistryRedirectionMode == 2)
+    if (GetEnvironment()->RegistryMode == 2)
     {
         Status = LepInitializeAdvancedRegistryRedirection(this, Ntdll);
         WriteLog(L"registry redirection mode 2 initialized entries=%p status=%08X",

@@ -76,7 +76,7 @@ NTSTATUS ReplaceMUIVersionLocaleInfo(PVOID& VersionData, ULONG& VersionSize)
     LangID = (PUSHORT)PtrAdd(Entry, ROUND_DOWN(CONST_STRSIZE(Translation) + 11, 4));
     CharsetID = LangID + 1;
 
-    *LangID = LANGIDFROMLCID(LeGetGlobalData()->GetLeb()->LocaleID);
+    *LangID = LANGIDFROMLCID(LeGetGlobalData()->GetEnvironment()->LocaleID);
 
     VersionData = TlbBuffer;
 
@@ -200,16 +200,16 @@ LeNtQuerySystemInformation(
     {
         case SystemCurrentTimeZoneInformation:
             if (SystemInformation == nullptr ||
-                SystemInformationLength < sizeof(GlobalData->GetLeb()->Timezone) ||
-                IsWritableMemory(SystemInformation, sizeof(GlobalData->GetLeb()->Timezone)) == FALSE)
+                SystemInformationLength < sizeof(GlobalData->GetEnvironment()->Timezone) ||
+                IsWritableMemory(SystemInformation, sizeof(GlobalData->GetEnvironment()->Timezone)) == FALSE)
                 break;
             if (ReturnLength != nullptr && IsWritableMemory(ReturnLength, sizeof(*ReturnLength)) == FALSE)
                 break;
 
-            *((PRTL_TIME_ZONE_INFORMATION)SystemInformation) = GlobalData->GetLeb()->Timezone;
+            CopyMemory(SystemInformation, &GlobalData->GetEnvironment()->Timezone, sizeof(GlobalData->GetEnvironment()->Timezone));
 
             if (ReturnLength != nullptr)
-                *ReturnLength = sizeof(GlobalData->GetLeb()->Timezone);
+                *ReturnLength = sizeof(GlobalData->GetEnvironment()->Timezone);
 
             HpSetFilterAction(BlockSystemCall);
 
@@ -264,7 +264,7 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
 {
     NTSTATUS    Status;
     PVOID       SelfShadow, LocalSelfShadow, ShadowLoadFirstDll;
-    ULONG_PTR   SizeOfImage, ExtraSize;
+    ULONG_PTR   SizeOfImage;
     LONG        Offset;
     PLEPEB      TargetLePeb, LePeb;
     HANDLE      Section;
@@ -371,30 +371,7 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     if (NT_FAILED(Status))
         return Rollback(Status);
 
-    const ULONG_PTR Count = this->RegistryRedirectionEntry.GetSize();
-    if (Count > (MAXULONG_PTR - sizeof(LEPEB)) / sizeof(TargetLePeb->Leb.RegistryReplacement[0]))
-        return Rollback(STATUS_INTEGER_OVERFLOW);
-    ExtraSize = Count * sizeof(TargetLePeb->Leb.RegistryReplacement[0]);
-    PREGISTRY_REDIRECTION_ENTRY Entry;
-    FOR_EACH_VEC(Entry, this->RegistryRedirectionEntry)
-    {
-        const ULONG64 StringSizes[] = { Entry->Original.SubKey.GetSize(), Entry->Redirected.SubKey.GetSize(),
-            Entry->Original.ValueName.GetSize(), Entry->Redirected.ValueName.GetSize() };
-        for (ULONG64 Bytes : StringSizes)
-        {
-            if (Bytes > MAX_USHORT - sizeof(WCHAR) || Bytes + sizeof(WCHAR) > MAXULONG_PTR - sizeof(LEPEB) - ExtraSize)
-                return Rollback(STATUS_INTEGER_OVERFLOW);
-            ExtraSize += static_cast<ULONG_PTR>(Bytes) + sizeof(WCHAR);
-        }
-        for (ULONG_PTR Bytes : { Entry->Original.DataSize, Entry->Redirected.DataSize })
-        {
-            if (Bytes > MAXULONG_PTR - sizeof(LEPEB) - ExtraSize)
-                return Rollback(STATUS_INTEGER_OVERFLOW);
-            ExtraSize += Bytes;
-        }
-    }
-
-    TargetLePeb = OpenOrCreateLePeb((ULONG_PTR)Cid->UniqueProcess, TRUE, ExtraSize);
+    TargetLePeb = OpenOrCreateLePeb((ULONG_PTR)Cid->UniqueProcess, TRUE, 0);
     if (TargetLePeb == nullptr)
         return Rollback(STATUS_UNSUCCESSFUL);
 
@@ -403,69 +380,9 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     TargetLePeb->Section = Section;
     CopyStruct(TargetLePeb->LdrLoadDllBackup, Backup, LDR_LOAD_DLL_BACKUP_SIZE);
     TargetLePeb->LdrLoadDllBackupSize = LDR_LOAD_DLL_BACKUP_SIZE;
-
-    if (ExtraSize != 0)
-    {
-        ULONG_PTR                       Length;
-        PBYTE                           Buffer;
-        PREGISTRY_REDIRECTION_ENTRY     Entry;
-        PREGISTRY_REDIRECTION_ENTRY64   Entry64;
-
-        TargetLePeb->Leb.NumberOfRegistryRedirectionEntries = this->RegistryRedirectionEntry.GetSize();
-        Entry64 = &TargetLePeb->Leb.RegistryReplacement[0];
-        Buffer = (PBYTE)(Entry64 + TargetLePeb->Leb.NumberOfRegistryRedirectionEntries);
-
-        auto StringToUnicode64 = [&] (UNICODE_STRING64& ustr64, ml::String& str)
-        {
-            ULONG_PTR Length;
-
-            // 上面的序列化边界检查保证字符串及终止符能放入 USHORT。
-            Length = static_cast<USHORT>(str.GetSize());
-
-            ustr64.Length         = (USHORT)Length;
-            ustr64.MaximumLength  = static_cast<USHORT>(Length + sizeof(WCHAR));
-            ustr64.Dummy          = PtrOffset(Buffer, &TargetLePeb->Leb);
-
-            CopyMemory(Buffer, (PWSTR)str, Length);
-            Buffer += Length;
-            *Buffer++ = 0;
-            *Buffer++ = 0;
-        };
-
-        FOR_EACH_VEC(Entry, this->RegistryRedirectionEntry)
-        {
-            Entry64->Original.Root      = (ULONG64)Entry->Original.Root;
-            Entry64->Original.DataType  = Entry->Original.DataType;
-            Entry64->Original.Data      = nullptr;
-            Entry64->Original.DataSize  = 0;
-
-            StringToUnicode64(Entry64->Original.SubKey, Entry->Original.SubKey);
-            StringToUnicode64(Entry64->Original.ValueName, Entry->Original.ValueName);
-
-            Entry64->Redirected.Root      = (ULONG64)Entry->Redirected.Root;
-            Entry64->Redirected.DataType  = Entry->Redirected.DataType;
-            Entry64->Redirected.Data      = nullptr;
-            Entry64->Redirected.DataSize  = 0;
-
-            StringToUnicode64(Entry64->Redirected.SubKey, Entry->Redirected.SubKey);
-            StringToUnicode64(Entry64->Redirected.ValueName, Entry->Redirected.ValueName);
-
-            if (Entry->Redirected.Data != nullptr && Entry->Redirected.DataSize != 0)
-            {
-                Length = Entry->Redirected.DataSize;
-                Entry64->Redirected.Data = (PVOID)PtrOffset(Buffer, &TargetLePeb->Leb);
-                Entry64->Redirected.DataSize = Length;
-                CopyMemory(Buffer, Entry->Redirected.Data, Length);
-                Buffer += Length;
-            }
-
-            ++Entry64;
-        }
-    }
-
     CloseLePeb(TargetLePeb);
-
     return STATUS_SUCCESS;
+
 }
 
 NTSTATUS
@@ -706,7 +623,7 @@ LeNtInitializeNlsFiles(
 
     GlobalData = (PLeGlobalData)HpGetFilterContext();
 
-    *DefaultLocaleId = GlobalData->GetLeb()->LocaleID;
+    *DefaultLocaleId = GlobalData->GetEnvironment()->LocaleID;
 
     return Status;
 }
@@ -980,7 +897,7 @@ LeNtQueryDefaultLocale(
     if (IsWritableMemory(DefaultLocaleId, sizeof(*DefaultLocaleId)) == FALSE)
         return 0;
     HpSetFilterAction(BlockSystemCall);
-    *DefaultLocaleId = ((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID;
+    *DefaultLocaleId = ((PLeGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID;
     return STATUS_SUCCESS;
 }
 
@@ -994,7 +911,7 @@ LeNtQueryDefaultUILanguage(
     if (IsWritableMemory(DefaultUILanguageId, sizeof(*DefaultUILanguageId)) == FALSE)
         return 0;
     HpSetFilterAction(BlockSystemCall);
-    *DefaultUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID);
+    *DefaultUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID);
     return STATUS_SUCCESS;
 }
 
@@ -1008,7 +925,7 @@ LeNtQueryInstallUILanguage(
     if (IsWritableMemory(InstallUILanguageId, sizeof(*InstallUILanguageId)) == FALSE)
         return 0;
     HpSetFilterAction(BlockSystemCall);
-    *InstallUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetLeb()->LocaleID);
+    *InstallUILanguageId = LANGIDFROMLCID(((PLeGlobalData)HpGetFilterContext())->GetEnvironment()->LocaleID);
     return STATUS_SUCCESS;
 }
 
@@ -1016,7 +933,7 @@ NTSTATUS NTAPI LeLdrInitNtContinue(PCONTEXT Context, BOOLEAN TestAlert)
 {
     PLeGlobalData GlobalData = LeGetGlobalData();
 
-    CurrentTeb()->CurrentLocale = GlobalData->GetLeb()->LocaleID;
+    CurrentTeb()->CurrentLocale = GlobalData->GetEnvironment()->LocaleID;
 
     return GlobalData->HookStub.StubLdrInitNtContinue(Context, TestAlert);
 }
@@ -1072,9 +989,9 @@ NTSTATUS NTAPI LeCustomCPToUnicodeN(IN PCPTABLEINFO CustomCP,
     IN ULONG CustomSize) {
     PLeGlobalData GlobalData = LeGetGlobalData();
 
-    if (CustomCP->CodePage != 65001 && CustomCP->CodePage != GlobalData->GetLeb()->AnsiCodePage) {
+    if (CustomCP->CodePage != 65001 && CustomCP->CodePage != GlobalData->GetEnvironment()->AnsiCodePage) {
         PROTECT_SECTION(&GlobalData->HookRoutineData.Ntdll.NtLock) {
-            if (CustomCP->CodePage != 65001 && CustomCP->CodePage != GlobalData->GetLeb()->AnsiCodePage) {
+            if (CustomCP->CodePage != 65001 && CustomCP->CodePage != GlobalData->GetEnvironment()->AnsiCodePage) {
                 RtlInitCodePageTable((PUSHORT)PtrAdd(GlobalData->CodePageMapView,
                     GlobalData->AnsiCodePageOffset), CustomCP);
             }
@@ -1113,7 +1030,7 @@ NTSTATUS LeGlobalData::HookNtdllRoutines(PVOID Ntdll)
     ADD_FILTER_(NtQueryDefaultLocale,       LeNtQueryDefaultLocale,     this);
     ADD_FILTER_(NtQueryDefaultUILanguage,   LeNtQueryDefaultUILanguage, this);
 
-    if (LeGetGlobalData()->GetLeb()->HookUILanguageApi != 0)
+    if (LeGetGlobalData()->GetEnvironment()->HookUILanguageMode != 0)
     {
         ADD_FILTER_(NtQueryInstallUILanguage, LeNtQueryInstallUILanguage, this);
         WriteLog(L"NtQueryInstallUILanguage hooked");

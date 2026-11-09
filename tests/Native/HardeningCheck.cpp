@@ -121,12 +121,28 @@ int __cdecl main()
     delete[] large;
     if (text.MatchExpression(expression)) return 9;
     if (expression.MatchExpression(L"*")) return 10;
-    LEB environment = {}; environment.AnsiCodePage = 932; environment.OemCodePage = 936; environment.DefaultCharset = 128;
-    if (NT_FAILED(ValidateLeb(environment))) return 11;
-    environment.DefaultCharset = 256;
-    if (ValidateLeb(environment) != STATUS_INVALID_PARAMETER) return 12;
-    environment.DefaultCharset = 128; environment.AnsiCodePage = 65536;
-    if (ValidateLeb(environment) != STATUS_INVALID_PARAMETER) return 13;
+    struct RuntimeInputFixture
+    {
+        LE_RUNTIME_INPUT Input;
+        WCHAR Timezone[20];
+        WCHAR Standard[1];
+        WCHAR Daylight[1];
+    } fixture = {};
+    CopyMemory(fixture.Timezone, L"Tokyo Standard Time", sizeof(L"Tokyo Standard Time"));
+    fixture.Input.Size = sizeof(fixture);
+    fixture.Input.Version = LE_RUNTIME_INPUT_VERSION;
+    fixture.Input.AnsiCodePage = 932;
+    fixture.Input.OemCodePage = 936;
+    fixture.Input.FontCharset = 128;
+    fixture.Input.TimezoneIdOffset = FIELD_OFFSET(RuntimeInputFixture, Timezone);
+    fixture.Input.TimezoneIdLength = sizeof(L"Tokyo Standard Time") - sizeof(WCHAR);
+    fixture.Input.StandardNameOffset = FIELD_OFFSET(RuntimeInputFixture, Standard);
+    fixture.Input.DaylightNameOffset = FIELD_OFFSET(RuntimeInputFixture, Daylight);
+    if (!LeValidateRuntimeInput(&fixture.Input)) return 11;
+    fixture.Input.FontCharset = 256;
+    if (LeValidateRuntimeInput(&fixture.Input)) return 12;
+    fixture.Input.FontCharset = 128; fixture.Input.AnsiCodePage = 65536;
+    if (LeValidateRuntimeInput(&fixture.Input)) return 13;
     LARGE_UNICODE_STRING source = {}, destination = {};
     source.Length = 65536; source.MaximumLength = 65536; source.UnicodeBuffer = (PWSTR)1;
     if (LargeStringDuplicate(&source, &destination) != nullptr) return 14;

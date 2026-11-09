@@ -191,9 +191,10 @@ namespace LEProc
                 var localeID = (uint) textInfo.LCID;
                 var defaultCharset = (uint) GetCharsetFromANSICodepage(textInfo.ANSICodePage);
 
-                var registries = profile.RedirectRegistry
-                    ? RegistryEntriesLoader.GetRegistryEntries(profile.IsAdvancedRedirection)
-                    : null;
+                var registryMode = profile.RedirectRegistry
+                    ? (profile.IsAdvancedRedirection ? 2u : 1u)
+                    : 0u;
+
 
                 var l = new LoaderWrapper
                 {
@@ -204,20 +205,11 @@ namespace LEProc
                     OemCodePage = oemCodePage,
                     LocaleID = localeID,
                     DefaultCharset = defaultCharset,
-                    HookUILanguageAPI = profile.IsAdvancedRedirection ? (uint) 1 : 0,
+                    RegistryMode = registryMode,
+                    HookUILanguageMode = profile.IsAdvancedRedirection ? 2u : 0u,
                     Timezone = profile.Timezone,
-                    NumberOfRegistryRedirectionEntries = registries?.Length ?? 0,
                     DebugMode = profile.RunWithSuspend
                 };
-
-                registries?.ToList()
-                    .ForEach(
-                        item =>
-                            l.AddRegistryRedirectEntry(item.Root,
-                                item.Key,
-                                item.Name,
-                                item.Type,
-                                item.GetValue(culture)));
 
                 uint ret = l.Start();
                 if (ret == 0)

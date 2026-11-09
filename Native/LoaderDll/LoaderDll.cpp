@@ -1,50 +1,39 @@
 #include "ml.cpp"
 #include "LoaderDll.h"
 
-
 // 自定义入口必须先初始化官方 GS cookie，再进入任何受保护的导出函数。
 extern "C" __declspec(safebuffers) BOOL WINAPI LeLoaderEntry(PVOID, DWORD reason, PVOID)
 {
     if (reason == DLL_PROCESS_ATTACH)
         __security_init_cookie();
-
     return TRUE;
 }
 
-// The public blob has relative offsets but no byte-count parameter.
-static NTSTATUS GetLebLength(PLEB Leb, ULONG_PTR& Length)
+static NTSTATUS PrepareRuntimeEnvironment(PLE_RUNTIME_INPUT Input, PLEPEB LePeb)
 {
-    const ULONG_PTR Prefix = FIELD_OFFSET(LEB, RegistryReplacement);
-    const ULONG_PTR Maximum = MAXULONG_PTR - sizeof(LEPEB);
-    Length = Prefix;
-    if (Leb == nullptr)
-        return STATUS_SUCCESS;
-    NTSTATUS Status = ValidateLeb(*Leb);
-    FAIL_RETURN(Status);
-    if (Leb->NumberOfRegistryRedirectionEntries > (Maximum - Prefix) / sizeof(REGISTRY_REDIRECTION_ENTRY64))
-        return STATUS_INTEGER_OVERFLOW;
-    const ULONG_PTR Count = static_cast<ULONG_PTR>(Leb->NumberOfRegistryRedirectionEntries);
-    Length += Count * sizeof(REGISTRY_REDIRECTION_ENTRY64);
-    auto Include = [&](ULONG64 Offset, ULONG64 Size) -> bool
-    {
-        if (Size == 0)
-            return true;
-        if (Offset > Maximum || Size > Maximum - Offset)
-            return false;
-        Length = ML_MAX(Length, static_cast<ULONG_PTR>(Offset + Size));
-        return true;
-    };
-    for (ULONG_PTR Index = 0; Index < Count; ++Index)
-    {
-        const auto& Entry = Leb->RegistryReplacement[Index];
-        if (!Include(Entry.Original.SubKey.Dummy, Entry.Original.SubKey.MaximumLength) ||
-            !Include(Entry.Original.ValueName.Dummy, Entry.Original.ValueName.MaximumLength) ||
-            !Include((ULONG64)Entry.Original.Data, Entry.Original.DataSize) ||
-            !Include(Entry.Redirected.SubKey.Dummy, Entry.Redirected.SubKey.MaximumLength) ||
-            !Include(Entry.Redirected.ValueName.Dummy, Entry.Redirected.ValueName.MaximumLength) ||
-            !Include((ULONG64)Entry.Redirected.Data, Entry.Redirected.DataSize))
-            return STATUS_INTEGER_OVERFLOW;
-    }
+    const BYTE* Base = (const BYTE*)Input;
+    ULONG TimezoneCharacters;
+
+    if (Input == nullptr || LePeb == nullptr || !LeValidateRuntimeInput(Input))
+        return STATUS_INVALID_PARAMETER;
+    if (Input->RegistryEntriesCount != 0)
+        return STATUS_NOT_SUPPORTED;
+
+    TimezoneCharacters = Input->TimezoneIdLength / sizeof(WCHAR);
+    if (TimezoneCharacters >= countof(LePeb->TimezoneId))
+        return STATUS_NAME_TOO_LONG;
+
+    ZeroMemory(&LePeb->Environment, sizeof(LePeb->Environment));
+    LePeb->Environment.Size = sizeof(LePeb->Environment);
+    LePeb->Environment.Version = LE_RUNTIME_CONFIG_VERSION;
+    LePeb->Environment.AnsiCodePage = Input->AnsiCodePage;
+    LePeb->Environment.OemCodePage = Input->OemCodePage;
+    LePeb->Environment.LocaleID = Input->LocaleID;
+    LePeb->Environment.FontCharset = Input->FontCharset;
+    LePeb->Environment.RegistryMode = Input->RegistryMode;
+    LePeb->Environment.HookUILanguageMode = Input->HookUILanguageMode;
+    CopyMemory(LePeb->TimezoneId, Base + Input->TimezoneIdOffset,
+        (TimezoneCharacters + 1) * sizeof(WCHAR));
     return STATUS_SUCCESS;
 }
 
@@ -52,99 +41,96 @@ EXTC
 NTSTATUS
 NTAPI
 LeCreateProcess(
-	PLEB                    Leb,
-	PCWSTR                  ApplicationName,
-	PWSTR                   CommandLine,
-	PCWSTR                  CurrentDirectory,
-	ULONG                   CreationFlags,
-	LPSTARTUPINFOW          StartupInfo,
-	PML_PROCESS_INFORMATION ProcessInformation,
-	LPSECURITY_ATTRIBUTES   ProcessAttributes,
-	LPSECURITY_ATTRIBUTES   ThreadAttributes,
-	PVOID                   Environment,
-	HANDLE                  Token
-	)
+    PLE_RUNTIME_INPUT       Environment,
+    PCWSTR                  ApplicationName,
+    PWSTR                   CommandLine,
+    PCWSTR                  CurrentDirectory,
+    ULONG                   CreationFlags,
+    LPSTARTUPINFOW          StartupInfo,
+    PLE_PROCESS_INFORMATION ProcessInformation,
+    LPSECURITY_ATTRIBUTES   ProcessAttributes,
+    LPSECURITY_ATTRIBUTES   ThreadAttributes,
+    PVOID                   EnvironmentBlock,
+    HANDLE                  Token
+    )
 {
-	NTSTATUS                Status;
-	PVOID                   LeDllHandle;
-	ULONG_PTR               Length;
-	PWSTR                   DllFullPath;
-	PLDR_MODULE             Module;
-	PLEPEB                  LePeb;
+    NTSTATUS Status;
+    PVOID LeDllHandle;
+    ULONG_PTR Length;
+    PWSTR DllFullPath;
+    PLDR_MODULE Module;
+    PLEPEB LePeb = nullptr;
+    static WCHAR Dll[] = L"LocaleEmulator.dll";
 
-	static WCHAR Dll[] = L"LocaleEmulator.dll";
+    if (Environment == nullptr || !LeValidateRuntimeInput(Environment))
+        return STATUS_INVALID_PARAMETER;
 
-    ULONG_PTR LebLength;
-    Status = GetLebLength(Leb, LebLength);
-    FAIL_RETURN(Status);
+    Module = FindLdrModuleByHandle(nullptr);
+    if (Module == nullptr || Module->FullDllName.Length < Module->BaseDllName.Length)
+        return STATUS_DLL_INIT_FAILED;
 
-	Module = FindLdrModuleByHandle(nullptr);
+    Length = Module->FullDllName.Length - Module->BaseDllName.Length;
+    DllFullPath = (PWSTR)AllocStack(Length + sizeof(Dll));
+    CopyMemory(DllFullPath, Module->FullDllName.Buffer, Length);
+    CopyStruct(PtrAdd(DllFullPath, Length), Dll, sizeof(Dll));
 
-	Length = Module->FullDllName.Length - Module->BaseDllName.Length;
-	DllFullPath = (PWSTR)AllocStack(Length + sizeof(Dll));
-	CopyMemory(DllFullPath, Module->FullDllName.Buffer, Length);
-	CopyStruct(PtrAdd(DllFullPath, Length), Dll, sizeof(Dll));
+    LePeb = OpenOrCreateLePeb((ULONG_PTR)CurrentTeb()->ClientId.UniqueProcess, TRUE, 0);
+    if (LePeb == nullptr)
+        return STATUS_NONE_MAPPED;
 
-	LePeb = nullptr;
+    Status = PrepareRuntimeEnvironment(Environment, LePeb);
+    if (NT_FAILED(Status))
+    {
+        CloseLePeb(LePeb);
+        return Status;
+    }
 
-	LOOP_ONCE
-	{
-		if (Leb == nullptr)
-		break;
+    LePeb->LdrLoadDllAddress = LookupExportTable(GetNtdllHandle(), NTDLL_LdrLoadDll);
+    if (LePeb->LdrLoadDllAddress == nullptr)
+    {
+        CloseLePeb(LePeb);
+        return STATUS_ENTRYPOINT_NOT_FOUND;
+    }
+    LePeb->LdrLoadDllBackupSize = LDR_LOAD_DLL_BACKUP_SIZE;
+    CopyMemory(LePeb->LdrLoadDllBackup, LePeb->LdrLoadDllAddress, LDR_LOAD_DLL_BACKUP_SIZE);
 
-    ULONG_PTR ExtraSize = LebLength - FIELD_OFFSET(LEB, RegistryReplacement);
+    Length = (StrLengthW(DllFullPath) + 1) * sizeof(WCHAR);
+    if (Length > sizeof(LePeb->LeDllFullPath))
+    {
+        CloseLePeb(LePeb);
+        return STATUS_NAME_TOO_LONG;
+    }
+    CopyMemory(LePeb->LeDllFullPath, DllFullPath, Length);
 
-	LePeb = OpenOrCreateLePeb((ULONG_PTR)CurrentTeb()->ClientId.UniqueProcess, TRUE, ExtraSize);
-	if (LePeb == nullptr)
-	{
-		Status = STATUS_NONE_MAPPED;
-		break;
-	}
+    Length = Module->FullDllName.Length + sizeof(WCHAR) - Module->BaseDllName.Length;
+    if (Length > sizeof(LePeb->LeDllDirPath))
+    {
+        CloseLePeb(LePeb);
+        return STATUS_NAME_TOO_LONG;
+    }
+    CopyMemory(LePeb->LeDllDirPath, Module->FullDllName.Buffer, Length);
+    LePeb->LeDllDirPath[Length / sizeof(WCHAR) - 1] = 0;
 
-    CopyMemory(&LePeb->Leb, Leb, LebLength);
+    UNICODE_STRING DllFullPathString;
+    TEB_ACTIVE_FRAME frame(LE_LOADER_PROCESS);
+    frame.Data = (ULONG_PTR)LePeb;
+    frame.Push();
 
-	LePeb->LdrLoadDllAddress = LookupExportTable(GetNtdllHandle(), NTDLL_LdrLoadDll);
-	LePeb->LdrLoadDllBackupSize = LDR_LOAD_DLL_BACKUP_SIZE;
-	CopyMemory(LePeb->LdrLoadDllBackup, LePeb->LdrLoadDllAddress, LDR_LOAD_DLL_BACKUP_SIZE);
-
-	ULONG_PTR Length = (StrLengthW(DllFullPath) + 1) * sizeof(WCHAR);
-	CopyMemory(LePeb->LeDllFullPath, DllFullPath, ML_MIN(Length, sizeof(LePeb->LeDllFullPath)));
-
-  Length = Module->FullDllName.Length + sizeof(WCHAR) - Module->BaseDllName.Length;
-
-  Length = ML_MIN(Length, sizeof(LePeb->LeDllFullPath));
-  CopyMemory(LePeb->LeDllDirPath, Module->FullDllName.Buffer, Length);
-  LePeb->LeDllDirPath[Length / sizeof(WCHAR) - 1] = 0;
-	}
-
-    if (Leb != nullptr && LePeb == nullptr)
+    RtlInitUnicodeString(&DllFullPathString, DllFullPath);
+    Status = LdrLoadDll(nullptr, nullptr, &DllFullPathString, &LeDllHandle);
+    CloseLePeb(LePeb);
+    if (NT_FAILED(Status))
         return Status;
 
-	UNICODE_STRING DllFullPathString;
-	TEB_ACTIVE_FRAME frame(LE_LOADER_PROCESS);
-
-	frame.Data = (ULONG_PTR)LePeb;
-	frame.Push();
-
-	RtlInitUnicodeString(&DllFullPathString, DllFullPath);
-
-	Status = LdrLoadDll(nullptr, nullptr, &DllFullPathString, &LeDllHandle);
-	CloseLePeb(LePeb);
-
-	FAIL_RETURN(Status);
-
-	Status = Ps::CreateProcess(
-		ApplicationName,
-		CommandLine,
-		CurrentDirectory,
-		CreationFlags,
-		StartupInfo,
-		ProcessInformation,
-		ProcessAttributes,
-		ThreadAttributes,
-		Environment,
-		Token
-		);
-
-	return Status;
+    return Ps::CreateProcess(
+        ApplicationName,
+        CommandLine,
+        CurrentDirectory,
+        CreationFlags,
+        StartupInfo,
+        ProcessInformation,
+        ProcessAttributes,
+        ThreadAttributes,
+        EnvironmentBlock,
+        Token);
 }

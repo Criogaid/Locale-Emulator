@@ -9,18 +9,22 @@
 #include <initializer_list>
 #include <cstdlib>
 
-// Wire layout of the existing public loader ABI; no production-only exports are needed.
-struct TimeFields { SHORT Year, Month, Day, Hour, Minute, Second, Milliseconds, Weekday; };
-struct TimeZone { LONG Bias; WCHAR StandardName[32]; TimeFields StandardStart; LONG StandardBias; WCHAR DaylightName[32]; TimeFields DaylightStart; LONG DaylightBias; };
-struct Environment { ULONG Ansi, Oem, Locale, Charset, HookUI; WCHAR Face[32]; TimeZone Zone; ULONG64 Count; };
-struct String64 { USHORT Length, MaximumLength; ULONG64 Offset; };
-struct RegistryEntry { ULONG64 Root; String64 SubKey, ValueName; ULONG Type; ULONG64 Data, DataSize; };
-struct Redirect { RegistryEntry Original, Redirected; };
+#include "../../Native/RuntimeEnvironment.h"
+
+// Wire layout of the architecture-independent public loader ABI.
 struct ProcessInfo : PROCESS_INFORMATION { void* FirstCall; };
-struct FullInfo { ULONG TitleIndex, Type, DataOffset, DataLength, NameLength; WCHAR Name[1]; };
-static_assert(sizeof(Environment) == 264 && sizeof(Redirect) == 128, "loader ABI");
-using Create = LONG(WINAPI*)(Environment*, PCWSTR, PWSTR, PCWSTR, ULONG, STARTUPINFOW*, ProcessInfo*, SECURITY_ATTRIBUTES*, SECURITY_ATTRIBUTES*, void*, HANDLE);
+struct EnvironmentFixture
+{
+    LE_RUNTIME_INPUT Input;
+    WCHAR Timezone[32];
+    WCHAR Standard[1];
+    WCHAR Daylight[1];
+};
+static_assert(sizeof(LE_RUNTIME_INPUT) == 68, "runtime input ABI");
+using Create = NTSTATUS(WINAPI*)(LE_RUNTIME_INPUT*, PCWSTR, PWSTR, PCWSTR, ULONG, STARTUPINFOW*, ProcessInfo*,
+    SECURITY_ATTRIBUTES*, SECURITY_ATTRIBUTES*, void*, HANDLE);
 using Query = LONG(NTAPI*)(HANDLE, UNICODE_STRING*, ULONG, void*, ULONG, ULONG*);
+struct FullInfo { ULONG TitleIndex, Type, DataOffset, DataLength, NameLength; WCHAR Name[1]; };
 static int failures;
 static void Check(bool condition, const char* name) { if (!condition) { printf("FAIL %s error=%lu\n", name, GetLastError()); ++failures; } }
 static WCHAR executable[32768], directory[32768];
@@ -164,49 +168,86 @@ static void LargeAttributeListContract()
 static void FaultContracts();
 static void RightsContracts(bool injected);
 static void CleanupOwnChildren();
-static int GuardContract(ULONG count, bool overflow)
+static int GuardContract(ULONG mode, bool malformed)
 {
-    WCHAR loader[32768]; swprintf_s(loader, L"%s\\LoaderDll.dll", directory);
-    HMODULE module = LoadLibraryW(loader); Check(module != nullptr, "load loader");
-    auto create = reinterpret_cast<Create>(GetProcAddress(module, "LeCreateProcess")); Check(create != nullptr, "loader export");
+    WCHAR loader[32768];
+    swprintf_s(loader, L"%s\\LoaderDll.dll", directory);
+    HMODULE module = LoadLibraryW(loader);
+    Check(module != nullptr, "load loader");
+    auto create = reinterpret_cast<Create>(GetProcAddress(module, "LeCreateProcess"));
+    Check(create != nullptr, "loader export");
     if (!create) return failures;
-    SYSTEM_INFO system; GetSystemInfo(&system);
+
+    SYSTEM_INFO system;
+    GetSystemInfo(&system);
     auto memory = static_cast<BYTE*>(VirtualAlloc(nullptr, system.dwPageSize * 2, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-    DWORD previous; Check(memory && VirtualProtect(memory + system.dwPageSize, system.dwPageSize, PAGE_NOACCESS, &previous), "guard page");
-    const WCHAR path[] = L"System\\CurrentControlSet\\Control\\Nls\\CodePage", name[] = L"ACP", data[] = L"932";
-    const WCHAR oemName[] = L"OEMCP";
-    size_t bytes = sizeof(Environment) + count * sizeof(Redirect) + (count ? sizeof(path) + sizeof(name) + sizeof(data) : 0) + (count > 1 ? sizeof(oemName) : 0);
-    auto env = reinterpret_cast<Environment*>(memory + system.dwPageSize - bytes); ZeroMemory(env, bytes);
-    env->Ansi = env->Oem = 932; env->Locale = 0x411; env->Charset = 128; env->Count = overflow && count == 0 ? UINT64_MAX : count;
-    auto entries = reinterpret_cast<Redirect*>(env + 1); auto buffer = reinterpret_cast<BYTE*>(entries + count);
-    if (count)
+    DWORD previous;
+    Check(memory && VirtualProtect(memory + system.dwPageSize, system.dwPageSize, PAGE_NOACCESS, &previous), "guard page");
+    if (!memory) return failures;
+
+    auto env = reinterpret_cast<EnvironmentFixture*>(memory + system.dwPageSize - sizeof(EnvironmentFixture));
+    ZeroMemory(env, sizeof(*env));
+    env->Input.Size = sizeof(*env);
+    env->Input.Version = LE_RUNTIME_INPUT_VERSION;
+    env->Input.AnsiCodePage = 932;
+    env->Input.OemCodePage = 932;
+    env->Input.LocaleID = 0x411;
+    env->Input.FontCharset = 128;
+    env->Input.RegistryMode = mode;
+    env->Input.TimezoneIdOffset = FIELD_OFFSET(EnvironmentFixture, Timezone);
+    env->Input.TimezoneIdLength = sizeof(L"Tokyo Standard Time") - sizeof(WCHAR);
+    env->Input.StandardNameOffset = FIELD_OFFSET(EnvironmentFixture, Standard);
+    env->Input.DaylightNameOffset = FIELD_OFFSET(EnvironmentFixture, Daylight);
+    CopyMemory(env->Timezone, L"Tokyo Standard Time", sizeof(L"Tokyo Standard Time"));
+    if (malformed)
     {
-        RegistryEntry original = {}; original.Root = static_cast<ULONG64>(static_cast<LONG64>(reinterpret_cast<LONG_PTR>(HKEY_LOCAL_MACHINE)));
-        original.SubKey = {sizeof(path) - 2, sizeof(path), static_cast<ULONG64>(buffer - reinterpret_cast<BYTE*>(env))}; memcpy(buffer, path, sizeof(path)); buffer += sizeof(path);
-        original.ValueName = {sizeof(name) - 2, sizeof(name), static_cast<ULONG64>(buffer - reinterpret_cast<BYTE*>(env))}; memcpy(buffer, name, sizeof(name)); buffer += sizeof(name);
-        for (ULONG i = 0; i < count; ++i) { entries[i].Original = entries[i].Redirected = original; entries[i].Redirected.Type = REG_SZ; entries[i].Redirected.Data = static_cast<ULONG64>(buffer - reinterpret_cast<BYTE*>(env)); entries[i].Redirected.DataSize = sizeof(data); }
-        memcpy(buffer, data, sizeof(data));
-        if (count > 1)
-        {
-            buffer += sizeof(data);
-            entries[1].Original.ValueName = {sizeof(oemName) - sizeof(WCHAR), sizeof(oemName), static_cast<ULONG64>(buffer - reinterpret_cast<BYTE*>(env))};
-            entries[1].Redirected.ValueName = entries[1].Original.ValueName;
-            memcpy(buffer, oemName, sizeof(oemName));
-        }
-        if (overflow) entries[0].Redirected.Data = UINT64_MAX - 1;
+        if (mode == 0)
+            env->Input.TimezoneIdOffset = 0xFFFFFFFFu;
+        else
+            env->Input.Size = sizeof(LE_RUNTIME_INPUT) - 1;
     }
-    WCHAR command[32768]; swprintf_s(command, L"\"%s\" --registry-and-failure %lu", executable, count);
-    STARTUPINFOW startup = {}; startup.cb = sizeof(startup); ProcessInfo info = {};
-    const bool CopyOnly = count == 0;
-    if (count == 1 && !overflow) RightsContracts(false);
-    LONG status = create(env, executable, command, directory, CopyOnly ? CREATE_SUSPENDED : 0, &startup, &info, nullptr, nullptr, nullptr, nullptr);
-    printf("export=LeCreateProcess entries=%lu bytes=%zu overflow=%d status=%08lx\n", count, bytes, overflow, status);
-    if (overflow) Check(status == static_cast<LONG>(0xC0000095), "overflow rejected");
-    else Check(status >= 0, "guarded legal blob accepted");
-    if (status >= 0 && CopyOnly) { TerminateProcess(info.hProcess, 0); WaitForSingleObject(info.hProcess, 5000); CloseHandle(info.hThread); CloseHandle(info.hProcess); }
-    if (status >= 0 && !CopyOnly) { DWORD wait = WaitForSingleObject(info.hProcess, 20000), code = 0; Check(wait == WAIT_OBJECT_0, "child completes"); if (wait != WAIT_OBJECT_0) TerminateProcess(info.hProcess, 99); GetExitCodeProcess(info.hProcess, &code); printf("child_exit=%08lx\n", code); Check(code == 0, "child contracts"); CloseHandle(info.hThread); CloseHandle(info.hProcess); }
-    if (count == 1 && !overflow && GetModuleHandleW(L"LocaleEmulator.dll")) { RightsContracts(true); FaultContracts(); }
-    if (count == 1 && !overflow && GetModuleHandleW(L"LocaleEmulator.dll")) { LargeAttributeListContract(); }
+    Check(!malformed || !LeValidateRuntimeInput(&env->Input), "malformed input accepted by local validator");
+
+    WCHAR command[32768];
+    swprintf_s(command, L"\"%s\" %s %lu", executable,
+        mode == LE_RUNTIME_REGISTRY_MODE_ADVANCED ? L"--registry-only" : L"--registry-and-failure", mode);
+    STARTUPINFOW startup = {};
+    startup.cb = sizeof(startup);
+    ProcessInfo info = {};
+    const bool copyOnly = mode == LE_RUNTIME_REGISTRY_MODE_NONE && !malformed;
+    if (mode == LE_RUNTIME_REGISTRY_MODE_STANDARD && !malformed) RightsContracts(false);
+    const NTSTATUS status = create(&env->Input, executable, command, directory, copyOnly ? CREATE_SUSPENDED : 0,
+        &startup, &info, nullptr, nullptr, nullptr, nullptr);
+    printf("export=LeCreateProcess mode=%lu bytes=%zu malformed=%d status=%08lx\n", mode, sizeof(*env), malformed, status);
+    if (malformed)
+        Check(status == static_cast<NTSTATUS>(0xC000000D), "malformed runtime input rejected");
+    else
+        Check(status >= 0, "legal runtime input accepted");
+    if (status >= 0 && copyOnly)
+    {
+        TerminateProcess(info.hProcess, 0);
+        WaitForSingleObject(info.hProcess, 5000);
+        CloseHandle(info.hThread);
+        CloseHandle(info.hProcess);
+    }
+    if (status >= 0 && !copyOnly)
+    {
+        DWORD wait = WaitForSingleObject(info.hProcess, 20000), code = 0;
+        Check(wait == WAIT_OBJECT_0, "child completes");
+        if (wait != WAIT_OBJECT_0) TerminateProcess(info.hProcess, 99);
+        GetExitCodeProcess(info.hProcess, &code);
+        printf("child_exit=%08lx\n", code);
+        Check(code == 0, "child contracts");
+        CloseHandle(info.hThread);
+        CloseHandle(info.hProcess);
+    }
+    Check(status >= 0 || (!info.hProcess && !info.hThread), "failed creation returned process handles");
+    if (mode == LE_RUNTIME_REGISTRY_MODE_STANDARD && !malformed && GetModuleHandleW(L"LocaleEmulator.dll"))
+    {
+        RightsContracts(true);
+        FaultContracts();
+        LargeAttributeListContract();
+    }
     VirtualFree(memory, 0, MEM_RELEASE);
     CleanupOwnChildren();
     return failures;
@@ -715,7 +756,8 @@ int wmain(int argc, wchar_t** argv)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     GetModuleFileNameW(nullptr, executable, _countof(executable)); wcscpy_s(directory, executable); *wcsrchr(directory, L'\\') = 0;
     if (argc > 1 && !wcscmp(argv[1], L"--failed-child")) { Sleep(60000); return 99; }
-    if (argc > 1 && !wcscmp(argv[1], L"--registry-and-failure")) { RegistryContract(argc > 2 && _wtoi(argv[2]) > 1); FailureContract(); return failures ? 1 : 0; }
+    if (argc > 1 && !wcscmp(argv[1], L"--registry-only")) { RegistryContract(argc > 2 && _wtoi(argv[2]) > 0); return failures ? 1 : 0; }
+    if (argc > 1 && !wcscmp(argv[1], L"--registry-and-failure")) { RegistryContract(argc > 2 && _wtoi(argv[2]) > 0); FailureContract(); return failures ? 1 : 0; }
     if (argc > 2 && !wcscmp(argv[1], L"--case")) return GuardContract(static_cast<ULONG>(_wtoi(argv[2])), argc > 3 && !wcscmp(argv[3], L"overflow")) ? 1 : 0;
     for (ULONG count = 0; count <= 2; ++count)
     {
