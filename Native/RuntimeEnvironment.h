@@ -2,13 +2,11 @@
 #define LOCALE_EMULATOR_RUNTIME_ENVIRONMENT_H
 
 #include <Windows.h>
-#include <limits.h>
 
-#define LE_RUNTIME_INPUT_VERSION 1u
+#define LE_RUNTIME_INPUT_VERSION 2u
 #define LE_RUNTIME_CONFIG_VERSION 1u
 #define LE_RUNTIME_MAX_SIZE (1024u * 1024u)
 #define LE_RUNTIME_MAX_STRING_BYTES (32768u)
-#define LE_RUNTIME_MAX_REGISTRY_ENTRIES 4096u
 
 #define LE_RUNTIME_REGISTRY_MODE_NONE 0u
 #define LE_RUNTIME_REGISTRY_MODE_STANDARD 1u
@@ -35,32 +33,7 @@ typedef struct _LE_RUNTIME_INPUT
     ULONG StandardNameLength;
     ULONG DaylightNameOffset;
     ULONG DaylightNameLength;
-    ULONG RegistryEntriesOffset;
-    ULONG RegistryEntriesCount;
-    ULONG RegistryEntriesSize;
 } LE_RUNTIME_INPUT, *PLE_RUNTIME_INPUT;
-
-// Optional mode-independent entry format. Product callers currently use the
-// built-in registry modes, so a normal launch keeps these fields zero.
-typedef struct _LE_RUNTIME_REGISTRY_ENTRY
-{
-    ULONGLONG OriginalRoot;
-    ULONG OriginalSubKeyOffset;
-    ULONG OriginalSubKeyLength;
-    ULONG OriginalValueNameOffset;
-    ULONG OriginalValueNameLength;
-    ULONG OriginalDataOffset;
-    ULONG OriginalDataLength;
-    ULONG OriginalDataType;
-    ULONGLONG RedirectedRoot;
-    ULONG RedirectedSubKeyOffset;
-    ULONG RedirectedSubKeyLength;
-    ULONG RedirectedValueNameOffset;
-    ULONG RedirectedValueNameLength;
-    ULONG RedirectedDataOffset;
-    ULONG RedirectedDataLength;
-    ULONG RedirectedDataType;
-} LE_RUNTIME_REGISTRY_ENTRY, *PLE_RUNTIME_REGISTRY_ENTRY;
 
 typedef struct _LE_RUNTIME_TIME_FIELDS
 {
@@ -104,8 +77,7 @@ typedef const LE_RUNTIME_CONFIG* PCLE_RUNTIME_CONFIG;
 #pragma pack(pop)
 
 #ifdef __cplusplus
-static_assert(sizeof(LE_RUNTIME_INPUT) == 68, "LE runtime input ABI size mismatch");
-static_assert(sizeof(LE_RUNTIME_REGISTRY_ENTRY) == 72, "LE runtime registry ABI size mismatch");
+static_assert(sizeof(LE_RUNTIME_INPUT) == 56, "LE runtime input ABI size mismatch");
 static_assert(sizeof(LE_RUNTIME_TIME_FIELDS) == 16, "LE runtime time fields ABI size mismatch");
 static_assert(sizeof(LE_RUNTIME_TIME_ZONE_INFORMATION) == 172, "LE runtime time zone ABI size mismatch");
 static_assert(sizeof(LE_RUNTIME_CONFIG) == 204, "LE runtime config ABI size mismatch");
@@ -148,19 +120,6 @@ static __inline BOOL LeRuntimeStringValid(
     return TRUE;
 }
 
-static __inline BOOL LeRuntimeRegistryEntryValid(
-    const BYTE* Base,
-    const LE_RUNTIME_REGISTRY_ENTRY* Entry,
-    ULONG TotalSize)
-{
-    return LeRuntimeStringValid(Base, Entry->OriginalSubKeyOffset, Entry->OriginalSubKeyLength, TotalSize, TRUE) &&
-        LeRuntimeStringValid(Base, Entry->OriginalValueNameOffset, Entry->OriginalValueNameLength, TotalSize, TRUE) &&
-        LeRuntimeRangeValid(Entry->OriginalDataOffset, Entry->OriginalDataLength, TotalSize) &&
-        LeRuntimeStringValid(Base, Entry->RedirectedSubKeyOffset, Entry->RedirectedSubKeyLength, TotalSize, TRUE) &&
-        LeRuntimeStringValid(Base, Entry->RedirectedValueNameOffset, Entry->RedirectedValueNameLength, TotalSize, TRUE) &&
-        LeRuntimeRangeValid(Entry->RedirectedDataOffset, Entry->RedirectedDataLength, TotalSize);
-}
-
 static __inline BOOL LeValidateRuntimeInput(const void* Buffer)
 {
     const BYTE* Base = (const BYTE*)Buffer;
@@ -187,33 +146,6 @@ static __inline BOOL LeValidateRuntimeInput(const void* Buffer)
         return FALSE;
     }
 
-    if (Input->RegistryEntriesCount == 0)
-    {
-        if (Input->RegistryEntriesOffset != 0 || Input->RegistryEntriesSize != 0)
-            return FALSE;
-    }
-    else
-    {
-        ULONG RequiredSize;
-        const LE_RUNTIME_REGISTRY_ENTRY* Entries;
-
-        if (Input->RegistryEntriesCount > LE_RUNTIME_MAX_REGISTRY_ENTRIES ||
-            Input->RegistryEntriesCount > 0xFFFFFFFFu / sizeof(LE_RUNTIME_REGISTRY_ENTRY) ||
-            Input->RegistryEntriesSize != Input->RegistryEntriesCount * sizeof(LE_RUNTIME_REGISTRY_ENTRY) ||
-            !LeRuntimeRangeValid(Input->RegistryEntriesOffset, Input->RegistryEntriesSize, Input->Size))
-        {
-            return FALSE;
-        }
-        RequiredSize = Input->RegistryEntriesOffset + Input->RegistryEntriesSize;
-        if (RequiredSize < Input->RegistryEntriesOffset)
-            return FALSE;
-        Entries = (const LE_RUNTIME_REGISTRY_ENTRY*)(Base + Input->RegistryEntriesOffset);
-        for (ULONG Index = 0; Index < Input->RegistryEntriesCount; ++Index)
-        {
-            if (!LeRuntimeRegistryEntryValid(Base, &Entries[Index], Input->Size))
-                return FALSE;
-        }
-    }
     return TRUE;
 }
 

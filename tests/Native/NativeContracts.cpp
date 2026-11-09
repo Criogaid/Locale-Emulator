@@ -20,7 +20,7 @@ struct EnvironmentFixture
     WCHAR Standard[1];
     WCHAR Daylight[1];
 };
-static_assert(sizeof(LE_RUNTIME_INPUT) == 68, "runtime input ABI");
+static_assert(sizeof(LE_RUNTIME_INPUT) == 56, "runtime input ABI");
 using Create = NTSTATUS(WINAPI*)(LE_RUNTIME_INPUT*, PCWSTR, PWSTR, PCWSTR, ULONG, STARTUPINFOW*, ProcessInfo*,
     SECURITY_ATTRIBUTES*, SECURITY_ATTRIBUTES*, void*, HANDLE);
 using Query = LONG(NTAPI*)(HANDLE, UNICODE_STRING*, ULONG, void*, ULONG, ULONG*);

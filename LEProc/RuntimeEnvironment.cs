@@ -6,8 +6,8 @@ namespace LEProc
 {
     internal sealed class RuntimeEnvironment
     {
-        private const uint HeaderSize = 68;
-        private const uint Version = 1;
+        private const uint HeaderSize = 56;
+        private const uint Version = 2;
         private const uint MaxSize = 1024 * 1024;
         private const uint MaxStringBytes = 32768;
 
@@ -50,9 +50,6 @@ namespace LEProc
                     writer.Write(standard.Length);
                     writer.Write(daylight.Offset);
                     writer.Write(daylight.Length);
-                    writer.Write(0u);
-                    writer.Write(0u);
-                    writer.Write(0u);
                 }
                 return payload.ToArray();
             }

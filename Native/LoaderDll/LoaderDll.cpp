@@ -16,9 +16,6 @@ static NTSTATUS PrepareRuntimeEnvironment(PLE_RUNTIME_INPUT Input, PLEPEB LePeb)
 
     if (LePeb == nullptr)
         return STATUS_INVALID_PARAMETER;
-    if (Input->RegistryEntriesCount != 0)
-        return STATUS_NOT_SUPPORTED;
-
     TimezoneCharacters = Input->TimezoneIdLength / sizeof(WCHAR);
     if (TimezoneCharacters >= countof(LePeb->TimezoneId))
         return STATUS_NAME_TOO_LONG;

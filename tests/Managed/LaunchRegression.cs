@@ -85,7 +85,7 @@ namespace ManagedRegression
             type.GetProperty("TimezoneId", Instance).SetValue(environment, "Tokyo Standard Time", null);
             var bytes = (byte[])Invoke(type.GetMethod("Serialize", Instance), environment);
             Check(BitConverter.ToUInt32(bytes, 0) == bytes.Length, "Runtime environment size is not self describing.");
-            Check(BitConverter.ToUInt32(bytes, 4) == 1, "Runtime environment version changed.");
+            Check(BitConverter.ToUInt32(bytes, 4) == 2, "Runtime environment version changed.");
             Check(BitConverter.ToUInt32(bytes, 8) == 932 && BitConverter.ToUInt32(bytes, 12) == 936,
                 "Runtime environment code pages changed.");
             Check(BitConverter.ToUInt32(bytes, 16) == 0x411 && BitConverter.ToUInt32(bytes, 20) == 128,
@@ -96,9 +96,6 @@ namespace ManagedRegression
             var timezoneLength = checked((int) BitConverter.ToUInt32(bytes, 36));
             Check(Encoding.Unicode.GetString(bytes, timezoneOffset, timezoneLength) == "Tokyo Standard Time",
                 "Runtime environment timezone ID changed.");
-            Check(BitConverter.ToUInt32(bytes, 56) == 0 && BitConverter.ToUInt32(bytes, 60) == 0
-                && BitConverter.ToUInt32(bytes, 64) == 0,
-                "Unused registry entry fields were not zeroed.");
         }
 
         internal static void TimezoneNamesAndStandardTimeContract()

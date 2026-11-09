@@ -56,7 +56,7 @@ LoaderDll 已启用编译器 `/guard:cf` 和链接器 `/GUARD:CF`。核心 DLL �
 
 完整入口自动构建并运行以下项目，对源码产物和实际 ZIP 各执行一次：
 
-- `NativeContracts`：通过唯一的 `LeCreateProcess` 导出验证版本化运行时环境块的保护页、相对偏移与计数溢出、注册表标准/Align64 的短缓冲区、名称和 canary，以及缺 DLL、跨位数非注入路径。测试仅修改自己进程的 IAT，实际触发 section、远程保护、写入、部分写入及恢复线程失败，验证适用的补丁回滚、shadow 释放、句柄清零和子进程退出。
+- `NativeContracts`：通过唯一的 `LeCreateProcess` 导出验证版本化运行时环境块的保护页、相对字符串偏移和溢出边界、注册表标准/Align64 的短缓冲区、名称和 canary，以及缺 DLL、跨位数非注入路径。测试仅修改自己进程的 IAT，实际触发 section、远程保护、写入、部分写入及恢复线程失败，验证适用的补丁回滚、shadow 释放、句柄清零和子进程退出。
 - `NativeDirectoryContracts`：创建受控临时对象目录，64 项长名称迫使枚举缓冲区扩容，验证目标项查找；不修改系统目录。
 - `HardeningCheck`：直接编译共享实现以验证 RX 跳板发布、原字节恢复和释放、显式长度保护页、SDK 长度边界、TEXTMETRIC 字符与 EM_GETLINE thunk。测试状态只属于 EXE，不新增产品导出或测试开关。
 - `HardeningMessages`：在真实注入的 CP932/936 进程检查 EDIT 消息容量和尾部、私有核心映像无 RWX、官方 security cookie 初始化和宿主 CFG 策略。两种防护测试项目均显式启用 CFG，不依赖环境变量开关。
