@@ -75,6 +75,7 @@ C01—C03 已用实际产品程序集验证：非法 XML 和锁定文件失败�
 - R14：User32 消息长度来自调用方或被控件过程返回时，宽字符乘法、负长度和 `ULONG` 窄化原先没有统一上限，异常值可能回绕为错误缓冲区大小或越过临时转换缓冲。现在在乘法、返回长度判断、列表框容量和宽窄转换前统一拒绝负值/超界值，并限制内核回调返回不超过已分配容量；x86/x64 双包完整回归和烟测通过。
 - R15：x86/x64 `CBTProc` 与 `CBTProcU` 保留未使用的 UnicodeWindow、OriginalProcW、CreateWnd 和 CreateParam 局部状态，增加维护噪声且容易掩盖真实生命周期；删除未使用局部变量，保留实际回调和清理流程，完整双包回归通过。
 - R16：x86/x64 公共查询辅助中的 `QuerySystemObjectTypes`、`QuerySystemHandles`、`Nt_QueryDosDevice`、`QueryCsrssProcessId` 及遍历宏在仓库内没有调用者，也不属于 DLL 导出；删除声明、实现和宏，保留仍被 `HookPort` 使用的 `ReleaseSystemInformation`。行为无变化，减少不可达代码和旧分配路径。完整双包回归通过。
+- R17：x86/x64 `NativeLoaderAdapter` 源文件内容完全相同，x64 项目条件组只是移除一个文件再加入重复副本；统一保留 `NativeLoaderAdapter.cs`，删除重复文件和条件替换。P/Invoke ABI 与 x86/x64 双包行为不变，托管双架构构建通过。
 
 ## 多语言里程碑
 

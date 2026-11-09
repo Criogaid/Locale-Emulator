@@ -89,10 +89,6 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
   </ItemGroup>
-  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <Compile Remove="NativeLoaderAdapter.cs" />
-    <Compile Include="NativeLoaderAdapterX64.cs" />
-  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LECommonLibrary\LECommonLibrary.csproj">
       <Project>{c4def32b-8fbb-41b6-80dc-c60339402323}</Project>
