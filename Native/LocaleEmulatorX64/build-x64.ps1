@@ -20,9 +20,16 @@ if ($Clean -and (Test-Path $outputRoot)) {
 }
 New-Item -ItemType Directory -Force $objectRoot, $libraryRoot, $binaryRoot | Out-Null
 
-$vsRoot = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools'
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+if (-not (Test-Path -LiteralPath $vswhere)) {
+    throw '未找到 Visual Studio Installer，无法定位 VS2019 官方工具链。'
+}
+$vsRoot = (& $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($vsRoot)) {
+    throw '未找到同时安装 MSBuild 和 C++ 工具的 Visual Studio 2019。'
+}
 $msvcRoot = Join-Path $vsRoot 'VC\Tools\MSVC\14.29.30133'
-$sdkRoot = 'C:\Program Files (x86)\Windows Kits\10'
+$sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
 $sdkVersion = '10.0.19041.0'
 $hostBin = Join-Path $msvcRoot 'bin\Hostx86\x64'
 $compiler = Join-Path $hostBin 'cl.exe'
