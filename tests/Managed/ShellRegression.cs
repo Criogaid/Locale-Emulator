@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32;
 
 namespace ManagedRegression
@@ -23,6 +24,7 @@ namespace ManagedRegression
             InstallerRegistrationFailuresRestoreRegistryOverride,
             ShellMenuHonorsCommandBudgetAndInsertionPosition,
             ShellFinalizationReleasesAllBitmaps,
+            ShellLongDropPathIsRead,
             InstallerInstalledProbeClosesRegistryKeys
         };
 
@@ -34,6 +36,7 @@ namespace ManagedRegression
         internal static void ShellMenuHonorsCommandBudgetAndInsertionPosition() { Run("menu"); }
         internal static void ShellFinalizationReleasesAllBitmaps() { Run("gdi"); }
         internal static void InstallerInstalledProbeClosesRegistryKeys() { Run("registry-handles"); }
+        internal static void ShellLongDropPathIsRead() { Run("long-path"); }
 
         private static void Run(string scenario)
         {
@@ -77,11 +80,13 @@ namespace ManagedRegression
                 if (scenario == "registration") RegistrationFailures(); else RegistryHandles();
                 return;
             }
-            if (scenario == "menu" || scenario == "gdi")
+            if (scenario == "menu" || scenario == "gdi" || scenario == "long-path")
             {
                 shellType = Assembly.LoadFrom(Path.Combine(directory, "LEContextMenuHandler.dll"))
                     .GetType("LEContextMenuHandler.FileContextMenuExt", true);
-                if (scenario == "menu") Menus(); else Bitmaps();
+                if (scenario == "menu") Menus();
+                else if (scenario == "gdi") Bitmaps();
+                else LongDropPath();
                 return;
             }
             Extraction(scenario);
@@ -226,6 +231,37 @@ namespace ManagedRegression
             }
         }
 
+        private void LongDropPath()
+        {
+            var method = shellType.GetMethod("GetDropFileName", BindingFlags.Static | BindingFlags.NonPublic);
+            Check(method != null, "Long path helper is missing.");
+            var path = Path.Combine(directory, new string('x', 300) + ".exe");
+            var bytes = Encoding.Unicode.GetBytes(path + "\0\0");
+            var hDrop = GlobalAlloc(0x42, (UIntPtr)(20 + bytes.Length));
+            Check(hDrop != IntPtr.Zero, "GlobalAlloc failed.");
+            try
+            {
+                var memory = GlobalLock(hDrop);
+                try
+                {
+                    Check(memory != IntPtr.Zero, "GlobalLock failed.");
+                    Marshal.WriteInt32(memory, 0, 20);
+                    Marshal.WriteInt32(memory, 16, 1);
+                    Marshal.Copy(bytes, 0, IntPtr.Add(memory, 20), bytes.Length);
+                }
+                finally
+                {
+                    if (memory != IntPtr.Zero) GlobalUnlock(hDrop);
+                }
+                var actual = (string)method.Invoke(null, new object[] { hDrop });
+                Check(actual == path, "Long shell path was truncated.");
+            }
+            finally
+            {
+                GlobalFree(hDrop);
+            }
+        }
+
         private void Menus()
         {
             object handler = Activator.CreateInstance(shellType);
@@ -332,6 +368,10 @@ namespace ManagedRegression
             internal IntPtr Bitmap;
         }
 
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr GlobalAlloc(uint flags, UIntPtr bytes);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr GlobalLock(IntPtr memory);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GlobalUnlock(IntPtr memory);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr GlobalFree(IntPtr memory);
         [DllImport("user32.dll")] private static extern IntPtr CreatePopupMenu();
         [DllImport("user32.dll")] private static extern bool DestroyMenu(IntPtr menu);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool AppendMenu(IntPtr menu, uint flags, UIntPtr id, string text);

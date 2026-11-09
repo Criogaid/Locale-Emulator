@@ -127,18 +127,7 @@ namespace LEContextMenuHandler
                 // one file is selected. 
                 if (nFiles == 1)
                 {
-                    // Get the path of the file.
-                    var fileName = new StringBuilder(260);
-                    if (0 == NativeMethods.DragQueryFile(hDrop,
-                                                         0,
-                                                         fileName,
-                                                         fileName.Capacity))
-                    {
-                        Marshal.ThrowExceptionForHR(WinError.E_FAIL);
-                    }
-
-                    _selectedFile = fileName.ToString();
-
+                    _selectedFile = GetDropFileName(hDrop);
                     _selectedLauncher = GlobalHelper.GetLauncherPath(_selectedFile);
                     if (_selectedLauncher == null)
                         Marshal.ThrowExceptionForHR(WinError.E_FAIL);
@@ -157,6 +146,18 @@ namespace LEContextMenuHandler
         #endregion
 
 
+
+        private static string GetDropFileName(IntPtr hDrop)
+        {
+            // Query the required length first; MAX_PATH is not a contract for shell paths.
+            var fileNameLength = NativeMethods.DragQueryFile(hDrop, 0, null, 0);
+            if (fileNameLength == 0)
+                Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+            var fileName = new StringBuilder(checked((int)fileNameLength + 1));
+            if (NativeMethods.DragQueryFile(hDrop, 0, fileName, fileName.Capacity) != fileNameLength)
+                Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+            return fileName.ToString();
+        }
 
         ~FileContextMenuExt()
         {
