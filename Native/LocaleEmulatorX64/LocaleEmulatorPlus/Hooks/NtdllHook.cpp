@@ -1,5 +1,4 @@
 ﻿#include "stdafx.h"
-#include "../../LoaderDll/BrokerProtocol.h"
 
 extern BOOL Initialize(PVOID BaseAddress, PLEP_BOOTSTRAP_PAYLOAD BootstrapPayload = nullptr);
 
@@ -31,105 +30,12 @@ PVOID SearchLdrInitNtContinue()
 }
 #endif
 
-#define LEP_BROKER_LAUNCH_CONTEXT TAG4('LBRC')
 
 static ULONG LepCurrentTimeMs()
 {
     return (ULONG)NtGetTickCount();
 }
 
-static const WCHAR LepCoreName[] = L"LocaleEmulator.dll";
-static const WCHAR LepX86Directory[] = L"x86\\";
-
-static BOOL LepIsX86Directory(PCWSTR Source, ULONG_PTR NamePosition)
-{
-    ULONG_PTR DirectoryLength = CONST_STRLEN(LepX86Directory);
-    return NamePosition >= DirectoryLength &&
-        StrNICompareW(Source + NamePosition - DirectoryLength, LepX86Directory, DirectoryLength) == 0;
-}
-
-static BOOL LepBuildArchitecturePath(PCWSTR Source, BOOL TargetWow64, PWSTR Destination, ULONG Capacity)
-{
-    static const WCHAR X86[] = L"_x86.dll";
-    static const WCHAR X64[] = L"_x64.dll";
-    PCWSTR Replacement = TargetWow64 ? X86 : X64;
-    ULONG_PTR Length, Position, SuffixLength, DirectoryLength;
-    BOOL InX86Directory;
-
-    if (Source == nullptr || Destination == nullptr || Capacity == 0)
-        return FALSE;
-
-    Length = StrLengthW(Source);
-    SuffixLength = CONST_STRLEN(X86);
-    if (Length >= SuffixLength &&
-        (StrNICompareW(Source + Length - SuffixLength, X86, SuffixLength) == 0 ||
-         StrNICompareW(Source + Length - SuffixLength, X64, SuffixLength) == 0))
-    {
-        if (Length + 1 > Capacity)
-            return FALSE;
-        CopyMemory(Destination, Source, (Length + 1) * sizeof(WCHAR));
-        CopyMemory(Destination + Length - SuffixLength, Replacement, (SuffixLength + 1) * sizeof(WCHAR));
-        return TRUE;
-    }
-
-    Position = Length;
-    while (Position != 0 && Source[Position - 1] != L'\\')
-        --Position;
-    if (StrICompareW(Source + Position, LepCoreName) != 0)
-        return FALSE;
-
-    DirectoryLength = CONST_STRLEN(LepX86Directory);
-    InX86Directory = LepIsX86Directory(Source, Position);
-    if (TargetWow64 == InX86Directory)
-    {
-        if (Length + 1 > Capacity)
-            return FALSE;
-        CopyMemory(Destination, Source, (Length + 1) * sizeof(WCHAR));
-        return TRUE;
-    }
-
-    if (TargetWow64)
-    {
-        if (Length > MAXULONG_PTR - DirectoryLength - 1 || Length + DirectoryLength + 1 > Capacity)
-            return FALSE;
-        CopyMemory(Destination, Source, Position * sizeof(WCHAR));
-        CopyMemory(Destination + Position, LepX86Directory, DirectoryLength * sizeof(WCHAR));
-        CopyMemory(Destination + Position + DirectoryLength, Source + Position, (Length - Position + 1) * sizeof(WCHAR));
-        return TRUE;
-    }
-
-    if (Length < DirectoryLength || Length - DirectoryLength + 1 > Capacity)
-        return FALSE;
-    CopyMemory(Destination, Source, (Position - DirectoryLength) * sizeof(WCHAR));
-    CopyMemory(Destination + Position - DirectoryLength, Source + Position, (Length - Position + 1) * sizeof(WCHAR));
-    return TRUE;
-}
-
-static BOOL LepBuildLoaderPath(PCWSTR CorePath, BOOL TargetWow64, PWSTR Destination, ULONG Capacity)
-{
-    static const WCHAR LoaderName[] = L"LoaderDll.dll";
-    static const WCHAR NameX86[] = L"LoaderDll_x86.dll";
-    static const WCHAR NameX64[] = L"LoaderDll_x64.dll";
-    ULONG_PTR Length, End, NameLength;
-    PCWSTR Name;
-
-    if (CorePath == nullptr || Destination == nullptr || Capacity == 0)
-        return FALSE;
-
-    Length = StrLengthW(CorePath);
-    End = Length;
-    while (End != 0 && CorePath[End - 1] != L'\\')
-        --End;
-    Name = StrICompareW(CorePath + End, LepCoreName) == 0
-        ? LoaderName
-        : (TargetWow64 ? NameX86 : NameX64);
-    NameLength = StrLengthW(Name);
-    if (End + NameLength + 1 > Capacity)
-        return FALSE;
-    CopyMemory(Destination, CorePath, End * sizeof(WCHAR));
-    CopyMemory(Destination + End, Name, (NameLength + 1) * sizeof(WCHAR));
-    return TRUE;
-}
 
 NTSTATUS LepGlobalData::BuildBootstrapPayload(
     PCWSTR FullPath,
@@ -185,164 +91,6 @@ NTSTATUS LepGlobalData::BuildBootstrapPayload(
     return STATUS_SUCCESS;
 }
 
-NTSTATUS LepGlobalData::InjectCrossArchitecture(HANDLE Process, BOOL CurrentWow64, PCLIENT_ID Cid, BOOL TargetWow64, ULONG InjectionFlags)
-{
-    ULONG_PTR ConfigSize;
-    ULONG PayloadSize;
-    PLEP_BOOTSTRAP_PAYLOAD Payload;
-    WCHAR MappingName[128], CorePath[MAX_NTPATH], LoaderPath[MAX_NTPATH], WindowsPath[MAX_NTPATH];
-    WCHAR RundllPath[MAX_NTPATH], CommandLine[2048];
-    HANDLE Mapping;
-    PLEP_BROKER_CONFIG Config;
-    STARTUPINFOW StartupInfo;
-    PROCESS_INFORMATION NativeInfo;
-    ULONG ProcessId = (ULONG)(ULONG_PTR)Cid->UniqueProcess;
-    DWORD ExitCode, Error;
-    BOOL Created;
-    NTSTATUS Status = STATUS_UNSUCCESSFUL;
-
-    Payload = nullptr;
-    PayloadSize = 0;
-    WriteLog(L"cross-arch begin pid=%u currentWow64=%u targetWow64=%u flags=%08X", ProcessId, CurrentWow64, TargetWow64, InjectionFlags);
-    if (!LepBuildArchitecturePath(GetLepDllFullPath(), TargetWow64, CorePath, countof(CorePath)) ||
-        !LepBuildLoaderPath(CorePath, TargetWow64, LoaderPath, countof(LoaderPath)))
-    {
-        WriteLog(L"cross-arch path derivation failed source=%ws", GetLepDllFullPath());
-        return STATUS_OBJECT_PATH_INVALID;
-    }
-    if (GetFileAttributesW(CorePath) == INVALID_FILE_ATTRIBUTES || GetFileAttributesW(LoaderPath) == INVALID_FILE_ATTRIBUTES)
-    {
-        WriteLog(L"cross-arch module missing core=%ws loader=%ws error=%u", CorePath, LoaderPath, GetLastError());
-        return STATUS_DLL_NOT_FOUND;
-    }
-
-    Status = BuildBootstrapPayload(CorePath, &Payload, &PayloadSize);
-    if (NT_FAILED(Status))
-    {
-        WriteLog(L"cross-arch payload build failed status=%08X", Status);
-        return Status;
-    }
-    ConfigSize = FIELD_OFFSET(LEP_BROKER_CONFIG, Payload) + PayloadSize;
-    if (ConfigSize > 0x7FFFFFFF)
-    {
-        FreeMemoryP(Payload);
-        return STATUS_BUFFER_OVERFLOW;
-    }
-
-    wsprintfW(MappingName, L"Local\\LEP_BROKER_%u_%u", ProcessId, GetCurrentProcessId());
-    DWORD ConfigHigh = 0;
-#if ML_AMD64
-    ConfigHigh = (DWORD)(ConfigSize >> 32);
-#endif
-    Mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, ConfigHigh, (DWORD)ConfigSize, MappingName);
-    if (Mapping == nullptr)
-    {
-        Error = GetLastError();
-        WriteLog(L"cross-arch CreateFileMapping failed=%u", Error);
-        FreeMemoryP(Payload);
-        return ML_NTSTATUS_FROM_WIN32(Error);
-    }
-    Config = (PLEP_BROKER_CONFIG)MapViewOfFile(Mapping, FILE_MAP_WRITE, 0, 0, ConfigSize);
-    if (Config == nullptr)
-    {
-        Error = GetLastError();
-        WriteLog(L"cross-arch MapViewOfFile failed=%u", Error);
-        CloseHandle(Mapping);
-        FreeMemoryP(Payload);
-        return ML_NTSTATUS_FROM_WIN32(Error);
-    }
-    ZeroMemory(Config, ConfigSize);
-    Config->Magic = LEP_BROKER_CONFIG_MAGIC;
-    Config->Version = LEP_BROKER_CONFIG_VERSION;
-    Config->Size = (ULONG)ConfigSize;
-    Config->PayloadSize = PayloadSize;
-    Config->Result = (ULONG)STATUS_UNSUCCESSFUL;
-    Config->ThreadId = (ULONG)(ULONG_PTR)Cid->UniqueThread;
-    Config->InjectionFlags = InjectionFlags;
-    CopyMemory(Config->Payload, Payload, PayloadSize);
-    FreeMemoryP(Payload);
-    Payload = nullptr;
-    WriteLog(L"cross-arch payload serialized bytes=%u", PayloadSize);
-    WriteLog(L"cross-arch mapping ready name=%ws size=%u loader=%ws core=%ws", MappingName,
-             (ULONG)ConfigSize, LoaderPath, CorePath);
-
-    if (GetWindowsDirectoryW(WindowsPath, countof(WindowsPath)) == 0)
-    {
-        Error = GetLastError();
-        WriteLog(L"cross-arch GetWindowsDirectory failed=%u", Error);
-        UnmapViewOfFile(Config);
-        CloseHandle(Mapping);
-        return ML_NTSTATUS_FROM_WIN32(Error);
-    }
-    if (TargetWow64)
-        wsprintfW(RundllPath, L"%s\\SysWOW64\\rundll32.exe", WindowsPath);
-    else if (CurrentWow64)
-        wsprintfW(RundllPath, L"%s\\Sysnative\\rundll32.exe", WindowsPath);
-    else
-        wsprintfW(RundllPath, L"%s\\System32\\rundll32.exe", WindowsPath);
-
-    wsprintfW(CommandLine, L"\"%s\" \"%s\",LepBrokerEntry %u|%s", RundllPath, LoaderPath, ProcessId, MappingName);
-    ZeroMemory(&StartupInfo, sizeof(StartupInfo));
-    StartupInfo.cb = sizeof(StartupInfo);
-    ZeroMemory(&NativeInfo, sizeof(NativeInfo));
-    lep::ActiveFrame BrokerLaunchFrame(LEP_BROKER_LAUNCH_CONTEXT);
-    BrokerLaunchFrame.Push();
-    Created = CreateProcessW(RundllPath, CommandLine, nullptr, nullptr, FALSE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &StartupInfo, &NativeInfo);
-    BrokerLaunchFrame.Pop();
-    if (!Created)
-    {
-        Error = GetLastError();
-        WriteLog(L"cross-arch broker CreateProcess failed=%u cmd=%ws", Error, CommandLine);
-        UnmapViewOfFile(Config);
-        CloseHandle(Mapping);
-        return ML_NTSTATUS_FROM_WIN32(Error);
-    }
-#if ENABLE_LOG
-    OBJECT_BASIC_INFORMATION SourceInfo = {};
-    NTSTATUS AccessStatus = NtQueryObject(Process, ObjectBasicInformation, &SourceInfo, sizeof(SourceInfo), nullptr);
-    // The legacy header calls ObjectBasicInformation.GrantedAccess DesiredAccess.
-    WriteLog(L"cross-arch created handle=%p queryStatus=%08X granted=%08X required=%08X",
-             Process, AccessStatus, SourceInfo.DesiredAccess, LEP_BROKER_PROCESS_ACCESS);
-#endif
-
-    HANDLE BrokerProcessHandle = nullptr;
-    if (DuplicateHandle(NtCurrentProcess(), Process, NativeInfo.hProcess, &BrokerProcessHandle,
-                        0, FALSE, DUPLICATE_SAME_ACCESS))
-    {
-        Config->ProcessHandleValue = (ULONGLONG)(ULONG_PTR)BrokerProcessHandle;
-        WriteLog(L"cross-arch duplicate created handle status=00000000 brokerHandle=%p", BrokerProcessHandle);
-    }
-    else
-    {
-        Error = GetLastError();
-        WriteLog(L"cross-arch duplicate created handle failed=%u; broker will use minimum-access OpenProcess", Error);
-    }
-
-    // Publish the broker-local handle before allowing the broker to run.
-    Status = NtResumeThread(NativeInfo.hThread, nullptr);
-    if (NT_FAILED(Status))
-    {
-        WriteLog(L"cross-arch resume broker failed=%08X", Status);
-        TerminateProcess(NativeInfo.hProcess, (ULONG)Status);
-        CloseHandle(NativeInfo.hThread);
-        CloseHandle(NativeInfo.hProcess);
-        UnmapViewOfFile(Config);
-        CloseHandle(Mapping);
-        return Status;
-    }
-    WriteLog(L"cross-arch broker started pid=%u cmd=%ws", NativeInfo.dwProcessId, CommandLine);
-    WaitForSingleObject(NativeInfo.hProcess, INFINITE);
-    ExitCode = (DWORD)STATUS_UNSUCCESSFUL;
-    GetExitCodeProcess(NativeInfo.hProcess, &ExitCode);
-    Status = (NTSTATUS)Config->Result;
-    WriteLog(L"cross-arch broker finished pid=%u processExit=%08X result=%08X stage=%ws granted=%08X",
-             NativeInfo.dwProcessId, ExitCode, Status, LepBrokerStageName(Config->Stage), Config->GrantedAccess);
-    CloseHandle(NativeInfo.hThread);
-    CloseHandle(NativeInfo.hProcess);
-    UnmapViewOfFile(Config);
-    CloseHandle(Mapping);
-    return Status;
-}
 
 /*
 NTSTATUS ReplaceMUIVersionLocaleInfo(PVOID& VersionData, ULONG& VersionSize)
@@ -1327,15 +1075,14 @@ LepNtQueryInformationThread(
 
 NTSTATUS LepGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid, ULONG InjectionFlags)
 {
-    if (lep::ActiveFrame::Find(LEP_BROKER_LAUNCH_CONTEXT) != nullptr)
-    {
-        WriteLog(L"skip child injection while broker launch is active");
-        return STATUS_SUCCESS;
-    }
 
     BOOL TargetWow64 = Ps::IsWow64Process(Process);
     if (this->Wow64 != TargetWow64)
-        return this->InjectCrossArchitecture(Process, this->Wow64, Cid, TargetWow64, InjectionFlags);
+    {
+        WriteLog(L"skip unsupported cross-architecture child injection pid=%u currentWow64=%u targetWow64=%u",
+                 (ULONG)(ULONG_PTR)Cid->UniqueProcess, this->Wow64, TargetWow64);
+        return STATUS_NOT_SUPPORTED;
+    }
 
     NTSTATUS Status = STATUS_SUCCESS;
     ULONG StartTime = LepCurrentTimeMs();
