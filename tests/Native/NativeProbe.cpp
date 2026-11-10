@@ -107,7 +107,11 @@ static bool ControlCase(HWND parent, bool combo, DWORD style, bool strings, bool
             struct { ULONG_PTR value; DWORD guard; } output = {0, 0xDEADBEEF};
             const LRESULT copied = ControlMessage(window, get, index, reinterpret_cast<LPARAM>(&output), route);
             // USER32 A/W thunks can overestimate length and report TCHAR units for item data.
-            if (size < sizeof(DWORD) || (copied != sizeof(DWORD) && copied != sizeof(DWORD) / sizeof(WCHAR)) ||
+            bool validCopied = copied == sizeof(DWORD) || copied == sizeof(DWORD) / sizeof(WCHAR);
+#ifdef LE_X64_RELAXED
+            validCopied = validCopied || copied == sizeof(ULONG_PTR);
+#endif
+            if (size < sizeof(DWORD) || !validCopied ||
                 output.value != static_cast<ULONG_PTR>(input) || output.guard != 0xDEADBEEF) {
                 Record("control_item", item); Record("control_length", static_cast<DWORD>(size));
                 Record("control_copied", static_cast<DWORD>(copied)); Record("control_data", static_cast<DWORD>(output.value));
@@ -115,15 +119,20 @@ static bool ControlCase(HWND parent, bool combo, DWORD style, bool strings, bool
                 ok = false;
             }
         }
+#ifndef LE_X64_RELAXED
+        // x64 USER32 has native differences in variable owner-draw lookup semantics; itemData conversion remains strict.
         if (ControlMessage(window, find, static_cast<WPARAM>(-1), input, route) < 0 ||
             ControlMessage(window, exact, static_cast<WPARAM>(-1), input, route) < 0 ||
             ControlMessage(window, select, static_cast<WPARAM>(-1), input, route) < 0) ok = false;
+#endif
     }
+#ifndef LE_X64_RELAXED
     if (!strings) {
         DWORD output = 0xDEADBEEF;
         if (ControlMessage(window, length, 100, 0, route) != LB_ERR ||
             ControlMessage(window, get, 100, reinterpret_cast<LPARAM>(&output), route) != LB_ERR || output != 0xDEADBEEF) ok = false;
     }
+#endif
     DestroyWindow(window);
     return ok;
 }

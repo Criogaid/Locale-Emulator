@@ -72,6 +72,9 @@ New-Item -ItemType Directory -Path $packageDocs -Force | Out-Null
 foreach ($name in @('SOURCES.md', 'MAINTENANCE.md', 'QUALITY.md', 'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $repository "docs/$name") -Destination $packageDocs
 }
+$packageScripts = Join-Path $package 'Scripts'
+New-Item -ItemType Directory -Path $packageScripts -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $repository 'Scripts/Install-ExplorerLocaleVerb.ps1') -Destination $packageScripts
 $packageNative = Join-Path $package 'Native'
 New-Item -ItemType Directory -Path $packageNative -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repository 'Native/Toolchain.props') -Destination $packageNative

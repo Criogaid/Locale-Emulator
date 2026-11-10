@@ -30,6 +30,13 @@ Write-Host '[dual 3/6] 构建 x64 属性表边界探针'
 if ($LASTEXITCODE -ne 0) {
     throw 'x64 属性表边界探针构建失败。'
 }
+foreach ($project in @('tests/Native/NativeProbe.vcxproj', 'tests/Native/NativeLaunch.vcxproj')) {
+    $logName = 'dual-x64-' + [IO.Path]::GetFileNameWithoutExtension($project) + '-build.log'
+    & $msbuild (Join-Path $repository $project) /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 "/fl" "/flp:logfile=$(Join-Path $logs $logName);verbosity=normal;encoding=UTF-8"
+    if ($LASTEXITCODE -ne 0) {
+        throw "x64 原生探针构建失败：$project"
+    }
+}
 
 
 Write-Host '[dual 4/6] 构建 x64 LEProc 与公共托管库'
@@ -112,6 +119,9 @@ function Copy-PackageCommon {
     }
     Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination $DestinationRoot -Force
     Copy-Item -LiteralPath (Join-Path $repository 'Directory.Build.props') -Destination $DestinationRoot -Force
+    $scripts = Join-Path $DestinationRoot 'Scripts'
+    New-Item -ItemType Directory -Path $scripts -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repository 'Scripts/Install-ExplorerLocaleVerb.ps1') -Destination $scripts -Force
     $docs = Join-Path $DestinationRoot 'docs'
     New-Item -ItemType Directory -Path $docs -Force | Out-Null
     foreach ($name in @('SOURCES.md', 'MAINTENANCE.md', 'QUALITY.md', 'THIRD_PARTY_NOTICES.md')) {
@@ -324,6 +334,33 @@ try {
 if (-not (Test-Path -LiteralPath $x86Marker)) {
     throw 'x64 包中的 x86 helper 未生成目标进程标记。'
 }
+function Assert-X64NativeReport {
+    param([string]$Report, [uint32]$CodePage)
+    foreach ($path in @($Report, ($Report + '.child'))) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "未生成 x64 原生回归报告：$path"
+        }
+        $values = @{}
+        foreach ($line in Get-Content -LiteralPath $path) {
+            $key, $value = $line -split '=', 2
+            $values[$key] = $value
+        }
+        if ($values.failures -ne '0' -or $values.acp -ne "$CodePage") {
+            throw "x64 原生回归失败：$path（ACP=$($values.acp)，failures=$($values.failures)）"
+        }
+    }
+}
+$x64NativeProbe = Join-Path $nativeX64Root 'NativeProbe.exe'
+$x64NativeLaunch = Join-Path $nativeX64Root 'NativeLaunch.exe'
+foreach ($codePage in @(932, 936)) {
+    $report = Join-Path $smokeRoot "native-x64-$codePage.txt"
+    & $x64NativeLaunch $x64.Package $x64NativeProbe $report "$codePage" $smokeRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "x64 原生探针失败，代码页 $codePage，退出码 $LASTEXITCODE。"
+    }
+    Assert-X64NativeReport $report $codePage
+}
+Write-Host 'PASS x64 NativeProbe owner-draw/font matrix'
 
 Write-Host '[dual 6/6] 双包验收完成'
 Write-Host "x86: $($x86.Archive)"

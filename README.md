@@ -59,6 +59,15 @@ Visual Studio 可打开 `LocaleEmulator.sln` 构建默认 x86 产品；x64 原�
 
 需要传统右键菜单时，可手动运行 `LEInstaller.exe` 安装或卸载。Windows 11 下该菜单位于“显示更多选项”；新式一级菜单尚未加入。构建回归只打开和关闭安装器，不点击安装按钮，也不修改 Shell 注册。
 
+发行包中的 `Scripts/Install-ExplorerLocaleVerb.ps1` 可为当前用户安装或卸载静态右键菜单，不需要管理员权限：
+
+```powershell
+pwsh -NoProfile -File ./Scripts/Install-ExplorerLocaleVerb.ps1
+pwsh -NoProfile -File ./Scripts/Install-ExplorerLocaleVerb.ps1 -Uninstall
+```
+
+该入口调用包内同架构的 `LEProc.exe` 默认配置路径；x64 包用于 x64 目标，x86 包用于 x86 目标。
+
 界面语言跟随 Windows 的 UI 语言。GUI 与 Shell 菜单保留仓库现有语言资源；安装器和 LEProc/公共错误提示提供英文、简体中文，并在缺少对应翻译时回退到英文。发行包中的 `Lang`、`InstallerLang` 和 `CommonLang` 目录可随包更新，不会改变目标程序的区域模拟语言。
 
 已移除访问归档上游 HTTP 清单的自动更新器。更新通过本仓库的源码或后续正式发行包完成。

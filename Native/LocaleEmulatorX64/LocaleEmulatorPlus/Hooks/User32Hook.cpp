@@ -427,10 +427,10 @@ ForceInline BOOL IsListBoxStringMessage(UINT Message)
 
 ForceInline BOOL IsWindowClass(HWND Window, PCWSTR ClassName)
 {
-    WCHAR WindowClass[16];
+    WCHAR WindowClass[32];
     PWSTR CurrentWindowClass;
 
-    if (GetClassNameW(Window, WindowClass, countof(WindowClass)) == 0)
+    if (RealGetWindowClassW(Window, WindowClass, countof(WindowClass)) == 0)
         return FALSE;
 
     CurrentWindowClass = WindowClass;
