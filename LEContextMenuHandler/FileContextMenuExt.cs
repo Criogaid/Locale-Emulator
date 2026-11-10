@@ -47,30 +47,41 @@ namespace LEContextMenuHandler
 
         public FileContextMenuExt()
         {
-            var is4K = SystemHelper.Is4KDisplay();
+            try
+            {
+                var is4K = SystemHelper.Is4KDisplay();
 
-            //Load the bitmap for the menu item.
-            _menuBmpPink = is4K ? Resource.purple_200.GetHbitmap() : Resource.purple.GetHbitmap();
-            _menuBmpGray = is4K ? Resource.gray_200.GetHbitmap() : Resource.gray.GetHbitmap();
-            _menuBmpBlue = is4K ? Resource.blue_200.GetHbitmap() : Resource.blue.GetHbitmap();
-            _menuBmpYellow = is4K ? Resource.yellow_200.GetHbitmap() : Resource.yellow.GetHbitmap();
+                //Load the bitmap for the menu item.
+                _menuBmpPink = is4K ? Resource.purple_200.GetHbitmap() : Resource.purple.GetHbitmap();
+                _menuBmpGray = is4K ? Resource.gray_200.GetHbitmap() : Resource.gray.GetHbitmap();
+                _menuBmpBlue = is4K ? Resource.blue_200.GetHbitmap() : Resource.blue.GetHbitmap();
+                _menuBmpYellow = is4K ? Resource.yellow_200.GetHbitmap() : Resource.yellow.GetHbitmap();
 
-            //Load default items.
-            menuItems.Add(new LEMenuItem(I18n.GetString("Submenu"), null, _menuBmpYellow, ""));
-            menuItems.Add(new LEMenuItem(I18n.GetString("RunDefault"), null, _menuBmpYellow, "-run \"%APP%\""));
-            menuItems.Add(new LEMenuItem(I18n.GetString("ManageApp"), null, _menuBmpGray, "-manage \"%APP%\""));
-            menuItems.Add(new LEMenuItem(I18n.GetString("ManageAll"), null, _menuBmpBlue, "-global"));
+                //Load default items.
+                menuItems.Add(new LEMenuItem(I18n.GetString("Submenu"), null, _menuBmpYellow, ""));
+                menuItems.Add(new LEMenuItem(I18n.GetString("RunDefault"), null, _menuBmpYellow, "-run \"%APP%\""));
+                menuItems.Add(new LEMenuItem(I18n.GetString("ManageApp"), null, _menuBmpGray, "-manage \"%APP%\""));
+                menuItems.Add(new LEMenuItem(I18n.GetString("ManageAll"), null, _menuBmpBlue, "-global"));
 
-            //If global config does not exist, create a new one.
-            LEConfig.CheckGlobalConfigFile(true);
+                //If global config does not exist, create a new one.
+                LEConfig.CheckGlobalConfigFile(true);
 
-            //Load global profiles.
-            Array.ForEach(LEConfig.GetProfiles(),
-                          p =>
-                          menuItems.Add(new LEMenuItem(p.Name,
-                                                       p.ShowInMainMenu,
-                                                       _menuBmpPink,
-                                                       $"-runas \"{p.Guid}\" \"%APP%\"")));
+                //Load global profiles.
+                Array.ForEach(LEConfig.GetProfiles(),
+                              p =>
+                                  menuItems.Add(new LEMenuItem(p.Name,
+                                                               p.ShowInMainMenu,
+                                                               _menuBmpPink,
+                                                               $"-runas \"{p.Guid}\" \"%APP%\"")));
+            }
+            catch
+            {
+                ReleaseBitmap(ref _menuBmpPink);
+                ReleaseBitmap(ref _menuBmpGray);
+                ReleaseBitmap(ref _menuBmpBlue);
+                ReleaseBitmap(ref _menuBmpYellow);
+                throw;
+            }
         }
 
         #region IShellExtInit Members
@@ -103,43 +114,52 @@ namespace LEContextMenuHandler
                          lindex = -1,
                          tymed = TYMED.TYMED_HGLOBAL
                      };
-            STGMEDIUM stm;
+            STGMEDIUM stm = new STGMEDIUM();
+            var mediumAcquired = false;
 
             // The pDataObj pointer contains the objects being acted upon. In this 
             // example, we get an HDROP handle for enumerating the selected files 
             // and folders.
             var dataObject = (IDataObject)Marshal.GetObjectForIUnknown(pDataObj);
-            dataObject.GetData(ref fe, out stm);
-
             try
             {
-                // Get an HDROP handle.
-                var hDrop = stm.unionmember;
-                if (hDrop == IntPtr.Zero)
+                dataObject.GetData(ref fe, out stm);
+                mediumAcquired = true;
+                try
                 {
-                    throw new ArgumentException();
-                }
+                    // Get an HDROP handle.
+                    var hDrop = stm.unionmember;
+                    if (hDrop == IntPtr.Zero)
+                    {
+                        throw new ArgumentException();
+                    }
 
-                // Determine how many files are involved in this operation.
-                var nFiles = NativeMethods.DragQueryFile(hDrop, uint.MaxValue, null, 0);
+                    // Determine how many files are involved in this operation.
+                    var nFiles = NativeMethods.DragQueryFile(hDrop, uint.MaxValue, null, 0);
 
-                // This code sample displays the custom context menu item when only 
-                // one file is selected. 
-                if (nFiles == 1)
-                {
-                    _selectedFile = GetDropFileName(hDrop);
-                    _selectedLauncher = GlobalHelper.GetLauncherPath(_selectedFile);
-                    if (_selectedLauncher == null)
+                    // This code sample displays the custom context menu item when only
+                    // one file is selected.
+                    if (nFiles == 1)
+                    {
+                        _selectedFile = GetDropFileName(hDrop);
+                        _selectedLauncher = GlobalHelper.GetLauncherPath(_selectedFile);
+                        if (_selectedLauncher == null)
+                            Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+                    }
+                    else
+                    {
                         Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+                    }
                 }
-                else
+                finally
                 {
-                    Marshal.ThrowExceptionForHR(WinError.E_FAIL);
+                    if (mediumAcquired)
+                        NativeMethods.ReleaseStgMedium(ref stm);
                 }
             }
             finally
             {
-                NativeMethods.ReleaseStgMedium(ref stm);
+                Marshal.ReleaseComObject(dataObject);
             }
         }
 
@@ -350,11 +370,19 @@ namespace LEContextMenuHandler
         /// </param>
         public void InvokeCommand(IntPtr pici)
         {
+            if (pici == IntPtr.Zero)
+                Marshal.ThrowExceptionForHR(WinError.E_INVALIDARG);
+
             var ici = (CMINVOKECOMMANDINFO)Marshal.PtrToStructure(pici, typeof (CMINVOKECOMMANDINFO));
+            var verb = ici.verb.ToInt64();
+            if (verb < 0 || verb > ushort.MaxValue)
+                Marshal.ThrowExceptionForHR(WinError.E_INVALIDARG);
 
-            var item = menuItems[NativeMethods.LowWord(ici.verb.ToInt32())];
+            var command = (int)verb;
+            if (command >= menuItems.Count)
+                Marshal.ThrowExceptionForHR(WinError.E_INVALIDARG);
 
-            OnVerbDisplayFileName(item.Commands);
+            OnVerbDisplayFileName(menuItems[command].Commands);
         }
 
         /// <summary>

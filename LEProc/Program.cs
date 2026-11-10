@@ -125,6 +125,7 @@ namespace LEProc
                 Process.Start(
                     Path.Combine(GlobalHelper.ProductDirectory, "LEGUI.exe"),
                     WindowsCommandLine.QuoteArgument(path + ".le.config"));
+                return 0;
             }
 
             var profiles = LEConfig.GetProfiles(conf);

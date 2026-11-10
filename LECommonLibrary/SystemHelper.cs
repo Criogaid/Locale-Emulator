@@ -51,19 +51,26 @@ namespace LECommonLibrary
 
         public static bool Is4KDisplay()
         {
-            Graphics g = Graphics.FromHwnd(IntPtr.Zero);
-            IntPtr desktop = g.GetHdc();
-
-            // 10 = VERTRES
-            // 90 = LOGPIXELSY
-            // 117 = DESKTOPVERTRES
-            int logicDpi = GetDeviceCaps(desktop, 10);
-            int logY = GetDeviceCaps(desktop, 90);
-            int realDpi = GetDeviceCaps(desktop, 117);
-
-            g.ReleaseHdc();
-
-            return (realDpi/logicDpi == 2) || (logY/96 == 2);
+            using (var graphics = Graphics.FromHwnd(IntPtr.Zero))
+            {
+                var desktop = graphics.GetHdc();
+                if (desktop == IntPtr.Zero)
+                    return false;
+                try
+                {
+                    // 10 = VERTRES
+                    // 90 = LOGPIXELSY
+                    // 117 = DESKTOPVERTRES
+                    var logicDpi = GetDeviceCaps(desktop, 10);
+                    var logY = GetDeviceCaps(desktop, 90);
+                    var realDpi = GetDeviceCaps(desktop, 117);
+                    return logicDpi != 0 && ((realDpi / logicDpi == 2) || (logY / 96 == 2));
+                }
+                finally
+                {
+                    graphics.ReleaseHdc(desktop);
+                }
+            }
         }
 
         public static void DisableDPIScale()
@@ -92,18 +99,33 @@ namespace LECommonLibrary
 
         public static bool CheckPermission(string path)
         {
+            string tempPath = null;
             try
             {
-                var tempGuid = Guid.NewGuid().ToString();
-
-                File.Create(Path.Combine(path, tempGuid)).Close();
-                File.Delete(Path.Combine(path, tempGuid));
-
+                tempPath = Path.Combine(path, Guid.NewGuid().ToString());
+                using (File.Create(tempPath))
+                {
+                }
+                File.Delete(tempPath);
                 return true;
             }
             catch
             {
                 return false;
+            }
+            finally
+            {
+                if (tempPath != null)
+                {
+                    try
+                    {
+                        File.Delete(tempPath);
+                    }
+                    catch
+                    {
+                        // Permission probing must preserve its result if cleanup also fails.
+                    }
+                }
             }
         }
 

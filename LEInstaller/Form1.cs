@@ -515,11 +515,6 @@ namespace LEInstaller
         [DllImport("advapi32.dll", SetLastError = true)]
         public static extern int RegCloseKey(UIntPtr hKey);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern UInt32 SendMessage(IntPtr hWnd, UInt32 msg, UInt32 wParam, UInt32 lParam);
@@ -527,9 +522,5 @@ namespace LEInstaller
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
 
-        private void ButtonExtract_Click(object sender, EventArgs e)
-        {
-
-        }
     }
 }

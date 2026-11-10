@@ -89,7 +89,7 @@ namespace LEGUI
             LEConfig.SaveApplicationConfigFile(App.StandaloneFilePath, crt);
         }
 
-        private void CreateShortcut(string path)
+        private bool CreateShortcut(string path)
         {
             try
             {
@@ -110,10 +110,12 @@ namespace LEGUI
                           Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
                                        Path.GetFileNameWithoutExtension(path) + ".lnk"),
                           false);
+                return true;
             }
             catch (Exception e)
             {
                 MessageBox.Show(e.Message + "\r\n\r\n" + e.StackTrace);
+                return false;
             }
         }
 
@@ -143,7 +145,8 @@ namespace LEGUI
         {
             SaveSetting();
 
-            CreateShortcut(ApplicationPath);
+            if (!CreateShortcut(ApplicationPath))
+                return;
 
             RunAndShutdown();
         }

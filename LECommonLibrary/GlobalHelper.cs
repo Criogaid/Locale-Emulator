@@ -97,13 +97,14 @@ namespace LECommonLibrary
 
             foreach (var dll in dlls)
             {
+                var systemDirectory = Environment.Is64BitProcess || !SystemHelper.Is64BitOS()
+                    ? @"Windows\System32\"
+                    : @"Windows\SysWOW64\";
                 var version = FileVersionInfo.GetVersionInfo(
-                                                             Path.Combine(
-                                                                          Path.GetPathRoot(Environment.SystemDirectory),
-                                                                          SystemHelper.Is64BitOS()
-                                                                              ? @"Windows\SysWOW64\"
-                                                                              : @"Windows\System32\",
-                                                                          dll));
+                    Path.Combine(
+                        Path.GetPathRoot(Environment.SystemDirectory),
+                        systemDirectory,
+                        dll));
 
                 result.Append(dll);
                 result.Append(": ");

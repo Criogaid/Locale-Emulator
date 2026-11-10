@@ -91,16 +91,5 @@ namespace LEContextMenuHandler
         [DllImport("gdi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern bool DeleteObject(IntPtr hObject);
 
-        public static int HighWord(int number)
-        {
-            return (number & 0x80000000) == 0x80000000
-                       ? number >> 16
-                       : (number >> 16) & 0xffff;
-        }
-
-        public static int LowWord(int number)
-        {
-            return number & 0xffff;
-        }
     }
 }
