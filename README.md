@@ -57,16 +57,9 @@ Visual Studio 可打开 `LocaleEmulator.sln` 构建默认 x86 产品；x64 原�
 
 使用 `LEGUI.exe` 编辑全局配置；将目标程序拖到 LEGUI 可创建应用配置，再通过 `LEProc.exe -run <目标程序> [参数]` 使用它。配置中的 Parameter 仍是完整 Windows 命令行片段，并优先于额外传入的参数。
 
-需要传统右键菜单时，可手动运行 `LEInstaller.exe` 安装或卸载。Windows 11 下该菜单位于“显示更多选项”；新式一级菜单尚未加入。构建回归只打开和关闭安装器，不点击安装按钮，也不修改 Shell 注册。
-
-发行包中的 `Scripts/Install-ExplorerLocaleVerb.ps1` 可为当前用户安装或卸载静态右键菜单，不需要管理员权限：
-
-```powershell
-pwsh -NoProfile -File ./Scripts/Install-ExplorerLocaleVerb.ps1
-pwsh -NoProfile -File ./Scripts/Install-ExplorerLocaleVerb.ps1 -Uninstall
-```
-
-该入口调用包内同架构的 `LEProc.exe` 默认配置路径；x64 包用于 x64 目标，x86 包用于 x86 目标。
+需要右键菜单时运行发行包中的 `LEInstaller.exe`。选择“为当前用户安装”会一次性注册原有的配置菜单和一个静态的“使用 Locale Emulator 运行”入口；选择“为当前用户卸载”会一起移除。整个流程不要求用户额外执行 PowerShell 脚本。
+Windows 11 下菜单可能位于“显示更多选项”；新式一级菜单尚未加入。静态入口调用包内同架构的 `LEProc.exe` 默认配置路径，x64 包用于 x64 目标，x86 包用于 x86 目标。
+“为所有用户安装/卸载”继续管理传统的机器级菜单；静态入口是当前用户注册表项，因此只随“为当前用户安装/卸载”管理。构建回归只打开和关闭安装器，不点击安装按钮，也不修改 Shell 注册。
 
 界面语言跟随 Windows 的 UI 语言。GUI 与 Shell 菜单保留仓库现有语言资源；安装器和 LEProc/公共错误提示提供英文、简体中文，并在缺少对应翻译时回退到英文。发行包中的 `Lang`、`InstallerLang` 和 `CommonLang` 目录可随包更新，不会改变目标程序的区域模拟语言。
 

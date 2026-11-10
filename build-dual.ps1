@@ -119,9 +119,6 @@ function Copy-PackageCommon {
     }
     Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination $DestinationRoot -Force
     Copy-Item -LiteralPath (Join-Path $repository 'Directory.Build.props') -Destination $DestinationRoot -Force
-    $scripts = Join-Path $DestinationRoot 'Scripts'
-    New-Item -ItemType Directory -Path $scripts -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repository 'Scripts/Install-ExplorerLocaleVerb.ps1') -Destination $scripts -Force
     $docs = Join-Path $DestinationRoot 'docs'
     New-Item -ItemType Directory -Path $docs -Force | Out-Null
     foreach ($name in @('SOURCES.md', 'MAINTENANCE.md', 'QUALITY.md', 'THIRD_PARTY_NOTICES.md')) {

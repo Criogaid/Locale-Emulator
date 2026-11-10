@@ -16,6 +16,7 @@ A reboot may be required to unlock some components.</UninstallFinished>
   <AllUsersInstall>Install for all users</AllUsersInstall>
   <AllUsersUninstall>Uninstall for all users</AllUsersUninstall>
   <EditGlobal>Edit global profile list</EditGlobal>
+  <RunWithLocaleEmulator>Run with Locale Emulator</RunWithLocaleEmulator>
   <GroupCurrentUser>(1.1) Install for yourself</GroupCurrentUser>
   <GroupAllUsers>(1.2) Install for all users on this PC (requires administrator)</GroupAllUsers>
   <GroupProfiles>(2) Customize your profiles</GroupProfiles>
@@ -30,4 +31,5 @@ Otherwise, follow these steps:
   <CannotOpenClassesKey>Cannot open the current user's Classes key.</CannotOpenClassesKey>
   <MissingPayload>The installer is missing an embedded component.</MissingPayload>
   <CannotCreateContextMenuKey>Cannot create the context menu registry key.</CannotCreateContextMenuKey>
+  <MissingLauncher>The packaged LEProc.exe is missing.</MissingLauncher>
 </Strings>

@@ -45,7 +45,7 @@ namespace ManagedRegression
             AppDomain domain = null;
             try
             {
-                foreach (var name in new[] { "LEInstaller.exe", "LEContextMenuHandler.dll", "LECommonLibrary.dll" })
+                foreach (var name in new[] { "LEInstaller.exe", "LEContextMenuHandler.dll", "LECommonLibrary.dll", "LEProc.exe" })
                     File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, name), Path.Combine(directory, name));
                 domain = AppDomain.CreateDomain("ShellRegression", null, new AppDomainSetup { ApplicationBase = directory });
                 var worker = (ShellRegressionWorker)domain.CreateInstanceFromAndUnwrap(
@@ -228,6 +228,32 @@ namespace ManagedRegression
             {
                 keyName.SetValue(null, original);
                 Registry.CurrentUser.DeleteSubKeyTree(isolated, false);
+            }
+
+            var staticKeyName = manager.GetField("staticVerbKeyName", BindingFlags.Static | BindingFlags.NonPublic);
+            string staticOriginal = (string)staticKeyName.GetValue(null);
+            string staticIsolated = @"Software\Classes\LE-ShellRegression-Static-" + Guid.NewGuid();
+            try
+            {
+                staticKeyName.SetValue(null, staticIsolated);
+                var launcher = Path.Combine(directory, "LEProc.exe");
+                manager.GetMethod("RegisterStaticExplorerVerb").Invoke(null, new object[] { launcher });
+                using (var command = Registry.CurrentUser.OpenSubKey(staticIsolated + @"\command"))
+                {
+                    Check(command != null, "Static Explorer verb command key was not created.");
+                    Check((string)command.GetValue(null) == "\"" + launcher + "\" \"%1\"",
+                        "Static Explorer verb command was encoded incorrectly.");
+                }
+                Check((bool)manager.GetMethod("IsStaticExplorerVerbInstalled").Invoke(null, null),
+                    "Static Explorer verb was not detected after registration.");
+                manager.GetMethod("UnregisterStaticExplorerVerb").Invoke(null, null);
+                Check(!(bool)manager.GetMethod("IsStaticExplorerVerbInstalled").Invoke(null, null),
+                    "Static Explorer verb remained after unregistration.");
+            }
+            finally
+            {
+                staticKeyName.SetValue(null, staticOriginal);
+                Registry.CurrentUser.DeleteSubKeyTree(staticIsolated, false);
             }
         }
 

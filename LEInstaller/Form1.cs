@@ -108,9 +108,9 @@ namespace LEInstaller
             AddShieldToButton(buttonInstallAllUsers);
             AddShieldToButton(buttonUninstallAllUsers);
 
-            buttonUninstall.Enabled = ShellExtensionManager.IsInstalled(false);
+            buttonUninstall.Enabled = ShellExtensionManager.IsInstalled(false) || ShellExtensionManager.IsStaticExplorerVerbInstalled();
             buttonUninstallAllUsers.Enabled = ShellExtensionManager.IsInstalled(true);
-            buttonEditGlobal.Enabled = ShellExtensionManager.IsInstalled(true) || ShellExtensionManager.IsInstalled(false);
+            buttonEditGlobal.Enabled = ShellExtensionManager.IsInstalled(true) || ShellExtensionManager.IsInstalled(false) || ShellExtensionManager.IsStaticExplorerVerbInstalled();
 
             switch (cmdMode)
             {
@@ -259,12 +259,18 @@ namespace LEInstaller
         private bool ChangeRegistration(bool allUsers, bool register)
         {
             operationError = null;
+            var staticVerbTouched = false;
+            var staticVerbWasInstalled = false;
             try
             {
                 // Load before overriding HKCR so missing payloads have no registry side effects.
-                var assembly = Assembly.LoadFrom(Path.Combine(crtDir, "LEContextMenuHandler.dll"));
                 if (allUsers && !IsAdministrator())
                     throw new UnauthorizedAccessException(I18n.GetString("AllUsersAdminRequired"));
+                var shellWasInstalled = ShellExtensionManager.IsInstalled(allUsers);
+                var assembly = register || shellWasInstalled
+                    ? Assembly.LoadFrom(Path.Combine(crtDir, "LEContextMenuHandler.dll"))
+                    : null;
+                staticVerbWasInstalled = !allUsers && ShellExtensionManager.IsStaticExplorerVerbInstalled();
                 var rs = new RegistrationServices();
                 var assemblyTouched = false;
                 var shellTouched = false;
@@ -276,6 +282,11 @@ namespace LEInstaller
                     {
                         if (register)
                         {
+                            if (!allUsers)
+                            {
+                                staticVerbTouched = true;
+                                ShellExtensionManager.RegisterStaticExplorerVerb(Path.Combine(crtDir, "LEProc.exe"));
+                            }
                             assemblyTouched = true;
                             if (!rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase))
                                 throw new InvalidOperationException(I18n.GetString("NoRegisterableComTypes"));
@@ -284,11 +295,19 @@ namespace LEInstaller
                         }
                         else
                         {
-                            shellTouched = true;
-                            ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
-                            assemblyTouched = true;
-                            if (!rs.UnregisterAssembly(assembly))
-                                throw new InvalidOperationException(I18n.GetString("NoRegisterableComTypes"));
+                            if (!allUsers)
+                            {
+                                staticVerbTouched = true;
+                                ShellExtensionManager.UnregisterStaticExplorerVerb();
+                            }
+                            if (shellWasInstalled)
+                            {
+                                shellTouched = true;
+                                ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers);
+                                assemblyTouched = true;
+                                if (!rs.UnregisterAssembly(assembly))
+                                    throw new InvalidOperationException(I18n.GetString("NoRegisterableComTypes"));
+                            }
                         }
                     }
                     catch (Exception error)
@@ -296,6 +315,17 @@ namespace LEInstaller
                         var rollbackErrors = new List<Exception>();
                         if (register)
                         {
+                            if (!allUsers && staticVerbTouched)
+                            {
+                                try
+                                {
+                                    if (staticVerbWasInstalled)
+                                        ShellExtensionManager.RegisterStaticExplorerVerb(Path.Combine(crtDir, "LEProc.exe"));
+                                    else
+                                        ShellExtensionManager.UnregisterStaticExplorerVerb();
+                                }
+                                catch (Exception rollbackError) { rollbackErrors.Add(rollbackError); }
+                            }
                             if (shellTouched)
                             {
                                 try { ShellExtensionManager.UnregisterShellExtContextMenuHandler(allUsers); }
@@ -309,6 +339,11 @@ namespace LEInstaller
                         }
                         else
                         {
+                            if (!allUsers && staticVerbTouched && staticVerbWasInstalled)
+                            {
+                                try { ShellExtensionManager.RegisterStaticExplorerVerb(Path.Combine(crtDir, "LEProc.exe")); }
+                                catch (Exception rollbackError) { rollbackErrors.Add(rollbackError); }
+                            }
                             if (assemblyTouched)
                             {
                                 try { rs.RegisterAssembly(assembly, AssemblyRegistrationFlags.SetCodeBase); }

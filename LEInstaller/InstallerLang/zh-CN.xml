@@ -16,6 +16,7 @@
   <AllUsersInstall>为所有用户安装</AllUsersInstall>
   <AllUsersUninstall>为所有用户卸载</AllUsersUninstall>
   <EditGlobal>编辑全局配置列表</EditGlobal>
+  <RunWithLocaleEmulator>使用 Locale Emulator 运行</RunWithLocaleEmulator>
   <GroupCurrentUser>（1.1）为当前用户安装</GroupCurrentUser>
   <GroupAllUsers>（1.2）为此电脑的所有用户安装（需要管理员权限）</GroupAllUsers>
   <GroupProfiles>（2）自定义配置</GroupProfiles>
@@ -30,4 +31,5 @@
   <CannotOpenClassesKey>无法打开当前用户的 Classes 注册表项。</CannotOpenClassesKey>
   <MissingPayload>安装器缺少内嵌组件。</MissingPayload>
   <CannotCreateContextMenuKey>无法创建右键菜单注册表项。</CannotCreateContextMenuKey>
+  <MissingLauncher>发行目录缺少 LEProc.exe。</MissingLauncher>
 </Strings>
