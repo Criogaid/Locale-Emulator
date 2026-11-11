@@ -148,6 +148,8 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 - `GetLocalTime` 等直接读本地时间的 API 仍返回宿主时间（原生探针 localHour-utcHour 为宿主偏移）。决定不模拟：本地时间的偏差来自 `KUSER_SHARED_DATA`，不经过系统调用，只能逐个钩用户态时间 API，范围和风险远大于收益；时区查询类 API（`GetTimeZoneInformation`、`GetDynamicTimeZoneInformation`）是目前的模拟范围。
 - 子进程继承只在同架构内成立，这是已有的明确边界（见 `docs/GOAL.md`、`docs/QUALITY.md`；Core 日志为 `skip unsupported cross-architecture child injection`）。用一个托管探针启动子进程实测（x64 包，`ja-JP` / Tokyo 配置）：x64 父进程启动 x64 子进程、x86 父进程启动 x86 子进程，子进程得到 bias -540、键名 Tokyo；跨架构的子进程完全没有模拟，连 `GetTimeZoneInformation` 都是宿主的 bias 240。代码页、文化也一并丢失（托管探针实测：x64→x86、x86→x64 的子进程得到 GetACP=936、LCID 0x409、en-US、宿主时区；x64→x64 为 932、0x411、ja-JP、Tokyo）。要支持它需要完整、可验证的另一架构 broker，`docs/GOAL.md` 禁止在没有它的情况下重新引入旧做法。
 
+  **如果要做，最小可行方案的调查结论**（尚未实现）：`LoaderDll` 只导出 `LeCreateProcess`（新建进程），没有附加到已有进程的入口；x64 进程不能加载 x86 DLL，反之亦然，所以不存在进程内捷径。可行的形状是：父进程的 Core 在 `NtCreateUserProcess` 创建出挂起的跨架构子进程后，启动另一架构的 helper EXE（例如 x86 包里的 `LEProc.exe` 新增一个 `-attach <pid>` 模式），由它用本架构的 Loader/Core 对该 PID 完成注入；Core 等 helper 成功后再恢复子进程。需要同时改三处：LoaderDll 新增附加导出、LEProc 新增 attach 模式（并要把 `LE_RUNTIME_INPUT` 通过命令行或共享内存传给 helper，LEProc 本身不保存父进程的配置）、两个 Core 的跨架构分支。还要处理 helper 失败时子进程该怎么办、以及孙进程继续继承。这是跨 C#、Loader、两个 Core 的功能，需要有专门的验证探针，估计不小于前面时区修复的总和。
+
 ## 历史提交元数据说明
 
 本轮审查发现历史提交 `3057efd`、`6f3bf66`、`e4dadeb`、`f996108` 和 `beeff20` 的提交正文含有未展开的 `Co-Authored-By: :PI_MODEL <noreply@pi.dev>`。这些提交已经成为当前本地分支的历史，源码、构建和发行包不读取该字段；本轮不改写历史，避免改变已记录的里程碑哈希、审查证据和后续父子关系。自 `d6cefaa` 起的新提交均在提交前读取实际 `PI_MODEL`，使用完整的协作者值；若发行者要求历史元数据重写，应作为独立的仓库维护操作重新生成全部受影响哈希并重建证据目录。
