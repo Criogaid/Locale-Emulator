@@ -214,6 +214,41 @@ LeNtQuerySystemInformation(
             HpSetFilterAction(BlockSystemCall);
 
             return STATUS_SUCCESS;
+
+        // GetDynamicTimeZoneInformation (used by .NET's TimeZoneInfo.Local) asks for the dynamic variant:
+        // the same zone data, then the registry key name and the DynamicDaylightTimeDisabled flag.
+        case SystemDynamicTimeZoneInformation:
+        {
+            struct
+            {
+                LE_RUNTIME_TIME_ZONE_INFORMATION    Zone;
+                WCHAR                               TimeZoneKeyName[128];
+                BOOLEAN                             DynamicDaylightTimeDisabled;
+            } *Dynamic = (decltype(Dynamic))SystemInformation;
+
+            PCWSTR Id = GlobalData->GetLePeb()->TimezoneId;
+            SIZE_T Length = StrLengthW(Id);
+
+            if (SystemInformation == nullptr ||
+                SystemInformationLength < sizeof(*Dynamic) ||
+                Length == 0 || Length >= countof(Dynamic->TimeZoneKeyName) ||
+                IsWritableMemory(SystemInformation, sizeof(*Dynamic)) == FALSE)
+                break;
+            if (ReturnLength != nullptr && IsWritableMemory(ReturnLength, sizeof(*ReturnLength)) == FALSE)
+                break;
+
+            Dynamic->Zone = GlobalData->GetEnvironment()->Timezone;
+            ZeroMemory(Dynamic->TimeZoneKeyName, sizeof(Dynamic->TimeZoneKeyName));
+            CopyMemory(Dynamic->TimeZoneKeyName, Id, Length * sizeof(WCHAR));
+            Dynamic->DynamicDaylightTimeDisabled = FALSE;
+
+            if (ReturnLength != nullptr)
+                *ReturnLength = sizeof(*Dynamic);
+
+            HpSetFilterAction(BlockSystemCall);
+
+            return STATUS_SUCCESS;
+        }
     }
 
     return Status;
