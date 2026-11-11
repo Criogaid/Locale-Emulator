@@ -48,6 +48,6 @@ Invoke-Native (Join-Path $hostBin 'link.exe') @(
     "/libpath:$(Join-Path $sdkRoot "Lib\$sdkVersion\um\x64")",
     "/libpath:$(Join-Path $sdkRoot "Lib\$sdkVersion\ucrt\x64")",
     "/libpath:$(Join-Path $msvcRoot 'lib\x64')",
-    $object, 'kernel32.lib', 'user32.lib', 'ole32.lib', 'shell32.lib', 'shlwapi.lib')
+    $object, 'kernel32.lib', 'user32.lib', 'ole32.lib', 'shell32.lib', 'shlwapi.lib', 'xmllite.lib')
 
 Write-Host "LEExplorerCommand.dll 已生成：$dll"

@@ -1,14 +1,19 @@
-// Windows 11 first-level context-menu verb ("Run with Locale Emulator") for .exe files.
-// Hosted by a sparse package (see AppxManifest.xml): Explorer loads this x64 DLL through
-// the package's COM surrogate and calls IExplorerCommand. The verb only forwards the
-// selected file to the LEProc.exe next to this DLL, which already selects the helper
-// matching the target's architecture.
+// Windows 11 first-level context-menu entry for .exe files, mirroring the classic menu:
+//   Locale Emulator >  Run with Application Profile   (-run)
+//                      <one entry per global profile>  (-runas <guid>)
+//                      ---
+//                      Modify Application Profile      (-manage)
+//                      Edit Global Profile List        (-global)
+// Hosted by a sparse package (see AppxManifest.xml): Explorer loads this x64 DLL through the
+// package's COM surrogate and calls IExplorerCommand. Every entry only forwards its verb to the
+// LEProc.exe next to this DLL, which selects the helper matching the target's architecture.
 #include <windows.h>
 #include <new>
 #include <shellapi.h>
 #include <shobjidl_core.h>
 #include <shlwapi.h>
 #include <strsafe.h>
+#include <xmllite.h>
 
 // {7F0B3C5A-2D41-4E8B-9A67-5C1E3B8D2A94}
 static const CLSID CLSID_LERunCommand =
@@ -19,45 +24,84 @@ static volatile LONG g_objectCount = 0;
 
 namespace {
 
-struct Title {
+constexpr ULONG kMaxProfiles = 64;
+constexpr size_t kMaxTitle = 128;
+constexpr size_t kGuidLength = 36;
+
+struct Texts {
+    PCWSTR root;
+    PCWSTR run;
+    PCWSTR manageApp;
+    PCWSTR manageAll;
+};
+
+struct LocalizedTexts {
     LANGID primary;
-    PCWSTR text;
+    Texts texts;
 };
 
-// The product UI follows the Windows UI language; the verb does the same.
-const Title kTitles[] = {
-    {LANG_CHINESE, L"使用 Locale Emulator 运行"},
-    {LANG_JAPANESE, L"Locale Emulator で実行"},
-    {LANG_KOREAN, L"Locale Emulator로 실행"},
-    {LANG_RUSSIAN, L"Запустить через Locale Emulator"},
+// Wording follows the classic menu (LEContextMenuHandler resources) and the Windows UI language.
+const LocalizedTexts kTexts[] = {
+    {LANG_CHINESE, {L"Locale Emulator", L"以此程序配置运行", L"修改此程序的配置", L"管理通用配置列表"}},
+    {LANG_JAPANESE, {L"ロケールエミュレータ", L"プロファイルで実行", L"プロファイルを変更", L"汎用性プロファイルリストを編集"}},
+    {LANG_KOREAN, {L"로케일 에뮬레이터", L"애플리케이션 프로필로 실행", L"애플리케이션 프로필 수정", L"글로벌 프로필 목록을 편집"}},
+    {LANG_RUSSIAN, {L"Эмулятор локали", L"Запустить с профилем приложения", L"Изменить профиль приложения", L"Изменить общий список профилей"}},
 };
-const WCHAR kDefaultTitle[] = L"Run with Locale Emulator";
+const Texts kDefaultTexts = {L"Locale Emulator", L"Run with Application Profile",
+                             L"Modify Application Profile", L"Edit Global Profile List"};
 
-PCWSTR ResolveTitle() {
+const Texts& ResolveTexts() {
     const LANGID primary = PRIMARYLANGID(GetUserDefaultUILanguage());
-    for (const Title& title : kTitles) {
-        if (title.primary == primary)
-            return title.text;
+    for (const LocalizedTexts& entry : kTexts) {
+        if (entry.primary == primary)
+            return entry.texts;
     }
-    return kDefaultTitle;
+    return kDefaultTexts;
 }
 
-// Full path of LEProc.exe in the directory that holds this DLL.
-HRESULT GetLauncherPath(WCHAR (&path)[MAX_PATH]) {
+enum class Kind { Root, Run, RunAs, ManageApp, ManageGlobal };
+
+// Directory that holds this DLL (without trailing separator).
+HRESULT GetModuleDirectory(WCHAR (&path)[MAX_PATH]) {
     const DWORD length = GetModuleFileNameW(g_module, path, ARRAYSIZE(path));
     if (length == 0 || length >= ARRAYSIZE(path))
         return HRESULT_FROM_WIN32(length == 0 ? GetLastError() : ERROR_INSUFFICIENT_BUFFER);
-    if (!PathRemoveFileSpecW(path) || !PathAppendW(path, L"LEProc.exe"))
-        return E_FAIL;
-    return S_OK;
+    return PathRemoveFileSpecW(path) ? S_OK : E_FAIL;
 }
 
-class RunCommand final : public IExplorerCommand {
-public:
-    RunCommand() { InterlockedIncrement(&g_objectCount); }
-    ~RunCommand() { InterlockedDecrement(&g_objectCount); }
+HRESULT GetSiblingPath(PCWSTR name, WCHAR (&path)[MAX_PATH]) {
+    const HRESULT hr = GetModuleDirectory(path);
+    if (FAILED(hr))
+        return hr;
+    return PathAppendW(path, name) ? S_OK : E_FAIL;
+}
 
-    // IUnknown
+// A profile GUID ends up inside a quoted command-line argument; accept only the canonical form.
+bool IsCanonicalGuid(PCWSTR text) {
+    if (lstrlenW(text) != static_cast<int>(kGuidLength))
+        return false;
+    for (size_t i = 0; i < kGuidLength; ++i) {
+        const WCHAR c = text[i];
+        const bool dash = i == 8 || i == 13 || i == 18 || i == 23;
+        if (dash ? c != L'-' : !((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f') || (c >= L'A' && c <= L'F')))
+            return false;
+    }
+    return true;
+}
+
+class Command final : public IExplorerCommand {
+public:
+    Command(Kind kind, PCWSTR title, PCWSTR guid) : m_kind(kind) {
+        m_title[0] = L'\0';
+        m_guid[0] = L'\0';
+        if (title != nullptr)
+            StringCchCopyW(m_title, ARRAYSIZE(m_title), title);
+        if (guid != nullptr)
+            StringCchCopyW(m_guid, ARRAYSIZE(m_guid), guid);
+        InterlockedIncrement(&g_objectCount);
+    }
+    ~Command() { InterlockedDecrement(&g_objectCount); }
+
     IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override {
         if (object == nullptr)
             return E_POINTER;
@@ -77,14 +121,22 @@ public:
         return static_cast<ULONG>(refs);
     }
 
-    // IExplorerCommand
     IFACEMETHODIMP GetTitle(IShellItemArray*, LPWSTR* name) override {
-        return SHStrDupW(ResolveTitle(), name);
+        const Texts& texts = ResolveTexts();
+        switch (m_kind) {
+        case Kind::Root: return SHStrDupW(texts.root, name);
+        case Kind::Run: return SHStrDupW(texts.run, name);
+        case Kind::RunAs: return SHStrDupW(m_title, name);
+        case Kind::ManageApp: return SHStrDupW(texts.manageApp, name);
+        case Kind::ManageGlobal: return SHStrDupW(texts.manageAll, name);
+        }
+        *name = nullptr;
+        return E_FAIL;
     }
     IFACEMETHODIMP GetIcon(IShellItemArray*, LPWSTR* icon) override {
         WCHAR path[MAX_PATH];
         *icon = nullptr;
-        HRESULT hr = GetLauncherPath(path);
+        HRESULT hr = GetSiblingPath(L"LEProc.exe", path);
         if (FAILED(hr))
             return hr;
         WCHAR spec[MAX_PATH + 4];
@@ -100,34 +152,52 @@ public:
         return S_OK;
     }
     IFACEMETHODIMP GetState(IShellItemArray* items, BOOL, EXPCMDSTATE* state) override {
-        // The manifest already limits the verb to .exe; hide it for multi-selection
-        // because LEProc starts exactly one target.
+        // LEProc starts exactly one target, so verbs that act on the selection hide for multi-selection.
         DWORD count = 0;
         *state = ECS_ENABLED;
-        if (items != nullptr && SUCCEEDED(items->GetCount(&count)) && count != 1)
+        if (m_kind != Kind::ManageGlobal && items != nullptr && SUCCEEDED(items->GetCount(&count)) && count != 1)
             *state = ECS_HIDDEN;
         return S_OK;
     }
     IFACEMETHODIMP Invoke(IShellItemArray* items, IBindCtx*) override {
-        if (items == nullptr)
-            return E_INVALIDARG;
-        IShellItem* item = nullptr;
-        HRESULT hr = items->GetItemAt(0, &item);
-        if (FAILED(hr))
-            return hr;
+        if (m_kind == Kind::Root)
+            return E_NOTIMPL;
+
         PWSTR target = nullptr;
-        hr = item->GetDisplayName(SIGDN_FILESYSPATH, &target);
-        item->Release();
-        if (FAILED(hr))
-            return hr;
+        HRESULT hr = S_OK;
+        if (m_kind != Kind::ManageGlobal) {
+            if (items == nullptr)
+                return E_INVALIDARG;
+            IShellItem* item = nullptr;
+            hr = items->GetItemAt(0, &item);
+            if (FAILED(hr))
+                return hr;
+            hr = item->GetDisplayName(SIGDN_FILESYSPATH, &target);
+            item->Release();
+            if (FAILED(hr))
+                return hr;
+        }
 
         WCHAR launcher[MAX_PATH];
-        hr = GetLauncherPath(launcher);
+        hr = GetSiblingPath(L"LEProc.exe", launcher);
         if (SUCCEEDED(hr)) {
-            // LEProc takes the target as its single argument and parses it with the
-            // standard Windows rules, so a quoted path is enough.
+            // LEProc parses its command line with the standard Windows rules; the target is a
+            // file path (no quotes possible) and the GUID was validated, so quoting is enough.
             WCHAR parameters[32768];
-            hr = StringCchPrintfW(parameters, ARRAYSIZE(parameters), L"\"%s\"", target);
+            switch (m_kind) {
+            case Kind::Run:
+                hr = StringCchPrintfW(parameters, ARRAYSIZE(parameters), L"-run \"%s\"", target);
+                break;
+            case Kind::RunAs:
+                hr = StringCchPrintfW(parameters, ARRAYSIZE(parameters), L"-runas \"%s\" \"%s\"", m_guid, target);
+                break;
+            case Kind::ManageApp:
+                hr = StringCchPrintfW(parameters, ARRAYSIZE(parameters), L"-manage \"%s\"", target);
+                break;
+            default:
+                hr = StringCchCopyW(parameters, ARRAYSIZE(parameters), L"-global");
+                break;
+            }
             if (SUCCEEDED(hr)) {
                 SHELLEXECUTEINFOW info = {sizeof(info)};
                 info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
@@ -141,17 +211,172 @@ public:
         return hr;
     }
     IFACEMETHODIMP GetFlags(EXPCMDFLAGS* flags) override {
-        *flags = ECF_DEFAULT;
+        switch (m_kind) {
+        case Kind::Root: *flags = ECF_HASSUBCOMMANDS; break;
+        case Kind::ManageApp: *flags = ECF_SEPARATORBEFORE; break;
+        default: *flags = ECF_DEFAULT; break;
+        }
         return S_OK;
     }
-    IFACEMETHODIMP EnumSubCommands(IEnumExplorerCommand** commands) override {
-        *commands = nullptr;
-        return E_NOTIMPL;
+    IFACEMETHODIMP EnumSubCommands(IEnumExplorerCommand** commands) override;
+
+private:
+    LONG m_refs = 1;
+    Kind m_kind;
+    WCHAR m_title[kMaxTitle];
+    WCHAR m_guid[kGuidLength + 1];
+};
+
+class SubCommands final : public IEnumExplorerCommand {
+public:
+    SubCommands() { InterlockedIncrement(&g_objectCount); }
+    ~SubCommands() {
+        for (ULONG i = 0; i < m_count; ++i)
+            m_items[i]->Release();
+        InterlockedDecrement(&g_objectCount);
+    }
+
+    // Takes a reference of its own.
+    bool Add(IExplorerCommand* command) {
+        if (m_count == ARRAYSIZE(m_items))
+            return false;
+        command->AddRef();
+        m_items[m_count++] = command;
+        return true;
+    }
+
+    IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override {
+        if (object == nullptr)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_IEnumExplorerCommand) {
+            *object = static_cast<IEnumExplorerCommand*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *object = nullptr;
+        return E_NOINTERFACE;
+    }
+    IFACEMETHODIMP_(ULONG) AddRef() override { return static_cast<ULONG>(InterlockedIncrement(&m_refs)); }
+    IFACEMETHODIMP_(ULONG) Release() override {
+        const LONG refs = InterlockedDecrement(&m_refs);
+        if (refs == 0)
+            delete this;
+        return static_cast<ULONG>(refs);
+    }
+
+    IFACEMETHODIMP Next(ULONG requested, IExplorerCommand** commands, ULONG* fetched) override {
+        ULONG done = 0;
+        while (done < requested && m_index < m_count) {
+            commands[done] = m_items[m_index++];
+            commands[done]->AddRef();
+            ++done;
+        }
+        if (fetched != nullptr)
+            *fetched = done;
+        return done == requested ? S_OK : S_FALSE;
+    }
+    IFACEMETHODIMP Skip(ULONG count) override {
+        m_index = count > m_count - m_index ? m_count : m_index + count;
+        return m_index < m_count ? S_OK : S_FALSE;
+    }
+    IFACEMETHODIMP Reset() override {
+        m_index = 0;
+        return S_OK;
+    }
+    IFACEMETHODIMP Clone(IEnumExplorerCommand** clone) override {
+        *clone = nullptr;
+        SubCommands* copy = new (std::nothrow) SubCommands();
+        if (copy == nullptr)
+            return E_OUTOFMEMORY;
+        for (ULONG i = 0; i < m_count; ++i)
+            copy->Add(m_items[i]);
+        copy->m_index = m_index;
+        *clone = copy;
+        return S_OK;
     }
 
 private:
     LONG m_refs = 1;
+    ULONG m_count = 0;
+    ULONG m_index = 0;
+    IExplorerCommand* m_items[kMaxProfiles + 3] = {};
 };
+
+// Adds one "-runas" entry per profile of LEConfig.xml (next to this DLL). A missing or malformed
+// file only means no profile entries: the fixed entries remain usable.
+void AddProfiles(SubCommands* commands) {
+    WCHAR path[MAX_PATH];
+    if (FAILED(GetSiblingPath(L"LEConfig.xml", path)))
+        return;
+    IStream* stream = nullptr;
+    if (FAILED(SHCreateStreamOnFileEx(path, STGM_READ | STGM_SHARE_DENY_NONE, FILE_ATTRIBUTE_NORMAL, FALSE, nullptr, &stream)))
+        return;
+    IXmlReader* reader = nullptr;
+    if (SUCCEEDED(CreateXmlReader(__uuidof(IXmlReader), reinterpret_cast<void**>(&reader), nullptr))) {
+        reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit);
+        if (SUCCEEDED(reader->SetInput(stream))) {
+            XmlNodeType type;
+            ULONG added = 0;
+            while (added < kMaxProfiles && reader->Read(&type) == S_OK) {
+                PCWSTR name = nullptr;
+                if (type != XmlNodeType_Element || FAILED(reader->GetLocalName(&name, nullptr))
+                    || lstrcmpW(name, L"Profile") != 0)
+                    continue;
+                PCWSTR profileName = nullptr;
+                PCWSTR guid = nullptr;
+                if (reader->MoveToAttributeByName(L"Name", nullptr) != S_OK
+                    || FAILED(reader->GetValue(&profileName, nullptr)))
+                    continue;
+                // The reader's string is only valid until the next read call; copy before moving on.
+                WCHAR title[kMaxTitle];
+                if (FAILED(StringCchCopyW(title, ARRAYSIZE(title), profileName)))
+                    continue;
+                if (reader->MoveToAttributeByName(L"Guid", nullptr) != S_OK
+                    || FAILED(reader->GetValue(&guid, nullptr)) || !IsCanonicalGuid(guid))
+                    continue;
+                Command* command = new (std::nothrow) Command(Kind::RunAs, title, guid);
+                if (command == nullptr)
+                    break;
+                const bool ok = commands->Add(command);
+                command->Release();
+                if (!ok)
+                    break;
+                ++added;
+            }
+        }
+        reader->Release();
+    }
+    stream->Release();
+}
+
+bool AddFixed(SubCommands* commands, Kind kind) {
+    Command* command = new (std::nothrow) Command(kind, nullptr, nullptr);
+    if (command == nullptr)
+        return false;
+    const bool ok = commands->Add(command);
+    command->Release();
+    return ok;
+}
+
+IFACEMETHODIMP Command::EnumSubCommands(IEnumExplorerCommand** commands) {
+    *commands = nullptr;
+    if (m_kind != Kind::Root)
+        return E_NOTIMPL;
+    SubCommands* list = new (std::nothrow) SubCommands();
+    if (list == nullptr)
+        return E_OUTOFMEMORY;
+    if (!AddFixed(list, Kind::Run)) {
+        list->Release();
+        return E_OUTOFMEMORY;
+    }
+    AddProfiles(list);
+    if (!AddFixed(list, Kind::ManageApp) || !AddFixed(list, Kind::ManageGlobal)) {
+        list->Release();
+        return E_OUTOFMEMORY;
+    }
+    *commands = list;
+    return S_OK;
+}
 
 class Factory final : public IClassFactory {
 public:
@@ -182,7 +407,7 @@ public:
         *object = nullptr;
         if (outer != nullptr)
             return CLASS_E_NOAGGREGATION;
-        RunCommand* command = new (std::nothrow) RunCommand();
+        Command* command = new (std::nothrow) Command(Kind::Root, nullptr, nullptr);
         if (command == nullptr)
             return E_OUTOFMEMORY;
         const HRESULT hr = command->QueryInterface(riid, object);

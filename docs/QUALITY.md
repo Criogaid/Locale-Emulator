@@ -176,3 +176,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - `eb9e007`：安装器无窗口入口 `--InstallUser`/`--UninstallUser`，复用事务式 `ChangeRegistration`；当前用户安装与卸载往返实测退出码均为 0、无残留进程。
 - `0315ea7`、`22d5b97`、`6833d0f`：Windows 11 一级右键菜单（`IExplorerCommand` 稀疏包，x64 DLL，x86 与 x64 包共用）。已验证：DLL `/W4 /WX`、CFG、ASLR、NX；独立驱动加载 DLL，覆盖错误 CLSID、空参数、含空格路径的引号转发、`DllCanUnloadNow`；清单通过 Appx 校验，在未开启开发人员模式时部署被拒为 `0x80073CFF`，安装器仍安装传统菜单；双包构建与两个 ZIP 的 PE 校验通过。**未验证**：稀疏包注册成功后 Explorer 界面中的实际菜单项与点击启动，需要开启开发人员模式或已签名的包。
 - 缺陷（已修复）：Windows PowerShell 5.1 把无 BOM 的 UTF-8 脚本按 ANSI 解析，`ModernMenu.ps1` 的中文字符串造成语法错误；改为纯 ASCII 并按 5.1 兼容，由真实 5.1 调用复现并验证。
+- 一级菜单子菜单：与传统菜单对齐为运行/各全局配置/修改此程序配置/编辑全局列表。独立驱动验证子命令枚举、`Clone`/`Skip`/`Reset`、非法或缺失的 GUID 与名称被过滤（GUID 只接受规范格式，因它进入带引号的命令行）、多选时隐藏，以及五条命令行与传统菜单逐项一致；配置缺失或损坏时只保留固定项。XmlLite 禁止 DTD。
