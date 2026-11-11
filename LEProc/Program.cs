@@ -210,8 +210,10 @@ namespace LEProc
                 {
                     var jb = AssociationReader.GetAssociatedProgram(Path.GetExtension(absPath));
 
+                    // A non-.exe target without an associated program used to exit 1 silently.
                     if (jb == null)
-                        return 1;
+                        throw new InvalidOperationException(
+                            string.Format(Localization.GetString("InvalidCommand"), absPath));
 
                     var plan = LaunchPlan.CreateAssociated(absPath, jb[0], jb[1],
                         profile.Parameter, Args.Skip(argumentsStart));
