@@ -275,7 +275,7 @@ foreach ($package in $x86.Package, $x64.Package) {
 # A stray NUL or control byte (for example an escape sequence expanded while writing a file) can slip into text sources
 # unnoticed, even through a compiler. Tracked text files must contain none; tab, LF and CR are normal.
 $textExtensions = '.cs', '.cpp', '.h', '.ps1', '.md', '.xml', '.resx', '.props', '.csproj', '.json'
-foreach ($file in (& git -C $repository ls-files)) {
+foreach ($file in ((& git -C $repository -c core.quotepath=false ls-files) -replace '^"|"$', '')) {
     if ($textExtensions -notcontains [IO.Path]::GetExtension($file).ToLowerInvariant()) { continue }
     $path = Join-Path $repository $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
