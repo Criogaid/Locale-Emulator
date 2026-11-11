@@ -804,82 +804,6 @@ inline BOOL UnInitialize(PVOID BaseAddress)
     return FALSE;
 }
 
-VOID GenerateModuleList(lep::String &ModuleNames)
-{
-    PVOID                               Address, BaseAddress, LastAllocationBase;
-    ULONG_PTR                           Size, Need, BufferSize;
-    NTSTATUS                            Status;
-    SYSTEM_BASIC_INFORMATION            SystemBasic;
-    MEMORY_BASIC_INFORMATION            MemoryBasic;
-
-    union
-    {
-        MEMORY_MAPPED_FILENAME_INFORMATION2 MappedFile;
-        BYTE MappedFileBuffer[0x2000];
-    };
-
-    auto AppendHexPointer = [] (lep::String &String, ULONG_PTR Value)
-    {
-        BOOL LeadingZero = TRUE;
-        WCHAR Buffer[bitsof(Value) / 4];
-        ULONG_PTR Count = 0;
-
-        for (LONG_PTR Shift = bitsof(Value) - 4; Shift >= 0; Shift -= 4)
-        {
-            ULONG_PTR Digit = (Value >> Shift) & 0xF;
-
-            if (Digit == 0 && LeadingZero && Shift != 0)
-                continue;
-
-            LeadingZero = FALSE;
-            Buffer[Count++] = (WCHAR)(Digit < 10 ? L'0' + Digit : L'A' + Digit - 10);
-        }
-
-        String.Concat(Buffer, Count);
-    };
-
-    Status = NtQuerySystemInformation(SystemBasicInformation, &SystemBasic, sizeof(SystemBasic), nullptr);
-    if (!NT_SUCCESS(Status))
-        return;
-
-    LastAllocationBase = IMAGE_INVALID_VA;
-    BaseAddress = (PVOID)SystemBasic.MinimumUserModeAddress;
-    BaseAddress = nullptr;
-
-    for (; (ULONG_PTR)BaseAddress < SystemBasic.MaximumUserModeAddress; BaseAddress = PtrAdd(BaseAddress, MemoryBasic.RegionSize))
-    {
-        MemoryBasic.RegionSize = MEMORY_PAGE_SIZE;
-        Status = NtQueryVirtualMemory(CurrentProcess, BaseAddress, MemoryBasicInformation, &MemoryBasic, sizeof(MemoryBasic), nullptr);
-        FAIL_CONTINUE(Status);
-
-        BaseAddress = MemoryBasic.BaseAddress;
-
-        if (MemoryBasic.Type != MEM_IMAGE || MemoryBasic.AllocationBase == LastAllocationBase)
-            continue;
-
-        LastAllocationBase = MemoryBasic.AllocationBase;
-
-        Status = NtQueryVirtualMemory(CurrentProcess, BaseAddress, MemoryMappedFilenameInformation, &MappedFile, sizeof(MappedFileBuffer), nullptr);
-        if (NT_FAILED(Status) || MappedFile.Name.Length == 0)
-            continue;
-
-        UNICODE_STRING DosPath;
-
-        Status = Io::QueryDosPathFromNtDeviceName(&DosPath, &MappedFile.Name);
-
-        ModuleNames += L"0x";
-        AppendHexPointer(ModuleNames, (ULONG_PTR)BaseAddress);
-        ModuleNames += L": ";
-        if (NT_SUCCESS(Status))
-            ModuleNames.Concat(DosPath.Buffer, DosPath.Length / sizeof(WCHAR));
-        else
-            ModuleNames.Concat(MappedFile.Name.Buffer, MappedFile.Name.Length / sizeof(WCHAR));
-        ModuleNames += L"\n";
-
-        RtlFreeUnicodeString(&DosPath);
-    }
-}
-
 BOOL Initialize(PVOID BaseAddress, PLEP_BOOTSTRAP_PAYLOAD BootstrapPayload = nullptr)
 {
     NTSTATUS            Status;
@@ -908,14 +832,13 @@ BOOL Initialize(PVOID BaseAddress, PLEP_BOOTSTRAP_PAYLOAD BootstrapPayload = nul
 
     if (!IsLoader && !BootstrapPayloadPresent)
     {
+        // Managed (.NET) targets reach the first LdrLoadDll call only after kernel32 has finished its process
+        // attach. Aborting left them silently un-emulated; the hooks below apply directly in that case.
         Kernel32 = GetKernel32Ldr();
         if (Kernel32 != nullptr && FLAG_ON(Kernel32->Flags, LDRP_PROCESS_ATTACH_CALLED))
         {
-            lep::String ModuleList = L"kernel32 has been loaded before the initialization of LEP\n\nModule list:\n\n";
-            GenerateModuleList(ModuleList);
-            ExceptionBox(ModuleList);
-            LEP_DIAG_HERE(L"kernel32 loaded before LEP");
-            return FALSE;
+            WriteLog(L"kernel32 attached before LEP initialization; continuing with late initialization");
+            LEP_DIAG_HERE(L"kernel32 loaded before LEP; continuing");
         }
     }
     else if (BootstrapPayloadPresent)
