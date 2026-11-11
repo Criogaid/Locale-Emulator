@@ -115,7 +115,7 @@ namespace LEGUI
                              CancelText = I18n.GetString("Cancel")
                          };
 
-                if (ib.ShowDialog() == true && !string.IsNullOrEmpty(ib.Text))
+                if (ib.ShowDialog() == true && !string.IsNullOrWhiteSpace(ib.Text))
                 {
                     SaveProfileAs(ib.Text);
 
