@@ -86,4 +86,12 @@
   <data name="MissingLauncher" xml:space="preserve">
     <value>发行目录缺少 LEProc.exe。</value>
   </data>
+  <data name="ModernMenuFailed" xml:space="preserve">
+    <value>传统菜单已处理，但 Windows 11 一级菜单未能更改：{0}
+
+未签名的包需要开启 Windows 开发人员模式。可稍后运行安装目录中的 ModernMenu.ps1 重试。</value>
+  </data>
+  <data name="ModernMenuTimeout" xml:space="preserve">
+    <value>注册 Windows 11 一级菜单超时。</value>
+  </data>
 </root>

@@ -86,4 +86,12 @@ Otherwise, follow these steps:
   <data name="MissingLauncher" xml:space="preserve">
     <value>The packaged LEProc.exe is missing.</value>
   </data>
+  <data name="ModernMenuFailed" xml:space="preserve">
+    <value>The classic menu is installed, but the Windows 11 first-level menu could not be changed: {0}
+
+Unsigned packages need Windows Developer Mode. You can retry with ModernMenu.ps1 in the installation folder.</value>
+  </data>
+  <data name="ModernMenuTimeout" xml:space="preserve">
+    <value>Registering the Windows 11 menu timed out.</value>
+  </data>
 </root>

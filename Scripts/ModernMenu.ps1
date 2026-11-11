@@ -1,4 +1,4 @@
-#requires -Version 7.0
+#requires -Version 5.1
 <#
 .SYNOPSIS
   Registers or removes the Windows 11 first-level "Run with Locale Emulator" menu for .exe files.
@@ -23,7 +23,7 @@ if ($Action -eq 'Unregister') {
     if ($existing) {
         $existing | Remove-AppxPackage
     }
-    Write-Host "已移除 $packageName。"
+    Write-Host "Removed $packageName."
     return
 }
 
@@ -37,12 +37,12 @@ if (-not $ManifestPath) {
     ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 }
 if (-not $ManifestPath) {
-    throw '未找到 AppxManifest.xml，请用 -ManifestPath 指定。'
+    throw 'AppxManifest.xml was not found; pass -ManifestPath.'
 }
 $ProductDirectory = (Resolve-Path -LiteralPath $ProductDirectory).Path
 foreach ($name in 'LEProc.exe', 'LEExplorerCommand.dll') {
     if (-not (Test-Path -LiteralPath (Join-Path $ProductDirectory $name))) {
-        throw "产品目录缺少 $name：$ProductDirectory"
+        throw "The product directory is missing ${name}: $ProductDirectory"
     }
 }
 
@@ -64,5 +64,5 @@ finally {
 }
 
 Add-AppxPackage -Register (Join-Path $registrationDirectory 'AppxManifest.xml') -ExternalLocation $ProductDirectory
-Write-Host "已为当前用户注册 $packageName，外部位置：$ProductDirectory"
-Write-Host '重新启动 Explorer 或重新登录后，.exe 的一级右键菜单会出现“Run with Locale Emulator”。'
+Write-Host "Registered $packageName for the current user; external location: $ProductDirectory"
+Write-Host 'Restart Explorer or sign in again; the .exe first-level menu then shows Run with Locale Emulator.'

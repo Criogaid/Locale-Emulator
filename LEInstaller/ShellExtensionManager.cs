@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
 
@@ -11,6 +12,44 @@ namespace LEInstaller
         private static string friendlyName = "LocaleEmulator.LEContextMenuHandler Class";
         private static string keyName = $@"Software\Classes\{fileType}\shellex\ContextMenuHandlers\{clsid}";
         private static string staticVerbKeyName = @"Software\Classes\exefile\shell\LocaleEmulator.Run";
+
+        // The x64 package ships the Windows 11 first-level menu (sparse package). Appx registration is
+        // only exposed through the Windows PowerShell Appx module, so the packaged script performs it.
+        public static bool IsModernMenuAvailable(string productDirectory)
+        {
+            return File.Exists(Path.Combine(productDirectory, "ModernMenu.ps1"))
+                && File.Exists(Path.Combine(productDirectory, "AppxManifest.xml"))
+                && File.Exists(Path.Combine(productDirectory, "LEExplorerCommand.dll"));
+        }
+
+        public static void ChangeModernMenu(string productDirectory, bool register)
+        {
+            // A 32-bit installer on 64-bit Windows must reach the native PowerShell, not the WOW64 one.
+            var systemDirectory = Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess
+                ? Path.Combine(Environment.GetEnvironmentVariable("windir"), "Sysnative")
+                : Environment.SystemDirectory;
+            var powershell = Path.Combine(systemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
+            var script = Path.Combine(productDirectory, "ModernMenu.ps1");
+            var startInfo = new ProcessStartInfo(powershell,
+                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + script + "\" -Action "
+                + (register ? "Register" : "Unregister"))
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true
+            };
+            using (var process = Process.Start(startInfo))
+            {
+                var error = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(120000))
+                {
+                    process.Kill();
+                    throw new TimeoutException(I18n.GetString("ModernMenuTimeout"));
+                }
+                if (process.ExitCode != 0)
+                    throw new InvalidOperationException(error.Result.Trim());
+            }
+        }
 
         public static void RegisterShellExtContextMenuHandler(bool allUsers)
         {

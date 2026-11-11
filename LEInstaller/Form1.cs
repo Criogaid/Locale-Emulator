@@ -24,6 +24,7 @@ namespace LEInstaller
         private bool IsHeadlessMode => cmdMode == ModeInstallUser || cmdMode == ModeUninstallUser;
         private readonly string crtDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         private Exception operationError;
+        private string modernMenuNote;
         
         public Form1(int CmdMode=0)
         {
@@ -163,7 +164,7 @@ namespace LEInstaller
 
             NotifyShell();
 
-            MessageBox.Show(this, I18n.GetString("InstallFinished"),
+            MessageBox.Show(this, WithModernMenuNote(I18n.GetString("InstallFinished")),
                 I18n.GetString("Title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -229,7 +230,7 @@ namespace LEInstaller
 
             NotifyShell();
 
-            MessageBox.Show(this, I18n.GetString("UninstallFinished"),
+            MessageBox.Show(this, WithModernMenuNote(I18n.GetString("UninstallFinished")),
                 I18n.GetString("Title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -393,6 +394,8 @@ namespace LEInstaller
                     if (!allUsers)
                         OverrideHKCR(true);
                 }
+                if (!allUsers)
+                    ChangeModernMenu(register);
                 return true;
             }
             catch (Exception e)
@@ -400,6 +403,28 @@ namespace LEInstaller
                 operationError = e;
                 return false;
             }
+        }
+
+        // The first-level menu is an addition to the classic menu: when it cannot be changed (for example
+        // unsigned packages need Developer Mode) the classic registration stays valid and the user is told.
+        private void ChangeModernMenu(bool register)
+        {
+            modernMenuNote = null;
+            if (!ShellExtensionManager.IsModernMenuAvailable(crtDir))
+                return;
+            try
+            {
+                ShellExtensionManager.ChangeModernMenu(crtDir, register);
+            }
+            catch (Exception error)
+            {
+                modernMenuNote = string.Format(I18n.GetString("ModernMenuFailed"), error.Message);
+            }
+        }
+
+        private string WithModernMenuNote(string message)
+        {
+            return modernMenuNote == null ? message : message + "\n\n" + modernMenuNote;
         }
 
         private void OverrideHKCR(bool restore = false)
