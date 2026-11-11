@@ -137,7 +137,7 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 **时区**：`GetTimeZoneInformation` 走 `NtQuerySystemInformation` 的 `SystemCurrentTimeZoneInformation`（44），Core 早已过滤；`GetDynamicTimeZoneInformation` 走 `SystemDynamicTimeZoneInformation`（102），此前没有过滤，所以原生和托管目标都拿到宿主时区，.NET 的 `TimeZoneInfo.Local` 因此是宿主的 `Atlantic Standard Time`。x86 与 x64 Core 现在都过滤 102：区域数据加时区键名，x86 键名来自 `LePeb->TimezoneId`，x64 键名放在引导载荷里（`LE_RUNTIME_CONFIG` 的大小被静态断言固定为 204，不能加字段，所以载荷版本升到 4，头部新增 `TimezoneIdOffset/Length`，为子进程重建载荷时继续传递）。x86、x64 的原生与托管探针都得到配置里的 `Tokyo Standard Time`、bias -540，`TimeZoneInfo.Local.Id` 也是 `Tokyo Standard Time`。
 
 **仍未解决**：
-- `GetLocalTime` 仍返回宿主本地时间（原生探针 localHour-utcHour 为宿主偏移），而 `GetTimeZoneInformation` 已是东京。这和 Locale Emulator 的设计范围是否一致尚未判断。
+- `GetLocalTime` 等直接读本地时间的 API 仍返回宿主时间（原生探针 localHour-utcHour 为宿主偏移）。决定不模拟：本地时间的偏差来自 `KUSER_SHARED_DATA`，不经过系统调用，只能逐个钩用户态时间 API，范围和风险远大于收益；时区查询类 API（`GetTimeZoneInformation`、`GetDynamicTimeZoneInformation`）是目前的模拟范围。
 - 子进程继承只在同架构内成立，这是已有的明确边界（见 `docs/GOAL.md`、`docs/QUALITY.md`；Core 日志为 `skip unsupported cross-architecture child injection`）。用一个托管探针启动子进程实测（x64 包，`ja-JP` / Tokyo 配置）：x64 父进程启动 x64 子进程、x86 父进程启动 x86 子进程，子进程得到 bias -540、键名 Tokyo；跨架构的子进程完全没有模拟，连 `GetTimeZoneInformation` 都是宿主的 bias 240。代码页是否同样丢失未测。要支持它需要完整、可验证的另一架构 broker，`docs/GOAL.md` 禁止在没有它的情况下重新引入旧做法。
 
 ## 历史提交元数据说明
