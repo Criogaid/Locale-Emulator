@@ -123,25 +123,18 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 5b. 名称中的 `&`：在全局配置里建一个名为 `A & B` 的配置，看一级菜单里显示 `A & B` 还是 `A  B`（`&` 被当作快捷键标记）。经典菜单已把配置名中的 `&` 转义为 `&&`，一级菜单标题目前原样传出；若真机上出现后者，在 `Native/ExplorerCommand/ExplorerCommand.cpp` 读取配置名时同样转义。
 6. 记录结果到 [QUALITY](QUALITY.md)，并把 README 的“验证状态”一句改为已验证；验证完用“为当前用户卸载”清理，再确认 `Get-AppxPackage -Name LocaleEmulator.ModernMenu` 为空。
 
-## 托管目标的区域模拟观测（原因未查）
+## 托管目标的区域模拟（已修复，时区仍未生效）
 
-在 x64 发行包上，用同一份 `ja-JP` / `Tokyo Standard Time` 独立配置（`<目标>.le.config`）和 `LEProc.exe -run <目标>`，分别启动调用 `MultiByteToWideChar(CP_ACP, …)` 转换字节 `82 A0` 的小程序：
+在 x64 发行包上，用同一份 `ja-JP` / `Tokyo Standard Time` 独立配置（`<目标>.le.config`）和 `LEProc.exe -run <目标>`，分别启动调用 `MultiByteToWideChar(CP_ACP, …)` 转换 `82 A0` 的探针。修复前原生 x86、x64 目标得到 U+3042（`GetACP=932`、`GetUserDefaultLCID=0x411`），而 .NET Framework 4.8 控制台程序（x86、x64、AnyCPU）得到 U+5041（`GetACP=936`，`CurrentCulture` 为 en-US），与位数无关。
 
-| 目标 | 结果 |
-| --- | --- |
-| 原生 x86、原生 x64（C） | `GetACP=932`，转换得到 U+3042，`GetUserDefaultLCID=0x411` |
-| .NET Framework 4.8 控制台程序，分别编译为 x86、x64、AnyCPU | 转换得到 U+5041（GBK 的解释，即未进入 932），`CurrentCulture` 仍为 en-US |
+原因有两处，都在 Core 初始化时对“kernel32/kernelbase 已完成进程附加”的处理，托管目标恰好总是走到这里：
 
-同样的调用，原生目标生效而托管目标不生效，且与托管程序的位数无关；AnyCPU 程序的 PE 头 Machine 为 0x14C（PE32），但在本机实际以 64 位进程运行，也就是说按 PE 头选择 x86 启动器的规则对这类程序与实际位数不一致。以上均为单机单次观测，原因没有调查，不要据此推断是回归还是上游一直如此。与原版 v2.5.0.1 的对照尝试过两种做法，都不可行：原版 ZIP 里的 `LEProc.exe` 缺少 `LECommonLibrary.dll` 无法单独运行；把原版两个原生 DLL 换进当前 x86 包，则因环境结构（ABI v2）不兼容而探针没有任何输出。要继续，需要一份可运行的原版前端，或直接在 Core 里查托管运行时启动阶段与钩子安装的先后关系。
+- **x86 Core**：`Initialize` 发现 kernel32 已完成 `PROCESS_ATTACH` 就返回 `FALSE`，Core 从未初始化，子进程毫无模拟。用 `ENABLE_LOG 1` 重新编译 x86 Core 并在失败分支落标记文件，托管探针停在该守卫上，原生探针不会。移除守卫（及只服务于它的 `GenerateModuleList`）后，x86 托管探针得到 `GetACP=932`、LCID `0x411`、`CurrentCulture=ja-JP`、`Encoding.Default.GetString(82 A0)=U+3042`。
+- **x64 Core**：Core 能初始化，但 `HackAnsiOemCodeHashNodes` 无条件跳过 kernelbase 的 `SetupAnsiOemCodeHashNodes`。原生目标在 kernelbase 建缓存之前被钩住，所以没问题；托管目标进入时 kernelbase 已按系统代码页建好 ANSI/OEM 哈希节点，没人刷新，`GetACP` 仍为 936。现在仅在 kernelbase 已完成附加时调用该刷新，查找失败时保持原状。修复后 x64 托管探针得到同样的 932 / `0x411` / ja-JP / U+3042。
 
-已经排除的解释（均为本机实测）：
+验证方法：x64 Core 的发行构建使用 `/DENABLE_LOG=0`，要看钩子顺序需用 `ENABLE_LOG=1` 在临时目录重新编译（链接时还要补 `kernel32.lib`，日志支持代码引用了 `CreateDirectoryW` 和 `GetModuleFileNameW`），并在包目录下建 `Log\` 才会生成日志。仓库回归里的原生探针只覆盖原生目标，没有覆盖这一点。
 
-- 不是时间问题：x86 托管探针在启动后 2.8 秒内每 0.4 秒查询一次，`GetACP` 始终是 936。
-- 不是单纯加载托管运行时造成的：原生 x86 探针依次加载 `mscoree.dll`、`clr.dll` 后，`GetACP` 仍是 932。
-- 不能靠内存映射判断是否注入：原生和托管进程里都扫不到 `LocaleEmulator.dll`（Core 自己隐藏），两者都只能看到系统的 `locale.nls` 与 `apphelp.dll`。
-- 已读代码得知：`LoaderDll` 通过补丁 `ntdll!LdrLoadDll` 的开头字节，让子进程第一次调用它时加载 `LocaleEmulator.dll`，Core 再接管 kernel32 的入口做延迟初始化。托管程序的启动顺序与原生不同，注入时机是否因此变化尚未验证。
-
-发行版的日志宏由编译开关 `ENABLE_LOG` 关闭，要看钩子安装的先后需要用该开关重新编译 Core。仓库回归里的原生探针只覆盖原生目标，不覆盖这一点。
+**仍未解决**：托管探针里 `TimeZoneInfo.Local.Id` 仍是宿主的 `Atlantic Standard Time`，没有变成配置里的 `Tokyo Standard Time`。原生目标的时区模拟是否生效、托管目标缺失的原因都还没有测。
 
 ## 历史提交元数据说明
 
