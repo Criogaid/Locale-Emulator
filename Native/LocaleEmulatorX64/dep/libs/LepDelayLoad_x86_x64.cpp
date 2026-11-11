@@ -168,20 +168,30 @@ extern "C" PVOID WINAPI __delayLoadHelper2(PCImgDelayDescr Descriptor, PVOID *Th
     // With /guard:cf the linker puts the delay-load IAT in its own read-only section (protected delay load),
     // so the slot must be made writable for the store and restored afterwards. KERNEL32's VirtualProtect is
     // not usable here: this helper is what bootstraps it.
+    // Two threads resolving slots on the same page would otherwise race: one restores read-only while the
+    // other is about to store. The lock covers Nt calls only, so it cannot re-enter this helper.
     {
+        static volatile LONG ProtectLock = 0;
         PVOID Page = ThunkAddress;
         ULONG_PTR PageSize = sizeof(PVOID);
         ULONG OldProtect = 0;
 
+        while (_InterlockedCompareExchange(&ProtectLock, 1, 0) != 0)
+            YieldProcessor();
+
         Status = NtProtectVirtualMemory(NtCurrentProcess(), &Page, &PageSize, PAGE_READWRITE, &OldProtect);
+        if (NT_SUCCESS(Status))
+        {
+            *ThunkAddress = Procedure;
+
+            Page = ThunkAddress;
+            PageSize = sizeof(PVOID);
+            NtProtectVirtualMemory(NtCurrentProcess(), &Page, &PageSize, OldProtect, &OldProtect);
+        }
+
+        _InterlockedExchange(&ProtectLock, 0);
         if (NT_FAILED(Status))
             return nullptr;
-
-        *ThunkAddress = Procedure;
-
-        Page = ThunkAddress;
-        PageSize = sizeof(PVOID);
-        NtProtectVirtualMemory(NtCurrentProcess(), &Page, &PageSize, OldProtect, &OldProtect);
     }
 
     return Procedure;
