@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using LECommonLibrary;
 
@@ -287,64 +288,29 @@ namespace LEProc
             }
         }
 
+        // The system maps a code page to its GDI charset; unknown code pages keep ANSI_CHARSET.
         private static int GetCharsetFromANSICodepage(int ansicp)
         {
+            const uint TCI_SRCCODEPAGE = 2;
             const int ANSI_CHARSET = 0;
-            const int SHIFTJIS_CHARSET = 128;
-            const int HANGEUL_CHARSET = 129;
-            const int GB2312_CHARSET = 134;
-            const int CHINESEBIG5_CHARSET = 136;
-            const int HEBREW_CHARSET = 177;
-            const int ARABIC_CHARSET = 178;
-            const int GREEK_CHARSET = 161;
-            const int TURKISH_CHARSET = 162;
-            const int EASTEUROPE_CHARSET = 238;
-            const int RUSSIAN_CHARSET = 204;
-            const int BALTIC_CHARSET = 186;
 
-            var charset = ANSI_CHARSET;
-
-            switch (ansicp)
-            {
-                case 932: // Japanese
-                    charset = SHIFTJIS_CHARSET;
-                    break;
-                case 936: // Simplified Chinese
-                    charset = GB2312_CHARSET;
-                    break;
-                case 949: // Korean
-                    charset = HANGEUL_CHARSET;
-                    break;
-                case 950: // Traditional Chinese
-                    charset = CHINESEBIG5_CHARSET;
-                    break;
-                case 1250: // Eastern Europe
-                    charset = EASTEUROPE_CHARSET;
-                    break;
-                case 1251: // Russian
-                    charset = RUSSIAN_CHARSET;
-                    break;
-                case 1252: // Western European Languages
-                    charset = ANSI_CHARSET;
-                    break;
-                case 1253: // Greek
-                    charset = GREEK_CHARSET;
-                    break;
-                case 1254: // Turkish
-                    charset = TURKISH_CHARSET;
-                    break;
-                case 1255: // Hebrew
-                    charset = HEBREW_CHARSET;
-                    break;
-                case 1256: // Arabic
-                    charset = ARABIC_CHARSET;
-                    break;
-                case 1257: // Baltic
-                    charset = BALTIC_CHARSET;
-                    break;
-            }
-
-            return charset;
+            CharsetInfo info;
+            return TranslateCharsetInfo(new IntPtr(ansicp), out info, TCI_SRCCODEPAGE)
+                ? (int)info.Charset
+                : ANSI_CHARSET;
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CharsetInfo
+        {
+            internal uint Charset;
+            internal uint CodePage;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 6)]
+            internal uint[] FontSignature;
+        }
+
+        // For TCI_SRCCODEPAGE the "pointer" argument carries the code page value itself.
+        [DllImport("gdi32.dll")]
+        private static extern bool TranslateCharsetInfo(IntPtr source, out CharsetInfo info, uint flags);
     }
 }
