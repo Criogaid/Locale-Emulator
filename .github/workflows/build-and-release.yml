@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-2022
     timeout-minutes: 90
     permissions:
       contents: read
@@ -23,6 +23,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # windows-2019 was retired by GitHub on 2025-06-30. The hosted windows-2022 image is not
+      # guaranteed to carry VS2019 (16.x), which the native toolchain scripts require, so install
+      # the C++ build tools and Windows SDK 10.0.19041.0 when vswhere cannot find them.
+      - name: Ensure Visual Studio 2019 Build Tools
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $found = & $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.Windows10SDK.19041 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($found)) {
+            choco install visualstudio2019buildtools --yes --no-progress --package-parameters '--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.Windows10SDK.19041'
+            if ($LASTEXITCODE -notin 0, 3010) { throw "Visual Studio 2019 Build Tools install failed: exit $LASTEXITCODE" }
+          }
 
       - name: Build, test, and package both architectures
         shell: pwsh
@@ -42,7 +55,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
-    runs-on: windows-2019
+    runs-on: windows-2022
     timeout-minutes: 15
     permissions:
       contents: write
