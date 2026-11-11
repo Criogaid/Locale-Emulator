@@ -108,7 +108,7 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 - **一级菜单**：`Native/ExplorerCommand/` 是 x64 的 `IExplorerCommand` DLL，只把动作转发给同目录的 `LEProc.exe`；`Scripts/ModernMenu.ps1` 注册或移除稀疏包。只覆盖 `.exe`，原因见 README。仅发布在 `build-dual.ps1` 的两个包里，默认 `build.ps1` 的 x86 包不含它。
 - **安装器无窗口模式**：`LEInstaller.exe --InstallUser` / `--UninstallUser`，退出码 0 成功、1 失败、2 表示经典菜单已处理而可选的一级菜单没有处理成功。
 - **构建约束**：原生工具链的版本统一由 `Native/Toolchain.ps1` 提供；`build-dual.ps1` 对 x64 DLL 与 Loader 的 CFG、`LEExplorerCommand.dll` 的缓解标志和导出做断言。
-- **未验证**：稀疏包注册需要开发人员模式或已签名的包，Windows 11 新菜单的真实渲染（含图标）从未在真实 Explorer 里验证，只用系统 shell32 验证过命令行为。待决事项：Core DLL 因私有 NLS 调用而未启用 CFG（需要安全取舍）。新增代码的许可已确定为 LGPL-3.0，见 [源码来源](SOURCES.md)。
+- **未验证**：稀疏包注册需要开发人员模式或已签名的包，Windows 11 新菜单的真实渲染（含图标）从未在真实 Explorer 里验证，只用系统 shell32 验证过命令行为。已作出的决定：新增代码的许可为 LGPL-3.0，见 [源码来源](SOURCES.md)；Core DLL 保持不启用 CFG（`LeSetupAnsiOemCodeHashNodes` 通过扫描 `KERNELBASE` 机器码取得未导出的私有 NLS 函数并间接调用，该目标不是合法的 CFG 目标；绕开只能关闭保护或复制 Windows 内部行为，风险高于收益）。Loader 与 `LEExplorerCommand.dll` 已启用 CFG 并由构建断言守住。若以后 Windows 提供公开的等价接口，或这条调用被移除，再重新评估。
 
 ## 历史提交元数据说明
 
