@@ -267,7 +267,7 @@ foreach ($package in $x86.Package, $x64.Package) {
 foreach ($package in $x86.Package, $x64.Package) {
     $dll = Join-Path $package 'LEExplorerCommand.dll'
     $headers = & $dumpbin /headers $dll 2>&1 | Out-String
-    foreach ($flag in 'Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard') {
+    foreach ($flag in 'Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard', 'CET compatible') {
         if ($headers -notmatch [regex]::Escape($flag)) { throw "LEExplorerCommand.dll 缺少 $flag：$dll" }
     }
     $exports = & $dumpbin /exports $dll 2>&1 | Out-String

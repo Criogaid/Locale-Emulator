@@ -116,7 +116,7 @@ Invoke-Native (Join-Path $hostBin 'cl.exe') @(
 
 Invoke-Native (Join-Path $hostBin 'link.exe') @(
     '/nologo', '/dll', '/machine:x64', '/debug:none', '/opt:ref', '/opt:icf',
-    '/dynamicbase', '/highentropyva', '/nxcompat', '/guard:cf', '/manifest:no',
+    '/dynamicbase', '/highentropyva', '/nxcompat', '/guard:cf', '/CETCOMPAT', '/manifest:no',
     "/def:$(Join-Path $PSScriptRoot 'ExplorerCommand.def')", "/out:$dll",
     "/libpath:$(Join-Path $sdkRoot "Lib\$sdkVersion\um\x64")",
     "/libpath:$(Join-Path $sdkRoot "Lib\$sdkVersion\ucrt\x64")",
