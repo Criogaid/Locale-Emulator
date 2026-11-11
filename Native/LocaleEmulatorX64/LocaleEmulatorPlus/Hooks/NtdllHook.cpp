@@ -1113,15 +1113,90 @@ LepNtQueryInformationThread(
     return Status;
 }
 
+#define LEP_CROSS_ARCH_LAUNCH_CONTEXT TAG4('LCAL')
+#define LEP_CROSS_ARCH_HELPER_TIMEOUT_MS 60000
+
+// The child has the other architecture, so this Core cannot be mapped into it.  Instead the package's
+// LEProc of the child's architecture (x86 package folder under the x64 root) is started in -attach
+// mode with the serialized environment; it injects its own Loader/Core into the suspended child.
+// Any failure leaves the child un-emulated and is reported to the caller, which still resumes it.
+static NTSTATUS LepInjectCrossArchitecture(PLepGlobalData GlobalData, PCLIENT_ID Cid)
+{
+    WCHAR HelperPath[MAX_NTPATH];
+    BYTE Input[2048];
+    ULONG InputSize = 0;
+    PCWSTR DirPath = GlobalData->GetLepDllDirPath();
+    ULONG_PTR DirLength;
+
+    if (DirPath == nullptr)
+        return STATUS_OBJECT_PATH_INVALID;
+    DirLength = LepStringLengthW(DirPath);
+    // GetLepDllDirPath keeps the trailing separator.
+    if (DirLength + countof(L"x86\\LEProc.exe") >= countof(HelperPath))
+        return STATUS_NAME_TOO_LONG;
+    CopyMemory(HelperPath, DirPath, DirLength * sizeof(WCHAR));
+    CopyMemory(HelperPath + DirLength, L"x86\\LEProc.exe", sizeof(L"x86\\LEProc.exe"));
+    if (GetFileAttributesW(HelperPath) == INVALID_FILE_ATTRIBUTES)
+    {
+        WriteLog(L"cross-arch helper missing %ws", HelperPath);
+        return STATUS_DLL_NOT_FOUND;
+    }
+
+    if (!LeSerializeRuntimeInput(GlobalData->GetEnvironment(), GlobalData->GetTimezoneId(),
+                                 Input, sizeof(Input), &InputSize))
+        return STATUS_BUFFER_OVERFLOW;
+
+    static WCHAR CommandLine[4096];
+    int Prefix = wsprintfW(CommandLine, L"\"%s\" -attach %u %u ", HelperPath,
+                           (ULONG)(ULONG_PTR)Cid->UniqueProcess, (ULONG)(ULONG_PTR)Cid->UniqueThread);
+    if (Prefix <= 0 || (ULONG)Prefix + InputSize * 2 + 1 > countof(CommandLine))
+        return STATUS_BUFFER_OVERFLOW;
+    LeBytesToHex(Input, InputSize, CommandLine + Prefix);
+
+    STARTUPINFOW StartupInfo = {};
+    PROCESS_INFORMATION Helper = {};
+    StartupInfo.cb = sizeof(StartupInfo);
+    BOOL Created;
+    {
+        // The helper is created through this very hook; keep it from being injected or recursed on.
+        lep::ActiveFrame LaunchFrame(LEP_CROSS_ARCH_LAUNCH_CONTEXT);
+        LaunchFrame.Push();
+        Created = CreateProcessW(HelperPath, CommandLine, nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                                 nullptr, nullptr, &StartupInfo, &Helper);
+        LaunchFrame.Pop();
+    }
+    if (!Created)
+        return ML_NTSTATUS_FROM_WIN32(GetLastError());
+
+    NTSTATUS Status = STATUS_TIMEOUT;
+    if (WaitForSingleObject(Helper.hProcess, LEP_CROSS_ARCH_HELPER_TIMEOUT_MS) == WAIT_OBJECT_0)
+    {
+        DWORD ExitCode = (DWORD)STATUS_UNSUCCESSFUL;
+        GetExitCodeProcess(Helper.hProcess, &ExitCode);
+        Status = (NTSTATUS)ExitCode;
+    }
+    else
+    {
+        TerminateProcess(Helper.hProcess, (UINT)STATUS_TIMEOUT);
+    }
+    WriteLog(L"cross-arch helper pid=%u status=%08X", Helper.dwProcessId, Status);
+    CloseHandle(Helper.hThread);
+    CloseHandle(Helper.hProcess);
+    return Status;
+}
+
 NTSTATUS LepGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid, ULONG InjectionFlags)
 {
+    // The cross-architecture helper itself is a child of this process; it must not be emulated.
+    if (lep::ActiveFrame::Find(LEP_CROSS_ARCH_LAUNCH_CONTEXT) != nullptr)
+        return STATUS_SUCCESS;
 
     BOOL TargetWow64 = Ps::IsWow64Process(Process);
     if (this->Wow64 != TargetWow64)
     {
-        WriteLog(L"skip unsupported cross-architecture child injection pid=%u currentWow64=%u targetWow64=%u",
+        WriteLog(L"cross-architecture child pid=%u currentWow64=%u targetWow64=%u",
                  (ULONG)(ULONG_PTR)Cid->UniqueProcess, this->Wow64, TargetWow64);
-        return STATUS_NOT_SUPPORTED;
+        return LepInjectCrossArchitecture(this, Cid);
     }
 
     NTSTATUS Status = STATUS_SUCCESS;

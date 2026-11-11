@@ -177,4 +177,65 @@ static __inline BOOL LeValidateRuntimeConfig(PCLE_RUNTIME_CONFIG Config)
     return TRUE;
 }
 
+// Rebuilds the Loader input from an already resolved configuration, so a Core can hand its own
+// environment to a Loader of the other architecture.  The resolved zone names travel as the
+// standard/daylight overrides, which reproduces them exactly.  Returns FALSE when Capacity is too small.
+static __inline BOOL LeSerializeRuntimeInput(
+    const LE_RUNTIME_CONFIG* Config,
+    const WCHAR* TimezoneId,
+    BYTE* Buffer,
+    ULONG Capacity,
+    ULONG* Written)
+{
+    const WCHAR* Strings[3];
+    ULONG Lengths[3], Offsets[3], Total = sizeof(LE_RUNTIME_INPUT);
+    LE_RUNTIME_INPUT* Input = (LE_RUNTIME_INPUT*)Buffer;
+
+    Strings[0] = TimezoneId != NULL ? TimezoneId : L"";
+    Strings[1] = Config->Timezone.StandardName;
+    Strings[2] = Config->Timezone.DaylightName;
+    for (ULONG Index = 0; Index < 3; ++Index)
+    {
+        ULONG Chars = 0;
+        while (Strings[Index][Chars] != 0)
+            ++Chars;
+        Lengths[Index] = Chars * sizeof(WCHAR);
+        Offsets[Index] = Total;
+        Total += Lengths[Index] + sizeof(WCHAR);
+    }
+    if (Total > Capacity)
+        return FALSE;
+
+    ZeroMemory(Buffer, Total);
+    Input->Size = Total;
+    Input->Version = LE_RUNTIME_INPUT_VERSION;
+    Input->AnsiCodePage = Config->AnsiCodePage;
+    Input->OemCodePage = Config->OemCodePage;
+    Input->LocaleID = Config->LocaleID;
+    Input->FontCharset = Config->FontCharset;
+    Input->RegistryMode = Config->RegistryMode;
+    Input->HookUILanguageMode = Config->HookUILanguageMode;
+    Input->TimezoneIdOffset = Offsets[0];
+    Input->TimezoneIdLength = Lengths[0];
+    Input->StandardNameOffset = Offsets[1];
+    Input->StandardNameLength = Lengths[1];
+    Input->DaylightNameOffset = Offsets[2];
+    Input->DaylightNameLength = Lengths[2];
+    for (ULONG Index = 0; Index < 3; ++Index)
+        CopyMemory(Buffer + Offsets[Index], Strings[Index], Lengths[Index]);
+    *Written = Total;
+    return TRUE;
+}
+
+static __inline VOID LeBytesToHex(const BYTE* Bytes, ULONG Count, WCHAR* Text)
+{
+    static const WCHAR Digits[] = L"0123456789ABCDEF";
+    for (ULONG Index = 0; Index < Count; ++Index)
+    {
+        Text[Index * 2] = Digits[Bytes[Index] >> 4];
+        Text[Index * 2 + 1] = Digits[Bytes[Index] & 15];
+    }
+    Text[Count * 2] = 0;
+}
+
 #endif // LOCALE_EMULATOR_RUNTIME_ENVIRONMENT_H

@@ -295,6 +295,85 @@ LeNtQueryInformationThread(
     return Status;
 }
 
+#define LE_CROSS_ARCH_LAUNCH_CONTEXT TAG4('LCAL')
+#define LE_CROSS_ARCH_HELPER_TIMEOUT_MS 60000
+
+// The child is a native x64 process, which this x86 Core cannot be mapped into.  In the dual package
+// this Core lives in the "x86" folder, and the x64 LEProc sits in its parent: start it in -attach mode
+// with the serialized environment so it injects the x64 Loader/Core into the suspended child.
+// A failure leaves the child un-emulated and is reported; the caller still lets the child run.
+static NTSTATUS LeInjectCrossArchitecture(PLeGlobalData GlobalData, PCLIENT_ID Cid)
+{
+    WCHAR HelperPath[MAX_NTPATH];
+    BYTE Input[2048];
+    ULONG InputSize = 0;
+    PLEPEB LePeb = GlobalData->GetLePeb();
+    ULONG_PTR Length = wcslen(LePeb->LeDllDirPath);
+    static const WCHAR Folder[] = L"x86\\";
+    static const WCHAR Helper[] = L"LEProc.exe";
+    const ULONG_PTR FolderChars = countof(Folder) - 1;
+
+    if (Length <= FolderChars || LePeb->LeDllDirPath[Length - FolderChars - 1] != L'\\')
+        return STATUS_NOT_SUPPORTED;
+    for (ULONG_PTR Index = 0; Index < FolderChars; ++Index)
+    {
+        WCHAR Actual = LePeb->LeDllDirPath[Length - FolderChars + Index];
+        if (Actual != Folder[Index] && Actual != (WCHAR)(Folder[Index] ^ 0x20))
+            return STATUS_NOT_SUPPORTED;
+    }
+    Length -= FolderChars;
+    if (Length + countof(Helper) > countof(HelperPath))
+        return STATUS_NAME_TOO_LONG;
+    CopyMemory(HelperPath, LePeb->LeDllDirPath, Length * sizeof(WCHAR));
+    CopyMemory(HelperPath + Length, Helper, sizeof(Helper));
+    if (GetFileAttributesW(HelperPath) == INVALID_FILE_ATTRIBUTES)
+    {
+        WriteLog(L"cross-arch helper missing %s", HelperPath);
+        return STATUS_DLL_NOT_FOUND;
+    }
+
+    if (!LeSerializeRuntimeInput(&LePeb->Environment, LePeb->TimezoneId, Input, sizeof(Input), &InputSize))
+        return STATUS_BUFFER_OVERFLOW;
+
+    static WCHAR CommandLine[4096];
+    int Prefix = wsprintfW(CommandLine, L"\"%s\" -attach %u %u ", HelperPath,
+                           (ULONG)(ULONG_PTR)Cid->UniqueProcess, (ULONG)(ULONG_PTR)Cid->UniqueThread);
+    if (Prefix <= 0 || (ULONG)Prefix + InputSize * 2 + 1 > countof(CommandLine))
+        return STATUS_BUFFER_OVERFLOW;
+    LeBytesToHex(Input, InputSize, CommandLine + Prefix);
+
+    STARTUPINFOW StartupInfo = {};
+    PROCESS_INFORMATION Created = {};
+    StartupInfo.cb = sizeof(StartupInfo);
+    BOOL Started;
+    {
+        // The helper is created through this very hook; it must be neither emulated nor recursed on.
+        TEB_ACTIVE_FRAME LaunchFrame(LE_CROSS_ARCH_LAUNCH_CONTEXT);
+        LaunchFrame.Push();
+        Started = CreateProcessW(HelperPath, CommandLine, nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                                 nullptr, nullptr, &StartupInfo, &Created);
+        LaunchFrame.Pop();
+    }
+    if (!Started)
+        return ML_NTSTATUS_FROM_WIN32(GetLastError());
+
+    NTSTATUS Status = STATUS_TIMEOUT;
+    if (WaitForSingleObject(Created.hProcess, LE_CROSS_ARCH_HELPER_TIMEOUT_MS) == WAIT_OBJECT_0)
+    {
+        DWORD ExitCode = (DWORD)STATUS_UNSUCCESSFUL;
+        GetExitCodeProcess(Created.hProcess, &ExitCode);
+        Status = (NTSTATUS)ExitCode;
+    }
+    else
+    {
+        TerminateProcess(Created.hProcess, (UINT)STATUS_TIMEOUT);
+    }
+    WriteLog(L"cross-arch helper pid=%u status=%08X", Created.dwProcessId, Status);
+    CloseHandle(Created.hThread);
+    CloseHandle(Created.hProcess);
+    return Status;
+}
+
 NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
 {
     NTSTATUS    Status;
@@ -576,9 +655,18 @@ LeNtCreateUserProcess(
 
     GlobalData = (PLeGlobalData)HpGetFilterContext();
 
-    // Cross-bitness children deliberately run without injection.
-    if (Ps::IsWow64Process(CurrentProcess) && !Ps::IsWow64Process(InternalProcess))
+    if (FindThreadFrame(LE_CROSS_ARCH_LAUNCH_CONTEXT) != nullptr)
+        // The cross-architecture helper itself: runs unmodified.
         Status2 = STATUS_SUCCESS;
+    else if (Ps::IsWow64Process(CurrentProcess) && !Ps::IsWow64Process(InternalProcess))
+    {
+        // A native x64 child: the x64 helper injects it. If that cannot be done the child still runs,
+        // just without emulation, as before.
+        NTSTATUS CrossStatus = LeInjectCrossArchitecture(GlobalData, Cid);
+        WriteLog(L"cross-arch child status=%08X", CrossStatus);
+        UNREFERENCED_PARAMETER(CrossStatus);
+        Status2 = STATUS_SUCCESS;
+    }
     else
         Status2 = GlobalData->InjectSelfToChildProcess(InternalProcess, Cid);
 

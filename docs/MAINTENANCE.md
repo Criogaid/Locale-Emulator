@@ -153,3 +153,13 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 ## 历史提交元数据说明
 
 本轮审查发现历史提交 `3057efd`、`6f3bf66`、`e4dadeb`、`f996108` 和 `beeff20` 的提交正文含有未展开的 `Co-Authored-By: :PI_MODEL <noreply@pi.dev>`。这些提交已经成为当前本地分支的历史，源码、构建和发行包不读取该字段；本轮不改写历史，避免改变已记录的里程碑哈希、审查证据和后续父子关系。自 `d6cefaa` 起的新提交均在提交前读取实际 `PI_MODEL`，使用完整的协作者值；若发行者要求历史元数据重写，应作为独立的仓库维护操作重新生成全部受影响哈希并重建证据目录。
+
+## 跨架构子进程继承（已实现）
+
+目标创建另一架构的子进程时（x64→x86 或 x86→x64），Core 无法把自己映射进去，改为启动包内另一架构的 `LEProc.exe -attach <pid> <tid> <hex>`：helper 加载本架构的 Loader/Core，经 `LeAttachProcess`（x86 内部走 Core 导出 `LeInjectChild`）对已挂起的子进程注入，Core 等待 helper 退出（60 秒上限）后再恢复子进程。
+
+- hex 是 `LeSerializeRuntimeInput`（`Native/RuntimeEnvironment.h`）由已解析配置重建的 `LE_RUNTIME_INPUT`；解析后的夏令/标准时间名作为覆盖项传回，复现结果一致。
+- 启动 helper 本身也经过 `NtCreateUserProcess` 钩子，用线程帧 `LCAL` 标记以跳过对 helper 的注入，避免递归。
+- helper 路径：x64 Core 用 `<Core 目录>\x86\LEProc.exe`；x86 Core 要求自己位于 `x86\` 目录并用其上一级的 `LEProc.exe`。文件缺失、参数无效、超时或 helper 返回失败时，子进程保持未模拟状态继续运行（不终止）。
+- 已测（scratch 探针，ja-JP/Tokyo Standard Time）：x64→x86 子进程 bias -540、key Tokyo Standard Time；x86→x64 子进程 sysLCID/userLCID 0x411；移走 `x86\LEProc.exe` 后 x64→x86 子进程回到宿主时区（bias 240）且不挂起。
+- 未测：跨架构孙进程（子进程再创建其他架构进程）、helper 被杀毒拦截的耗时、托管（.NET）跨架构子进程。
