@@ -132,7 +132,7 @@ namespace LEProc
             // app profile > first global profile > new profile(ja-JP)
             var profile = appProfile.Any()
                 ? appProfile.First()
-                : globalProfiles.Any() ? globalProfiles.First() : new LEProfile(true);
+                : globalProfiles.Any() ? globalProfiles.First() : LEProfile.CreateDefault(LEProfile.DefaultLocation, false);
 
             return DoRunWithLEProfile(path, 1, profile);
         }

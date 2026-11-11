@@ -13,23 +13,26 @@
         public bool ShowInMainMenu;
         public string Timezone;
 
+        /// <summary>The one place that defines the built-in region and time zone.</summary>
+        public const string DefaultLocation = "ja-JP";
+        public const string DefaultTimezone = "Tokyo Standard Time";
+
         /// <summary>
-        ///     Create a new LEProfile object using default(ja-JP) settings.
+        ///     Create a new profile using the built-in default (ja-JP) settings.
         /// </summary>
-        /// <param name="isDefault">A placeholder, not used at all.</param>
-        public LEProfile(bool isDefault)
-            : this(
-                "ja-JP",
+        public static LEProfile CreateDefault(string name, bool runAsAdmin)
+        {
+            return new LEProfile(
+                name,
                 System.Guid.NewGuid().ToString(),
                 false,
                 string.Empty,
-                "ja-JP",
-                "Tokyo Standard Time",
-                false,
+                DefaultLocation,
+                DefaultTimezone,
+                runAsAdmin,
                 true,
                 false,
-                false)
-        {
+                false);
         }
 
         /// <summary>

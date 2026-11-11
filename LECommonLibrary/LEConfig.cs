@@ -71,30 +71,9 @@ namespace LECommonLibrary
         {
             var defaultProfiles = new[]
                                   {
-                                      new LEProfile("Run in Japanese",
-                                                    Guid.NewGuid().ToString(),
-                                                    false,
-                                                    string.Empty,
-                                                    "ja-JP",
-                                                    "Tokyo Standard Time",
-                                                    false,
-                                                    true,
-                                                    false,
-                                                    false
-                                          ),
-                                      new LEProfile("Run in Japanese (Admin)",
-                                                    Guid.NewGuid().ToString(),
-                                                    false,
-                                                    string.Empty,
-                                                    "ja-JP",
-                                                    "Tokyo Standard Time",
-                                                    true,
-                                                    true,
-                                                    false,
-                                                    false
-                                          )
+                                      LEProfile.CreateDefault("Run in Japanese", false),
+                                      LEProfile.CreateDefault("Run in Japanese (Admin)", true)
                                   };
-
             WriteConfig(GlobalConfigPath, defaultProfiles);
         }
 

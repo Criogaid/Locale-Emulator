@@ -43,12 +43,12 @@ namespace LEGUI
             // Region.
             _cultureInfos = CultureInfo.GetCultures(CultureTypes.AllCultures).OrderBy(i => i.DisplayName).ToList();
             cbLocation.ItemsSource = _cultureInfos.Select(c => c.DisplayName);
-            cbLocation.SelectedIndex = _cultureInfos.FindIndex(c => c.Name == "ja-JP");
+            cbLocation.SelectedIndex = _cultureInfos.FindIndex(c => c.Name == LEProfile.DefaultLocation);
 
             //Timezone.
             _timezones = TimeZoneInfo.GetSystemTimeZones().ToList();
             cbTimezone.ItemsSource = _timezones.Select(t => t.DisplayName);
-            cbTimezone.SelectedIndex = _timezones.FindIndex(tz => tz.Id == "Tokyo Standard Time");
+            cbTimezone.SelectedIndex = _timezones.FindIndex(tz => tz.Id == LEProfile.DefaultTimezone);
 
             // Load exists config.
             var configs = LEConfig.GetProfiles(App.StandaloneFilePath);
