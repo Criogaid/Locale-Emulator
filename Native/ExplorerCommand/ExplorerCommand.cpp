@@ -349,6 +349,12 @@ void AddProfiles(SubCommands* commands) {
                 const HRESULT copied = StringCchCopyW(title, ARRAYSIZE(title), profileName);
                 if (FAILED(copied) && copied != STRSAFE_E_INSUFFICIENT_BUFFER)
                     continue;
+                // Truncating by UTF-16 unit may split a surrogate pair; drop the orphaned high surrogate.
+                if (copied == STRSAFE_E_INSUFFICIENT_BUFFER) {
+                    const size_t last = lstrlenW(title) - 1;
+                    if (last < ARRAYSIZE(title) && title[last] >= 0xD800 && title[last] <= 0xDBFF)
+                        title[last] = L'\0';
+                }
                 if (reader->MoveToAttributeByName(L"Guid", nullptr) != S_OK
                     || FAILED(reader->GetValue(&guid, nullptr)) || !IsCanonicalGuid(guid))
                     continue;
