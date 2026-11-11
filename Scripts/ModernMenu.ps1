@@ -15,76 +15,84 @@ param(
     [string]$ManifestPath
 )
 
-$ErrorActionPreference = 'Stop'
-$packageName = 'LocaleEmulator.ModernMenu'
-# Holds the registered manifest and logo only; the product files stay in the product directory.
-$registrationDirectory = Join-Path $env:LOCALAPPDATA 'LocaleEmulator\ModernMenu'
-
-function Remove-RegistrationDirectory {
-    Remove-Item -LiteralPath $registrationDirectory -Recurse -Force -ErrorAction SilentlyContinue
-    # Drop the product folder as well when nothing else lives in it.
-    $parent = Split-Path -Parent $registrationDirectory
-    if ((Test-Path -LiteralPath $parent) -and -not (Get-ChildItem -LiteralPath $parent -Force)) {
-        Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
-    }
-}
-
-if ($Action -eq 'Unregister') {
-    $existing = Get-AppxPackage -Name $packageName
-    if ($existing) {
-        $existing | Remove-AppxPackage
-    }
-    Remove-RegistrationDirectory
-    Write-Host "Removed $packageName."
-    return
-}
-
-if (-not $ProductDirectory) {
-    $ProductDirectory = $PSScriptRoot
-}
-if (-not $ManifestPath) {
-    $ManifestPath = @(
-        (Join-Path $PSScriptRoot 'AppxManifest.xml'),
-        (Join-Path $PSScriptRoot '..\Native\ExplorerCommand\AppxManifest.xml')
-    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-}
-if (-not $ManifestPath) {
-    throw 'AppxManifest.xml was not found; pass -ManifestPath.'
-}
-$ProductDirectory = (Resolve-Path -LiteralPath $ProductDirectory).Path
-foreach ($name in 'LEProc.exe', 'LEExplorerCommand.dll') {
-    if (-not (Test-Path -LiteralPath (Join-Path $ProductDirectory $name))) {
-        throw "The product directory is missing ${name}: $ProductDirectory"
-    }
-}
-
-# The registered manifest folder must stay in place for as long as the package is registered.
-$assetsDirectory = Join-Path $registrationDirectory 'Assets'
-New-Item -ItemType Directory -Force $assetsDirectory | Out-Null
-Copy-Item -LiteralPath $ManifestPath -Destination $registrationDirectory -Force
-
-Add-Type -AssemblyName System.Drawing
-$icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $ProductDirectory 'LEProc.exe'))
-$bitmap = [System.Drawing.Bitmap]::new($icon.ToBitmap(), 150, 150)
 try {
-    $bitmap.Save((Join-Path $assetsDirectory 'Logo.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-}
-finally {
-    $bitmap.Dispose()
-    $icon.Dispose()
-}
+    $ErrorActionPreference = 'Stop'
+    $packageName = 'LocaleEmulator.ModernMenu'
+    # Holds the registered manifest and logo only; the product files stay in the product directory.
+    $registrationDirectory = Join-Path $env:LOCALAPPDATA 'LocaleEmulator\ModernMenu'
 
-# Re-registering the same identity from another location fails, so drop an earlier registration first.
-Get-AppxPackage -Name $packageName | Remove-AppxPackage
-try {
-    Add-AppxPackage -Register (Join-Path $registrationDirectory 'AppxManifest.xml') -ExternalLocation $ProductDirectory
+    function Remove-RegistrationDirectory {
+        Remove-Item -LiteralPath $registrationDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        # Drop the product folder as well when nothing else lives in it.
+        $parent = Split-Path -Parent $registrationDirectory
+        if ((Test-Path -LiteralPath $parent) -and -not (Get-ChildItem -LiteralPath $parent -Force)) {
+            Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($Action -eq 'Unregister') {
+        $existing = Get-AppxPackage -Name $packageName
+        if ($existing) {
+            $existing | Remove-AppxPackage
+        }
+        Remove-RegistrationDirectory
+        Write-Host "Removed $packageName."
+        return
+    }
+
+    if (-not $ProductDirectory) {
+        $ProductDirectory = $PSScriptRoot
+    }
+    if (-not $ManifestPath) {
+        $ManifestPath = @(
+            (Join-Path $PSScriptRoot 'AppxManifest.xml'),
+            (Join-Path $PSScriptRoot '..\Native\ExplorerCommand\AppxManifest.xml')
+        ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    }
+    if (-not $ManifestPath) {
+        throw 'AppxManifest.xml was not found; pass -ManifestPath.'
+    }
+    $ProductDirectory = (Resolve-Path -LiteralPath $ProductDirectory).Path
+    foreach ($name in 'LEProc.exe', 'LEExplorerCommand.dll') {
+        if (-not (Test-Path -LiteralPath (Join-Path $ProductDirectory $name))) {
+            throw "The product directory is missing ${name}: $ProductDirectory"
+        }
+    }
+
+    # The registered manifest folder must stay in place for as long as the package is registered.
+    $assetsDirectory = Join-Path $registrationDirectory 'Assets'
+    New-Item -ItemType Directory -Force $assetsDirectory | Out-Null
+    Copy-Item -LiteralPath $ManifestPath -Destination $registrationDirectory -Force
+
+    Add-Type -AssemblyName System.Drawing
+    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $ProductDirectory 'LEProc.exe'))
+    $bitmap = [System.Drawing.Bitmap]::new($icon.ToBitmap(), 150, 150)
+    try {
+        $bitmap.Save((Join-Path $assetsDirectory 'Logo.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $bitmap.Dispose()
+        $icon.Dispose()
+    }
+
+    # Re-registering the same identity from another location fails, so drop an earlier registration first.
+    Get-AppxPackage -Name $packageName | Remove-AppxPackage
+    try {
+        Add-AppxPackage -Register (Join-Path $registrationDirectory 'AppxManifest.xml') -ExternalLocation $ProductDirectory
+    }
+    catch {
+        # A failed registration (for example without Developer Mode) must not leave files behind.
+        if (-not (Get-AppxPackage -Name $packageName)) {
+            Remove-RegistrationDirectory
+        }
+        throw
+    }
+    Write-Host "Registered $packageName for the current user; external location: $ProductDirectory"
+    Write-Host 'Restart Explorer or sign in again; the .exe first-level menu then shows Run with Locale Emulator.'
 }
 catch {
-    # A failed registration (for example without Developer Mode) must not leave files behind.
-    if (-not (Get-AppxPackage -Name $packageName)) {
-        Remove-RegistrationDirectory
-    }
-    throw
+    # One readable line for callers (the installer shows it); the full error record stays out of the way.
+    $reason = ($_.Exception.Message -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1)
+    [Console]::Error.WriteLine($reason)
+    exit 1
 }
-Write-Host "Registered $packageName for the current user; external location: $ProductDirectory"
-Write-Host 'Restart Explorer or sign in again; the .exe first-level menu then shows Run with Locale Emulator.'

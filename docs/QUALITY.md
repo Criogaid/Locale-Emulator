@@ -183,3 +183,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 重复来源（已消除）：一级菜单的 CLSID 同时手写在 `AppxManifest.xml`（Verb 与 COM Class 两处）和 `ExplorerCommand.cpp`，任何一处不一致都只会让菜单静默不出现。现在 `build.ps1` 以清单为唯一来源：要求两处 GUID 相同，并生成到 `MenuTexts.h`；实测生成值与原值一致，故意改错一处时构建以退出码 1 失败。
 - 缺陷（已修复）：`ModernMenu.ps1` 注册失败（例如未开启开发人员模式）时会把清单与图标留在 `%LOCALAPPDATA%\LocaleEmulator\ModernMenu`，卸载后还会留下空的 `LocaleEmulator` 父目录。现在失败且无已注册包时清理注册目录，`Unregister` 也在父目录为空时一并删除。实测：用打包出的 x64 包运行注册，仍以 `0x80073CFF` 失败（空管道的 `Remove-AppxPackage` 不会提前报错，清单已通过部署层解析），目录无残留；无注册时 `Unregister` 退出码 0。
 - 更正：此前记录“多选时隐藏需要目标的项”并不准确，且“多选已验证”依据的驱动里多选部分只是空桩。用真实的两项 `IShellItemArray` 实测：根项状态为 `ECS_HIDDEN`，整个菜单不显示（与传统菜单只在单选时出现一致），`GetState` 里对“编辑全局配置列表”的豁免是死代码。已改为统一规则（单选才显示）；实测单选时根与 5 个子项均为启用，两项选择时根与前 5 个子项隐藏。
+- 改进：`ModernMenu.ps1` 失败时只向 stderr 输出一行英文原因（如 `Deployment failed with HRESULT: 0x80073CFF, ...`）并以退出码 1 结束；此前安装器会把 PowerShell 的整段多行错误（含本地化重复文本和脚本位置）原样放进完成提示框。实测注册失败、产品目录缺文件、`Unregister` 三条路径：失败时 stderr 恰好一行，退出码 1，目录无残留；`Unregister` 退出码 0。
