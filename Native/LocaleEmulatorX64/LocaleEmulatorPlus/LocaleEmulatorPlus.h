@@ -331,7 +331,7 @@ enum LEP_CHILD_INJECTION_FLAGS
 #define LEP_FIRST_DLL_BOOTSTRAP_MAGIC TAG4('L1DB')
 #define LEP_FIRST_DLL_BOOTSTRAP_EXPORT "LepFirstDllBootstrapData"
 #define LEP_BOOTSTRAP_PAYLOAD_MAGIC TAG4('LBP1')
-#define LEP_BOOTSTRAP_PAYLOAD_VERSION 3
+#define LEP_BOOTSTRAP_PAYLOAD_VERSION 4
 #define LEP_BOOTSTRAP_PAYLOAD_MAX_SIZE 0x1000000
 #define LEP_BOOTSTRAP_IMAGE_MAX_SIZE 0x10000000
 
@@ -359,6 +359,8 @@ typedef struct
     ULONG LepDllFullPathLength;
     ULONG LepDllDirPathOffset;
     ULONG LepDllDirPathLength;
+    ULONG TimezoneIdOffset;
+    ULONG TimezoneIdLength;
 } LEP_BOOTSTRAP_PAYLOAD, *PLEP_BOOTSTRAP_PAYLOAD;
 
 enum LEP_BOOTSTRAP_STAGE
@@ -447,6 +449,10 @@ inline BOOL LepValidateBootstrapPayload(PLEP_BOOTSTRAP_PAYLOAD Payload)
         Payload->EnvironmentOffset < Payload->HeaderSize ||
         Payload->LepDllFullPathOffset < Payload->HeaderSize ||
         Payload->LepDllDirPathOffset < Payload->HeaderSize ||
+        Payload->TimezoneIdOffset < Payload->HeaderSize ||
+        Payload->TimezoneIdLength > Payload->TotalSize - sizeof(WCHAR) ||
+        (Payload->TimezoneIdLength & (sizeof(WCHAR) - 1)) != 0 ||
+        !LepPayloadRangeValid(Payload->TimezoneIdOffset, Payload->TimezoneIdLength + sizeof(WCHAR), Payload->TotalSize) ||
         Payload->LepDllFullPathLength > Payload->TotalSize - sizeof(WCHAR) ||
         Payload->LepDllDirPathLength > Payload->TotalSize - sizeof(WCHAR) ||
         !LepPayloadRangeValid(Payload->EnvironmentOffset, Payload->EnvironmentSize, Payload->TotalSize) ||
@@ -466,8 +472,10 @@ inline BOOL LepValidateBootstrapPayload(PLEP_BOOTSTRAP_PAYLOAD Payload)
 
     PCWSTR FullPath = (PCWSTR)PtrAdd(Payload, Payload->LepDllFullPathOffset);
     PCWSTR DirPath = (PCWSTR)PtrAdd(Payload, Payload->LepDllDirPathOffset);
+    PCWSTR TimezoneId = (PCWSTR)PtrAdd(Payload, Payload->TimezoneIdOffset);
     return FullPath[Payload->LepDllFullPathLength / sizeof(WCHAR)] == 0 &&
-           DirPath[Payload->LepDllDirPathLength / sizeof(WCHAR)] == 0;
+           DirPath[Payload->LepDllDirPathLength / sizeof(WCHAR)] == 0 &&
+           TimezoneId[Payload->TimezoneIdLength / sizeof(WCHAR)] == 0;
 }
 
 inline PCLE_RUNTIME_CONFIG LepBootstrapEnvironment(PLEP_BOOTSTRAP_PAYLOAD Payload)
@@ -492,6 +500,14 @@ inline PCWSTR LepBootstrapDllDirPath(PLEP_BOOTSTRAP_PAYLOAD Payload)
 }
 
 
+inline PCWSTR LepBootstrapTimezoneId(PLEP_BOOTSTRAP_PAYLOAD Payload)
+{
+    return LepValidateBootstrapPayload(Payload)
+        ? (PCWSTR)PtrAdd(Payload, Payload->TimezoneIdOffset)
+        : nullptr;
+}
+
+
 inline ULONG_PTR LepStringLengthW(PCWSTR String)
 {
     PCWSTR Current = String;
@@ -502,12 +518,13 @@ inline ULONG_PTR LepStringLengthW(PCWSTR String)
     return Current - String;
 }
 
-inline ULONG LepBootstrapPayloadSize(ULONG EnvironmentSize, PCWSTR FullPath, PCWSTR DirPath)
+inline ULONG LepBootstrapPayloadSize(ULONG EnvironmentSize, PCWSTR FullPath, PCWSTR DirPath, PCWSTR TimezoneId)
 {
     ULONG64 Size = ROUND_UP(sizeof(LEP_BOOTSTRAP_PAYLOAD), 8) + EnvironmentSize;
     Size = ROUND_UP(Size, sizeof(WCHAR));
     Size += (LepStringLengthW(FullPath) + 1) * sizeof(WCHAR);
     Size += (LepStringLengthW(DirPath) + 1) * sizeof(WCHAR);
+    Size += (LepStringLengthW(TimezoneId) + 1) * sizeof(WCHAR);
     return Size <= LEP_BOOTSTRAP_PAYLOAD_MAX_SIZE ? (ULONG)Size : 0;
 }
 
@@ -517,14 +534,15 @@ inline NTSTATUS LepBuildBootstrapPayload(
     PCLE_RUNTIME_CONFIG Environment,
     ULONG EnvironmentSize,
     PCWSTR FullPath,
-    PCWSTR DirPath
+    PCWSTR DirPath,
+    PCWSTR TimezoneId
 )
 {
-    if (Payload == nullptr || Environment == nullptr || FullPath == nullptr || DirPath == nullptr ||
+    if (Payload == nullptr || Environment == nullptr || FullPath == nullptr || DirPath == nullptr || TimezoneId == nullptr ||
         !LepValidateRuntimeEnvironment(Environment) || EnvironmentSize != Environment->Size)
         return STATUS_INVALID_PARAMETER;
 
-    ULONG TotalSize = LepBootstrapPayloadSize(EnvironmentSize, FullPath, DirPath);
+    ULONG TotalSize = LepBootstrapPayloadSize(EnvironmentSize, FullPath, DirPath, TimezoneId);
     if (TotalSize == 0 || Capacity < TotalSize)
         return STATUS_BUFFER_TOO_SMALL;
 
@@ -548,6 +566,11 @@ inline NTSTATUS LepBuildBootstrapPayload(
     Payload->LepDllDirPathOffset = Offset;
     Payload->LepDllDirPathLength = (ULONG)(LepStringLengthW(DirPath) * sizeof(WCHAR));
     CopyMemory(PtrAdd(Payload, Offset), DirPath, Payload->LepDllDirPathLength + sizeof(WCHAR));
+    Offset += Payload->LepDllDirPathLength + sizeof(WCHAR);
+
+    Payload->TimezoneIdOffset = Offset;
+    Payload->TimezoneIdLength = (ULONG)(LepStringLengthW(TimezoneId) * sizeof(WCHAR));
+    CopyMemory(PtrAdd(Payload, Offset), TimezoneId, Payload->TimezoneIdLength + sizeof(WCHAR));
 
     return LepValidateBootstrapPayload(Payload) ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
 }
@@ -976,6 +999,13 @@ public:
         return BootstrapPayload == nullptr
             ? nullptr
             : (PCLE_RUNTIME_CONFIG)PtrAdd(BootstrapPayload, BootstrapPayload->EnvironmentOffset);
+    }
+
+    PCWSTR GetTimezoneId() const
+    {
+        return BootstrapPayload == nullptr
+            ? nullptr
+            : (PCWSTR)PtrAdd(BootstrapPayload, BootstrapPayload->TimezoneIdOffset);
     }
 
     PCWSTR GetLepDllFullPath()

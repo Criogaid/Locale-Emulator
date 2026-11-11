@@ -48,6 +48,8 @@ static NTSTATUS LepCreateBootstrapPayload(
     if (NT_FAILED(Status))
         return Status;
     ULONG EnvironmentSize = sizeof(Resolved);
+    // Validated by LepResolveEnvironment above, so offset and terminator are in range.
+    PCWSTR TimezoneId = (PCWSTR)((const BYTE*)Environment + Environment->TimezoneIdOffset);
 
     WCHAR DirPath[MAX_NTPATH];
     ULONG_PTR Length = StrLengthW(DllPath);
@@ -65,7 +67,7 @@ static NTSTATUS LepCreateBootstrapPayload(
         }
     }
 
-    ULONG Required = LepBootstrapPayloadSize(EnvironmentSize, DllPath, DirPath);
+    ULONG Required = LepBootstrapPayloadSize(EnvironmentSize, DllPath, DirPath, TimezoneId);
     if (Required == 0)
     {
         return STATUS_BUFFER_OVERFLOW;
@@ -77,7 +79,7 @@ static NTSTATUS LepCreateBootstrapPayload(
     }
 
     Status = LepBuildBootstrapPayload(LocalPayload, Required, &Resolved, EnvironmentSize,
-                                      DllPath, DirPath);
+                                      DllPath, DirPath, TimezoneId);
     if (NT_FAILED(Status))
     {
         FreeMemory(LocalPayload);
