@@ -134,6 +134,12 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 
 验证方法：x64 Core 的发行构建使用 `/DENABLE_LOG=0`，要看钩子顺序需用 `ENABLE_LOG=1` 在临时目录重新编译（链接时还要补 `kernel32.lib`，日志支持代码引用了 `CreateDirectoryW` 和 `GetModuleFileNameW`），并在包目录下建 `Log\` 才会生成日志。仓库回归里的原生探针只覆盖原生目标，没有覆盖这一点。
 
+**其他区域 API（x64 包实测，`ja-JP` 配置）**：托管目标的 `CurrentCulture`、`RegionInfo`（JP/JPY）、`GetUserDefaultLocaleName`（ja-JP）、`Encoding.Default`/OEM（932）都是配置值；`CurrentUICulture` 为 en-US、`GetSystemDefaultUILanguage` 为宿主的 0x804，这是 UI 语言默认不模拟的既有设计。已知的不一致：
+- `GetSystemDefaultLCID`：原生目标返回 0x411，托管目标返回宿主的 0x804。托管进程里 kernelbase 在 Core 之前就缓存了系统区域，Core 只重建了 ANSI/OEM 哈希节点，没有刷新这份缓存。.NET 主要用用户区域，影响有限，未处理。
+- 格式化数据：`ja-JP` 文化下货币仍为 `$`、日期为 `M/d/yyyy`、时间为 `h:mm:ss tt`。原生目标的 `GetLocaleInfo(LOCALE_USER_DEFAULT, …)` 同样得到这些值，来自宿主的“用户覆盖”设置（`HKCU\Control Panel\International`），Core 并不模拟它们，所以这是既有行为，不是托管目标特有。
+
+另外，kernelbase 的 ANSI/OEM 哈希节点刷新只对“Core 初始化时 kernelbase 已附加”的进程执行一次（日志实测：原生目标三次都是 skip，托管目标一次 refresh、两次 skip）。
+
 **时区**：`GetTimeZoneInformation` 走 `NtQuerySystemInformation` 的 `SystemCurrentTimeZoneInformation`（44），Core 早已过滤；`GetDynamicTimeZoneInformation` 走 `SystemDynamicTimeZoneInformation`（102），此前没有过滤，所以原生和托管目标都拿到宿主时区，.NET 的 `TimeZoneInfo.Local` 因此是宿主的 `Atlantic Standard Time`。x86 与 x64 Core 现在都过滤 102：区域数据加时区键名，x86 键名来自 `LePeb->TimezoneId`，x64 键名放在引导载荷里（`LE_RUNTIME_CONFIG` 的大小被静态断言固定为 204，不能加字段，所以载荷版本升到 4，头部新增 `TimezoneIdOffset/Length`，为子进程重建载荷时继续传递）。x86、x64 的原生与托管探针都得到配置里的 `Tokyo Standard Time`、bias -540，`TimeZoneInfo.Local.Id` 也是 `Tokyo Standard Time`。
 
 **仍未解决**：
