@@ -179,3 +179,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 一级菜单子菜单：与传统菜单对齐为运行/各全局配置/修改此程序配置/编辑全局列表。独立驱动验证子命令枚举、`Clone`/`Skip`/`Reset`、非法或缺失的 GUID 与名称被过滤（GUID 只接受规范格式，因它进入带引号的命令行）、多选时隐藏，以及五条命令行与传统菜单逐项一致；配置缺失或损坏时只保留固定项。XmlLite 禁止 DTD。
 - 缺陷（已修复）：一级菜单清单缺少 `unvirtualizedResources` 能力，`makeappx` 的严格校验拒绝（0x80080204）；此前的注册尝试只被“需要开发者许可证”拦下，没走到这一步。`Native/ExplorerCommand/build.ps1` 现在用 SDK `makeappx pack /nv` 校验清单架构，旧清单使构建失败、修复后通过。
 - 已查明的限制：`Add-AppxPackage -AllowUnsigned`（24H2）只支持 `-Path` 安装 `.msix`；将发布者改为 unsigned namespace 后仍被拒绝为 0x80073D2B（无签名包不能包含可执行激活），而菜单扩展必须挂在 `Application` 下，所以无签名路线不可行，注册仍需要开发人员模式或签名包。
+- 重复来源（已消除）：一级菜单在 `ExplorerCommand.cpp` 里手写了 5 种语言的标题，与传统菜单的 22 份 `Strings*.resx` 是两份来源，繁体中文用户会看到简体、其余 17 种语言只有英文。`Native/ExplorerCommand/build.ps1` 现在从 resx 生成 `MenuTexts.h`，运行时按“完整区域名 → 语言 → 英文”回退（与托管菜单一致）。实测：12 种界面语言（含 zh-TW/zh-HK/pt-BR/pt-PT/fr-CA/nb-NO）下 4 个标题与 resx 原文逐项一致。
