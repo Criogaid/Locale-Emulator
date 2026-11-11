@@ -73,7 +73,7 @@ const Texts& ResolveTexts() {
     return languageMatch != nullptr ? *languageMatch : kNeutralTexts;
 }
 
-enum class Kind { Root, Run, RunAs, ManageApp, ManageGlobal };
+enum class Kind { Root, Run, RunAs, ManageApp, ManageAll };
 
 // Directory that holds this DLL (without trailing separator).
 HRESULT GetModuleDirectory(WCHAR (&path)[MAX_PATH]) {
@@ -142,7 +142,7 @@ public:
         case Kind::Run: return SHStrDupW(texts.run, name);
         case Kind::RunAs: return SHStrDupW(m_title, name);
         case Kind::ManageApp: return SHStrDupW(texts.manageApp, name);
-        case Kind::ManageGlobal: return SHStrDupW(texts.manageAll, name);
+        case Kind::ManageAll: return SHStrDupW(texts.manageAll, name);
         }
         *name = nullptr;
         return E_FAIL;
@@ -181,7 +181,7 @@ public:
 
         PWSTR target = nullptr;
         HRESULT hr = S_OK;
-        if (m_kind != Kind::ManageGlobal) {
+        if (m_kind != Kind::ManageAll) {
             if (items == nullptr)
                 return E_INVALIDARG;
             IShellItem* item = nullptr;
@@ -388,7 +388,7 @@ IFACEMETHODIMP Command::EnumSubCommands(IEnumExplorerCommand** commands) {
         return E_OUTOFMEMORY;
     }
     AddProfiles(list);
-    if (!AddFixed(list, Kind::ManageApp) || !AddFixed(list, Kind::ManageGlobal)) {
+    if (!AddFixed(list, Kind::ManageApp) || !AddFixed(list, Kind::ManageAll)) {
         list->Release();
         return E_OUTOFMEMORY;
     }
