@@ -20,7 +20,7 @@
                     <ColumnDefinition Width="1*" />
                 </Grid.ColumnDefinitions>
                 <legui:MaskedTextBox x:Name="tbAppParameter" Grid.Row="0" Grid.Column="0" Height="Auto"
-                                     Margin="3,3,3,4" MaskText="{StaticResource EnterArgument}"
+                                     Margin="3,3,3,4" MaskText="{legui:Loc EnterArgument}"
                                      VerticalContentAlignment="Center" Grid.ColumnSpan="3" />
                 <Button x:Name="bSaveAppSetting" Grid.Row="1" Grid.Column="0" Content="{legui:Loc Save}"
                         Margin="3,0,3,5" Click="bSaveAppSetting_Click" />
