@@ -24,6 +24,8 @@ static volatile LONG g_objectCount = 0;
 namespace {
 
 constexpr ULONG kMaxProfiles = 64;
+// Run, Modify and Edit Global; the profile entries are added in front of them.
+constexpr ULONG kFixedItems = 3;
 constexpr size_t kMaxTitle = 128;
 constexpr size_t kGuidLength = 36;
 
@@ -312,7 +314,7 @@ private:
     LONG m_refs = 1;
     ULONG m_count = 0;
     ULONG m_index = 0;
-    IExplorerCommand* m_items[kMaxProfiles + 3] = {};
+    IExplorerCommand* m_items[kMaxProfiles + kFixedItems] = {};
 };
 
 // Adds one "-runas" entry per profile of LEConfig.xml (next to this DLL). A missing or malformed

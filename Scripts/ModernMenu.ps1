@@ -50,11 +50,11 @@ try {
         $ProductDirectory = $PSScriptRoot
     }
     # Inside a package the manifest sits next to this script; in a checkout it is under Native/.
-    $ManifestPath = @(
+    $manifestPath = @(
         (Join-Path $PSScriptRoot 'AppxManifest.xml'),
         (Join-Path $PSScriptRoot '..\Native\ExplorerCommand\AppxManifest.xml')
     ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if (-not $ManifestPath) {
+    if (-not $manifestPath) {
         throw 'AppxManifest.xml was not found next to the script or under Native/ExplorerCommand.'
     }
     $ProductDirectory = (Resolve-Path -LiteralPath $ProductDirectory).Path
@@ -67,7 +67,7 @@ try {
     # The registered manifest folder must stay in place for as long as the package is registered.
     $assetsDirectory = Join-Path $registrationDirectory 'Assets'
     New-Item -ItemType Directory -Force $assetsDirectory | Out-Null
-    Copy-Item -LiteralPath $ManifestPath -Destination $registrationDirectory -Force
+    Copy-Item -LiteralPath $manifestPath -Destination $registrationDirectory -Force
 
     Add-Type -AssemblyName System.Drawing
     $icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $ProductDirectory 'LEProc.exe'))
