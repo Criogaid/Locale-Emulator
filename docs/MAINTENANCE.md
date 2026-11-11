@@ -123,7 +123,7 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 5b. 名称中的 `&`：在全局配置里建一个名为 `A & B` 的配置，看一级菜单里显示 `A & B` 还是 `A  B`（`&` 被当作快捷键标记）。经典菜单已把配置名中的 `&` 转义为 `&&`，一级菜单标题目前原样传出；若真机上出现后者，在 `Native/ExplorerCommand/ExplorerCommand.cpp` 读取配置名时同样转义。
 6. 记录结果到 [QUALITY](QUALITY.md)，并把 README 的“验证状态”一句改为已验证；验证完用“为当前用户卸载”清理，再确认 `Get-AppxPackage -Name LocaleEmulator.ModernMenu` 为空。
 
-## 托管目标的区域模拟（已修复，时区仍未生效）
+## 托管目标的区域模拟（代码页已修复，x64 时区未完成）
 
 在 x64 发行包上，用同一份 `ja-JP` / `Tokyo Standard Time` 独立配置（`<目标>.le.config`）和 `LEProc.exe -run <目标>`，分别启动调用 `MultiByteToWideChar(CP_ACP, …)` 转换 `82 A0` 的探针。修复前原生 x86、x64 目标得到 U+3042（`GetACP=932`、`GetUserDefaultLCID=0x411`），而 .NET Framework 4.8 控制台程序（x86、x64、AnyCPU）得到 U+5041（`GetACP=936`，`CurrentCulture` 为 en-US），与位数无关。
 
@@ -134,7 +134,11 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 
 验证方法：x64 Core 的发行构建使用 `/DENABLE_LOG=0`，要看钩子顺序需用 `ENABLE_LOG=1` 在临时目录重新编译（链接时还要补 `kernel32.lib`，日志支持代码引用了 `CreateDirectoryW` 和 `GetModuleFileNameW`），并在包目录下建 `Log\` 才会生成日志。仓库回归里的原生探针只覆盖原生目标，没有覆盖这一点。
 
-**仍未解决**：托管探针里 `TimeZoneInfo.Local.Id` 仍是宿主的 `Atlantic Standard Time`，没有变成配置里的 `Tokyo Standard Time`。原生目标的时区模拟是否生效、托管目标缺失的原因都还没有测。
+**时区**：`GetTimeZoneInformation` 走 `NtQuerySystemInformation` 的 `SystemCurrentTimeZoneInformation`（44），Core 早已过滤；`GetDynamicTimeZoneInformation` 走 `SystemDynamicTimeZoneInformation`（102），此前没有过滤，所以原生和托管目标都拿到宿主时区，.NET 的 `TimeZoneInfo.Local` 因此是宿主的 `Atlantic Standard Time`。x86 Core 现在也过滤 102（区域数据加 `LePeb->TimezoneId` 作键名），x86 原生和托管探针都得到配置里的 `Tokyo Standard Time`、bias -540。
+
+**仍未解决**：
+- x64 Core 的子进程只收到解析后的时区结构（`LE_RUNTIME_CONFIG`），没有保留键名，所以 x64 目标的 `GetDynamicTimeZoneInformation` 仍是宿主值。补上需要把键名放进 x64 的运行时配置，属于内部 ABI 变更，需要和原生测试一起改。
+- `GetLocalTime` 仍返回宿主本地时间（原生探针 localHour-utcHour 为宿主偏移），而 `GetTimeZoneInformation` 已是东京。这和 Locale Emulator 的设计范围是否一致尚未判断。
 
 ## 历史提交元数据说明
 
