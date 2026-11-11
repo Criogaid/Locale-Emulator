@@ -138,7 +138,7 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 
 **仍未解决**：
 - `GetLocalTime` 仍返回宿主本地时间（原生探针 localHour-utcHour 为宿主偏移），而 `GetTimeZoneInformation` 已是东京。这和 Locale Emulator 的设计范围是否一致尚未判断。
-- 子进程继承只在同架构内成立。用一个托管探针启动子进程实测（x64 包，`ja-JP` / Tokyo 配置）：x64 父进程启动 x64 子进程、x86 父进程启动 x86 子进程，子进程得到 bias -540、键名 Tokyo；跨架构（x64 父→x86 子、x86 父→x64 子）的子进程是完全没有模拟的，连 `GetTimeZoneInformation` 都是宿主的 bias 240，代码页应当也一样（未测）。这不是本轮改动引入的，原因未查；两个 Core 各自只钩自己架构的创建进程路径，跨架构目前没有交接。
+- 子进程继承只在同架构内成立，这是已有的明确边界（见 `docs/GOAL.md`、`docs/QUALITY.md`；Core 日志为 `skip unsupported cross-architecture child injection`）。用一个托管探针启动子进程实测（x64 包，`ja-JP` / Tokyo 配置）：x64 父进程启动 x64 子进程、x86 父进程启动 x86 子进程，子进程得到 bias -540、键名 Tokyo；跨架构的子进程完全没有模拟，连 `GetTimeZoneInformation` 都是宿主的 bias 240。代码页是否同样丢失未测。要支持它需要完整、可验证的另一架构 broker，`docs/GOAL.md` 禁止在没有它的情况下重新引入旧做法。
 
 ## 历史提交元数据说明
 
