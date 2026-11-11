@@ -272,6 +272,12 @@ foreach ($package in $x86.Package, $x64.Package) {
     Assert-DumpbinContains $dll '/headers' @('Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard', 'CET compatible') 'LEExplorerCommand.dll 缺少 {0}：{1}'
     Assert-DumpbinContains $dll '/exports' @('DllGetClassObject', 'DllCanUnloadNow') 'LEExplorerCommand.dll 缺少导出 {0}：{1}'
 }
+# The first-level menu, the static verb and the package logo take their icon from LEGUI.exe (LEProc.exe has none).
+Add-Type -Namespace BuildCheck -Name Icons -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern uint ExtractIconEx(string file, int index, System.IntPtr[] large, System.IntPtr[] small, uint count);'
+foreach ($package in $x86.Package, $x64.Package) {
+    $gui = Join-Path $package 'LEGUI.exe'
+    if ([BuildCheck.Icons]::ExtractIconEx($gui, -1, $null, $null, 0) -lt 1) { throw "LEGUI.exe 没有图标资源，菜单与静态入口依赖它：$gui" }
+}
 function Assert-LauncherSelection {
     param([string]$Package)
     $commonAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LECommonLibrary.dll'))
