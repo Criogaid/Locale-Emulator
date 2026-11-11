@@ -238,7 +238,8 @@ Write-Host '[dual 5/6] 装配 x86 与 x64 ZIP'
 $x86 = New-Package -Architecture x86 -ManagedRoot $releaseRoot -NativeRoot $releaseRoot
 $x64 = New-Package -Architecture x64 -ManagedRoot $managedX64Root -NativeRoot $nativeX64Root -IncludeX86Compatibility
 
-$dumpbin = Join-Path $installation 'VC/Tools/MSVC/14.29.30133/bin/Hostx86/x64/dumpbin.exe'
+. (Join-Path $repository 'Native/Toolchain.ps1')
+$dumpbin = Join-Path (Get-OfficialToolchain).HostBin 'dumpbin.exe'
 function Assert-Machine {
     param([string]$Executable, [string]$Expected)
     $headers = & $dumpbin /headers $Executable 2>&1 | Out-String
@@ -257,6 +258,18 @@ Assert-Machine (Join-Path $x64.Package 'LoaderDll.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LocaleEmulator.dll') 'x64'
 Assert-Machine (Join-Path $x86.Package 'LEExplorerCommand.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LEExplorerCommand.dll') 'x64'
+# The Shell loads this DLL into Explorer: require the mitigations the build asks for and the two COM exports.
+foreach ($package in $x86.Package, $x64.Package) {
+    $dll = Join-Path $package 'LEExplorerCommand.dll'
+    $headers = & $dumpbin /headers $dll 2>&1 | Out-String
+    foreach ($flag in 'Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard') {
+        if ($headers -notmatch [regex]::Escape($flag)) { throw "LEExplorerCommand.dll 缺少 $flag：$dll" }
+    }
+    $exports = & $dumpbin /exports $dll 2>&1 | Out-String
+    foreach ($export in 'DllGetClassObject', 'DllCanUnloadNow') {
+        if ($exports -notmatch $export) { throw "LEExplorerCommand.dll 缺少导出 $export：$dll" }
+    }
+}
 function Assert-LauncherSelection {
     param([string]$Package)
     $commonAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LECommonLibrary.dll'))
