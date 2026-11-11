@@ -173,3 +173,6 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 当前复审修复：HandleTable 的最后项移除路径与最终销毁路径均匹配数组分配方式，x86/x64 保持一致。
 - 当前复审修复：x64 User32 消息边界与 x86/x64 CBT 回调统一使用 `IsReadableMemory`/`IsWritableMemory`；新增 x64 真实注入消息守护页探针和 x86 CBT 结构守护页回归，x86/x64 双包构建、完整源码回归与 ZIP 烟测通过。
 - 当前复审修复：x86/x64 User32 消息长度统一执行有符号、乘法、窄化和临时缓冲容量检查；完整源码回归、x64 真实注入探针和双 ZIP 验收通过。
+- `eb9e007`：安装器无窗口入口 `--InstallUser`/`--UninstallUser`，复用事务式 `ChangeRegistration`；当前用户安装与卸载往返实测退出码均为 0、无残留进程。
+- `0315ea7`、`22d5b97`、`6833d0f`：Windows 11 一级右键菜单（`IExplorerCommand` 稀疏包，x64 DLL，x86 与 x64 包共用）。已验证：DLL `/W4 /WX`、CFG、ASLR、NX；独立驱动加载 DLL，覆盖错误 CLSID、空参数、含空格路径的引号转发、`DllCanUnloadNow`；清单通过 Appx 校验，在未开启开发人员模式时部署被拒为 `0x80073CFF`，安装器仍安装传统菜单；双包构建与两个 ZIP 的 PE 校验通过。**未验证**：稀疏包注册成功后 Explorer 界面中的实际菜单项与点击启动，需要开启开发人员模式或已签名的包。
+- 缺陷（已修复）：Windows PowerShell 5.1 把无 BOM 的 UTF-8 脚本按 ANSI 解析，`ModernMenu.ps1` 的中文字符串造成语法错误；改为纯 ASCII 并按 5.1 兼容，由真实 5.1 调用复现并验证。
