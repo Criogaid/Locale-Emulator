@@ -4,19 +4,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Same VS2019 / SDK 10.0.19041.0 toolchain as the x64 Core build.
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-if (-not (Test-Path -LiteralPath $vswhere)) {
-    throw '未找到 Visual Studio Installer，无法定位 VS2019 官方工具链。'
-}
-$vsRoot = (& $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($vsRoot)) {
-    throw '未找到同时安装 MSBuild 和 C++ 工具的 Visual Studio 2019。'
-}
-$msvcRoot = Join-Path $vsRoot 'VC\Tools\MSVC\14.29.30133'
-$sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
-$sdkVersion = '10.0.19041.0'
-$hostBin = Join-Path $msvcRoot 'bin\Hostx86\x64'
+# Same toolchain as the x64 Core build (shared discovery in Native/Toolchain.ps1).
+. (Join-Path $PSScriptRoot '../Toolchain.ps1')
+$toolchain = Get-OfficialToolchain
+$msvcRoot = $toolchain.MsvcRoot
+$sdkRoot = $toolchain.SdkRoot
+$sdkVersion = $toolchain.SdkVersion
+$hostBin = $toolchain.HostBin
 $env:Path = "$hostBin;$env:Path"
 
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
@@ -77,6 +71,15 @@ $menuResources = Join-Path $PSScriptRoot '..\..\LEContextMenuHandler'
 $neutralTexts = Get-MenuTexts (Join-Path $menuResources 'Strings.resx') $null
 $generatedDirectory = Join-Path $OutputDirectory 'generated'
 New-Item -ItemType Directory -Force $generatedDirectory | Out-Null
+# ModernMenu.ps1 finds the registered package by name; a renamed manifest identity would make its
+# Unregister and stale-package removal silently match nothing.
+$manifestIdentity = ([xml](Get-Content -LiteralPath (Join-Path $PSScriptRoot 'AppxManifest.xml') -Raw -Encoding UTF8)).Package.Identity.Name
+$scriptText = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../Scripts/ModernMenu.ps1') -Raw -Encoding UTF8
+$scriptPackageName = [regex]::Match($scriptText, '\$packageName\s*=\s*''([^'']+)''').Groups[1].Value
+if ($manifestIdentity -ne $scriptPackageName) {
+    throw "AppxManifest.xml 的包标识名（$manifestIdentity）与 ModernMenu.ps1 的 `$packageName（$scriptPackageName）不一致。"
+}
+
 # The class id is written once, in AppxManifest.xml (the verb and the COM class must name the same id).
 $manifestText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'AppxManifest.xml') -Raw -Encoding UTF8
 $classIds = @([regex]::Matches($manifestText, '(?:Clsid|Class Id)="([0-9A-Fa-f-]{36})"') | ForEach-Object { $_.Groups[1].Value.ToUpperInvariant() } | Select-Object -Unique)

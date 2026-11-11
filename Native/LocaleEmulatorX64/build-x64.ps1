@@ -20,18 +20,13 @@ if ($Clean -and (Test-Path $outputRoot)) {
 }
 New-Item -ItemType Directory -Force $objectRoot, $libraryRoot, $binaryRoot | Out-Null
 
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-if (-not (Test-Path -LiteralPath $vswhere)) {
-    throw '未找到 Visual Studio Installer，无法定位 VS2019 官方工具链。'
-}
-$vsRoot = (& $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($vsRoot)) {
-    throw '未找到同时安装 MSBuild 和 C++ 工具的 Visual Studio 2019。'
-}
-$msvcRoot = Join-Path $vsRoot 'VC\Tools\MSVC\14.29.30133'
-$sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
-$sdkVersion = '10.0.19041.0'
-$hostBin = Join-Path $msvcRoot 'bin\Hostx86\x64'
+# Toolchain discovery is shared with the other x64 native build scripts.
+. (Join-Path $PSScriptRoot '../Toolchain.ps1')
+$toolchain = Get-OfficialToolchain
+$msvcRoot = $toolchain.MsvcRoot
+$sdkRoot = $toolchain.SdkRoot
+$sdkVersion = $toolchain.SdkVersion
+$hostBin = $toolchain.HostBin
 $compiler = Join-Path $hostBin 'cl.exe'
 $librarian = Join-Path $hostBin 'lib.exe'
 $linker = Join-Path $hostBin 'link.exe'
