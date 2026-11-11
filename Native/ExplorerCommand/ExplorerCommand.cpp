@@ -164,10 +164,11 @@ public:
         return S_OK;
     }
     IFACEMETHODIMP GetState(IShellItemArray* items, BOOL, EXPCMDSTATE* state) override {
-        // LEProc starts exactly one target, so verbs that act on the selection hide for multi-selection.
+        // Like the classic menu, show up only for a single selection: LEProc starts exactly one target.
+        // The root hides the whole submenu, so every child follows the same rule.
         DWORD count = 0;
         *state = ECS_ENABLED;
-        if (m_kind != Kind::ManageGlobal && items != nullptr && SUCCEEDED(items->GetCount(&count)) && count != 1)
+        if (items != nullptr && SUCCEEDED(items->GetCount(&count)) && count != 1)
             *state = ECS_HIDDEN;
         return S_OK;
     }
