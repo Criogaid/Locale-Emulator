@@ -63,6 +63,8 @@ finally {
     $icon.Dispose()
 }
 
+# Re-registering the same identity from another location fails, so drop an earlier registration first.
+Get-AppxPackage -Name $packageName | Remove-AppxPackage
 Add-AppxPackage -Register (Join-Path $registrationDirectory 'AppxManifest.xml') -ExternalLocation $ProductDirectory
 Write-Host "Registered $packageName for the current user; external location: $ProductDirectory"
 Write-Host 'Restart Explorer or sign in again; the .exe first-level menu then shows Run with Locale Emulator.'

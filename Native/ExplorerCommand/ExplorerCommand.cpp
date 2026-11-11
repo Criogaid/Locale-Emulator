@@ -328,8 +328,10 @@ void AddProfiles(SubCommands* commands) {
                     || FAILED(reader->GetValue(&profileName, nullptr)))
                     continue;
                 // The reader's string is only valid until the next read call; copy before moving on.
+                // An over-long name is shown truncated rather than dropping the profile.
                 WCHAR title[kMaxTitle];
-                if (FAILED(StringCchCopyW(title, ARRAYSIZE(title), profileName)))
+                const HRESULT copied = StringCchCopyW(title, ARRAYSIZE(title), profileName);
+                if (FAILED(copied) && copied != STRSAFE_E_INSUFFICIENT_BUFFER)
                     continue;
                 if (reader->MoveToAttributeByName(L"Guid", nullptr) != S_OK
                     || FAILED(reader->GetValue(&guid, nullptr)) || !IsCanonicalGuid(guid))
