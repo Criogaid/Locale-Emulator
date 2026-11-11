@@ -35,7 +35,7 @@ try {
             $existing | Remove-AppxPackage
         }
         Remove-RegistrationDirectory
-        Write-Host "Removed $packageName."
+        Write-Host $(if ($existing) { "Removed $packageName." } else { "$packageName was not registered; nothing to remove." })
         return
     }
 
