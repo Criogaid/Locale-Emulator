@@ -6,7 +6,7 @@ ownerdraw 修复参考 [Cliff-Yang 的崩溃修补](https://github.com/Cliff-Yan
 
 ## 构建
 
-安装 Visual Studio 2019 Build Tools 的 C++ 构建工具。工具集 v142 和 Windows SDK 10.0.19041.0 的版本统一定义在 [Toolchain.props](Toolchain.props)；已验证 MSVC 14.29.30133。x86 原生项目通过 MSBuild 构建；x64 原生 Core 和 Loader 通过仓库提供的 `LocaleEmulatorX64/build-x64.ps1` 使用官方 Hostx86\x64 工具链构建。产品启动器为托管 LEProc，旧独立 Loader 项目已退役。
+安装 Visual Studio 2019 Build Tools 的 C++ 构建工具。工具集 v142 和 Windows SDK 10.0.19041.0 的版本统一定义在 [Toolchain.props](Toolchain.props)；已验证 MSVC 14.29.30133。x86 原生项目通过 MSBuild 构建；x64 原生 Core 和 Loader 通过仓库提供的 `LocaleEmulatorX64/build-x64.ps1` 使用官方 Hostx86\x64 工具链构建；一级菜单的 `ExplorerCommand/build.ps1` 与它共用 [Toolchain.ps1](Toolchain.ps1) 中的工具链发现（SDK 版本取自 `Toolchain.props`，MSVC 版本固定在该脚本内）。产品启动器为托管 LEProc，旧独立 Loader 项目已退役。
 
 从仓库根目录执行（PowerShell）：
 
