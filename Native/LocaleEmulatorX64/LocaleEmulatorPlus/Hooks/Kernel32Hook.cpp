@@ -641,13 +641,22 @@ NTSTATUS LepGlobalData::HackAnsiOemCodeHashNodes() {
 #endif
     }
 
-    // Keep the kernelbase private refresh implementation available for
-    // diagnostics, but skip it in the normal path. Process/ntdll/user32 cache
-    // sync is enough, and this private routine is fragile across builds.
+    // The private kernelbase refresh stays out of the normal path: process/ntdll/user32 cache sync is
+    // enough while kernelbase has not attached yet, and the routine is fragile across builds. A target
+    // whose kernelbase already attached (managed .NET targets) has built its ANSI/OEM hash nodes with the
+    // system code page, so only then rebuild them. A lookup failure leaves the process as it was.
     Status = STATUS_SUCCESS;
-#if ENABLE_LOG
-    WriteLog(L"skip SetupAnsiOemCodeHashNodes");
-#endif
+    PLDR_MODULE AttachedKernelBase = FindLdrModuleByName(&USTR(L"KERNELBASE.dll"));
+    if (AttachedKernelBase != nullptr && FLAG_ON(AttachedKernelBase->Flags, LDRP_PROCESS_ATTACH_CALLED))
+    {
+        Status = LepSetupAnsiOemCodeHashNodes();
+        WriteLog(L"refresh SetupAnsiOemCodeHashNodes (kernelbase already attached): %08X", Status);
+        Status = STATUS_SUCCESS;
+    }
+    else
+    {
+        WriteLog(L"skip SetupAnsiOemCodeHashNodes");
+    }
 
 #if ML_AMD64
     LepProbeRtlAnsiTable(L"after-kbase", &AnsiTableInfo);
