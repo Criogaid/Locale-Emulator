@@ -110,6 +110,17 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 - **构建约束**：原生工具链的版本统一由 `Native/Toolchain.ps1` 提供；`build-dual.ps1` 对 x64 DLL 与 Loader 的 CFG、`LEExplorerCommand.dll` 的缓解标志和导出做断言。
 - **未验证**：稀疏包注册需要开发人员模式或已签名的包，Windows 11 新菜单的真实渲染（含图标）从未在真实 Explorer 里验证，只用系统 shell32 验证过命令行为。已作出的决定：新增代码的许可为 LGPL-3.0，见 [源码来源](SOURCES.md)；Core DLL 保持不启用 CFG（`LeSetupAnsiOemCodeHashNodes` 通过扫描 `KERNELBASE` 机器码取得未导出的私有 NLS 函数并间接调用，该目标不是合法的 CFG 目标；绕开只能关闭保护或复制 Windows 内部行为，风险高于收益）。Loader 与 `LEExplorerCommand.dll` 已启用 CFG 并由构建断言守住。若以后 Windows 提供公开的等价接口，或这条调用被移除，再重新评估。
 
+### 一级菜单真机验证清单
+
+唯一尚未验证的部分是 Windows 11 资源管理器对一级菜单的实际渲染，需要在开启开发人员模式（设置 → 系统 → 开发者选项）的机器上，用 x64 包完成，约 5 分钟：
+
+1. 解压 `Locale.Emulator.<版本>-x64.zip`，运行 `LEInstaller.exe`，选择“为当前用户安装”；退出码为 0 且没有“一级菜单未处理”的提示即注册成功（脚本方式：`--InstallUser`，退出码 0；2 表示一级菜单仍失败）。
+2. 重启资源管理器（任务管理器中重启 Windows 资源管理器）。
+3. 右键一个 `.exe`：一级菜单应出现“Locale Emulator”，带 Locale Emulator 图标；展开后依次是按应用配置运行、`LEConfig.xml` 中的各配置、修改此程序的配置、编辑全局配置列表。名称含 `&` 时的显示方式也在这里确认。
+4. 逐项点击，确认能分别启动目标、打开 `LEGUI.exe`；同时选中两个 `.exe` 时菜单应隐藏。
+5. 切换系统显示语言后重启资源管理器，标题应随语言变化。
+6. 记录结果到 [QUALITY](QUALITY.md)，并把 README 的“验证状态”一句改为已验证；验证完用“为当前用户卸载”清理，再确认 `Get-AppxPackage -Name LocaleEmulator.ModernMenu` 为空。
+
 ## 历史提交元数据说明
 
 本轮审查发现历史提交 `3057efd`、`6f3bf66`、`e4dadeb`、`f996108` 和 `beeff20` 的提交正文含有未展开的 `Co-Authored-By: :PI_MODEL <noreply@pi.dev>`。这些提交已经成为当前本地分支的历史，源码、构建和发行包不读取该字段；本轮不改写历史，避免改变已记录的里程碑哈希、审查证据和后续父子关系。自 `d6cefaa` 起的新提交均在提交前读取实际 `PI_MODEL`，使用完整的协作者值；若发行者要求历史元数据重写，应作为独立的仓库维护操作重新生成全部受影响哈希并重建证据目录。
