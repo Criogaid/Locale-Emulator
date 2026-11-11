@@ -283,6 +283,12 @@ foreach ($file in (& git -C $repository ls-files)) {
         if ($byte -lt 32 -and $byte -ne 9 -and $byte -ne 10 -and $byte -ne 13) { throw "文本文件含控制字节 0x$($byte.ToString('X2'))：$file" }
     }
 }
+# README: only the dual packages carry the first-level menu; the single x86 package from build.ps1 must not.
+foreach ($defaultPackage in (Get-ChildItem -LiteralPath (Join-Path $artifacts 'package') -Directory -ErrorAction SilentlyContinue)) {
+    foreach ($name in 'LEExplorerCommand.dll', 'AppxManifest.xml', 'ModernMenu.ps1') {
+        if (Test-Path -LiteralPath (Join-Path $defaultPackage.FullName $name)) { throw "默认 x86 包不应包含一级菜单文件 ${name}：$($defaultPackage.FullName)" }
+    }
+}
 # The installer runs ModernMenu.ps1 with Windows PowerShell 5.1, which reads a BOM-less file as the ANSI code page:
 # any non-ASCII byte would be misread there, so the shipped script must be pure ASCII.
 foreach ($package in $x86.Package, $x64.Package) {
