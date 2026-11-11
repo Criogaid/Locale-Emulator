@@ -40,6 +40,13 @@ try {
         return
     }
 
+    # The package and its DLL are x64 only; Explorer on other architectures cannot load them.
+    # OSArchitecture reports the real OS even when this script runs under x64 emulation.
+    $osArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    if ($osArchitecture -ne [System.Runtime.InteropServices.Architecture]::X64) {
+        throw "The Windows 11 first-level menu is only available on x64 Windows (found $osArchitecture)."
+    }
+
     if (-not $ProductDirectory) {
         $ProductDirectory = $PSScriptRoot
     }
