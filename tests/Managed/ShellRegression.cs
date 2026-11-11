@@ -22,6 +22,9 @@ namespace ManagedRegression
             InstallerExtractionUsesProductDirectory,
             InstallerIdenticalLockedPayloadsAreRetained,
             InstallerRegistrationFailuresRestoreRegistryOverride,
+            InstallerLockedSatelliteRestoresExistingPayloads,
+            InstallerLockedSatelliteRemovesNewPayloads,
+            InstallerOldBackupsAreCleanedRecursively,
             ShellMenuHonorsCommandBudgetAndInsertionPosition,
             ShellFinalizationReleasesAllBitmaps,
             ShellLongDropPathIsRead,
@@ -32,6 +35,9 @@ namespace ManagedRegression
         internal static void InstallerLockedSecondFileRollsBackPayloads() { Run("locked-second"); }
         internal static void InstallerExtractionUsesProductDirectory() { Run("extract"); }
         internal static void InstallerIdenticalLockedPayloadsAreRetained() { Run("identical"); }
+        internal static void InstallerLockedSatelliteRestoresExistingPayloads() { Run("locked-satellite-existing"); }
+        internal static void InstallerLockedSatelliteRemovesNewPayloads() { Run("locked-satellite-new"); }
+        internal static void InstallerOldBackupsAreCleanedRecursively() { Run("cleanup"); }
         internal static void InstallerRegistrationFailuresRestoreRegistryOverride() { Run("registration"); }
         internal static void ShellMenuHonorsCommandBudgetAndInsertionPosition() { Run("menu"); }
         internal static void ShellFinalizationReleasesAllBitmaps() { Run("gdi"); }
@@ -47,6 +53,15 @@ namespace ManagedRegression
             {
                 foreach (var name in new[] { "LEInstaller.exe", "LEContextMenuHandler.dll", "LECommonLibrary.dll", "LEProc.exe" })
                     File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, name), Path.Combine(directory, name));
+                foreach (var culture in Directory.GetDirectories(AppDomain.CurrentDomain.BaseDirectory))
+                    foreach (var name in new[] { "LEContextMenuHandler.resources.dll", "LECommonLibrary.resources.dll" })
+                    {
+                        var source = Path.Combine(culture, name);
+                        if (!File.Exists(source)) continue;
+                        var destination = Path.Combine(directory, Path.GetFileName(culture));
+                        Directory.CreateDirectory(destination);
+                        File.Copy(source, Path.Combine(destination, name));
+                    }
                 domain = AppDomain.CreateDomain("ShellRegression", null, new AppDomainSetup { ApplicationBase = directory });
                 var worker = (ShellRegressionWorker)domain.CreateInstanceFromAndUnwrap(
                     typeof(ShellRegressionWorker).Assembly.Location, typeof(ShellRegressionWorker).FullName);
@@ -92,58 +107,166 @@ namespace ManagedRegression
             Extraction(scenario);
         }
 
+        private KeyValuePair<string, byte[]>[] EmbeddedPayloads()
+        {
+            var assembly = formType.Assembly;
+            var names = assembly.GetManifestResourceNames()
+                .Where(name => name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)).ToArray();
+            foreach (var name in new[] { "LEContextMenuHandler.dll", "LECommonLibrary.dll",
+                "zh-CN/LEContextMenuHandler.resources.dll", "zh-CN/LECommonLibrary.resources.dll" })
+                Check(names.Contains(name), "Missing embedded payload: " + name);
+            var expectedNames = Directory.GetFiles(directory, "*.dll", SearchOption.AllDirectories)
+                .Select(path => path.Substring(directory.Length + 1).Replace(Path.DirectorySeparatorChar, '/'));
+            Check(new HashSet<string>(names, StringComparer.Ordinal).SetEquals(expectedNames),
+                "Embedded payloads do not match the adjacent product files.");
+            return names.Select(name =>
+            {
+                using (var stream = assembly.GetManifestResourceStream(name))
+                using (var buffer = new MemoryStream())
+                {
+                    stream.CopyTo(buffer);
+                    var expected = File.ReadAllBytes(PayloadPath(name));
+                    Check(buffer.ToArray().SequenceEqual(expected), "Embedded payload differs from the actual product: " + name);
+                    return new KeyValuePair<string, byte[]>(name, expected);
+                }
+            }).ToArray();
+        }
+
+        private string PayloadPath(string name)
+        {
+            return Path.Combine(directory, name.Replace('/', Path.DirectorySeparatorChar));
+        }
+
         private void Extraction(string scenario)
         {
             var form = Activator.CreateInstance(formType, new object[] { 0 });
             string originalCwd = Environment.CurrentDirectory;
-            string elsewhere = Path.Combine(directory, "unrelated-cwd");
+            string elsewhere = Path.Combine(Path.GetTempPath(), "LE-ShellRegression-Cwd-" + Guid.NewGuid());
             Directory.CreateDirectory(elsewhere);
-            string first = Path.Combine(directory, "LEContextMenuHandler.dll");
-            string second = Path.Combine(directory, "LECommonLibrary.dll");
-            byte[] oldFirst = File.ReadAllBytes(first), oldSecond = File.ReadAllBytes(second);
             try
             {
                 Environment.CurrentDirectory = elsewhere;
+                var payloads = EmbeddedPayloads();
+                if (scenario == "cleanup")
+                {
+                    CleanupBackups(form, elsewhere);
+                    return;
+                }
                 if (scenario == "identical")
                 {
                     Check((bool)Invoke(form, "ReplaceDll"), "Initial extraction failed.");
-                    byte[] expectedFirst = File.ReadAllBytes(first), expectedSecond = File.ReadAllBytes(second);
-                    using (File.Open(first, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    using (File.Open(second, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    var locks = new List<FileStream>();
+                    try
+                    {
+                        foreach (var payload in payloads)
+                        {
+                            Check(File.ReadAllBytes(PayloadPath(payload.Key)).SequenceEqual(payload.Value),
+                                "Initial extraction did not match embedded payload: " + payload.Key);
+                            locks.Add(File.Open(PayloadPath(payload.Key), FileMode.Open, FileAccess.Read, FileShare.Read));
+                        }
                         Check((bool)Invoke(form, "ReplaceDll"), "Identical locked payloads should not require replacement.");
-                    Check(File.ReadAllBytes(first).SequenceEqual(expectedFirst) && File.ReadAllBytes(second).SequenceEqual(expectedSecond),
-                        "Identical payloads changed.");
+                    }
+                    finally
+                    {
+                        foreach (var file in locks) file.Dispose();
+                    }
+                    foreach (var payload in payloads)
+                        Check(File.ReadAllBytes(PayloadPath(payload.Key)).SequenceEqual(payload.Value),
+                            "Identical payload changed: " + payload.Key);
+                    Check(Directory.GetFiles(directory, "*.installer.bak", SearchOption.AllDirectories).Length == 0,
+                        "Identical payloads created replacement backups.");
                 }
                 else
                 {
-                    File.WriteAllText(first, "old-handler");
-                    File.WriteAllText(second, "old-common");
+                    bool satelliteFailure = scenario.StartsWith("locked-satellite-", StringComparison.Ordinal);
+                    string blocked = scenario == "locked-first" ? "LEContextMenuHandler.dll" : "LECommonLibrary.dll";
+                    if (satelliteFailure)
+                    {
+                        // 沿真实资源顺序锁住末项，确保此前已经写入主 DLL 和卫星。
+                        blocked = payloads.Last().Key;
+                        var preceding = payloads.Take(payloads.Length - 1).Select(payload => payload.Key).ToArray();
+                        Check(blocked.EndsWith(".resources.dll", StringComparison.Ordinal) &&
+                            preceding.Contains("LEContextMenuHandler.dll") && preceding.Contains("LECommonLibrary.dll") &&
+                            preceding.Any(name => name.Contains("/")),
+                            "A late satellite lock must follow both main DLLs and at least one satellite.");
+                        Console.WriteLine("Rollback blocker: " + blocked + "; preceding satellites: " + preceding.Count(name => name.Contains("/")));
+                    }
+                    var before = new Dictionary<string, byte[]>();
+                    foreach (var payload in payloads)
+                    {
+                        string path = PayloadPath(payload.Key);
+                        bool exists = scenario == "locked-satellite-new" ? payload.Key == blocked :
+                            satelliteFailure || !payload.Key.Contains("/");
+                        byte[] bytes = exists ? Encoding.UTF8.GetBytes("outdated:" + payload.Key) : null;
+                        if (exists)
+                        {
+                            Directory.CreateDirectory(Path.GetDirectoryName(path));
+                            File.WriteAllBytes(path, bytes);
+                        }
+                        else if (File.Exists(path)) File.Delete(path);
+                        before.Add(payload.Key, bytes);
+                    }
                     if (scenario.StartsWith("locked-", StringComparison.Ordinal))
                     {
-                        using (File.Open(scenario == "locked-first" ? first : second, FileMode.Open, FileAccess.Read, FileShare.Read))
-                            Check(!(bool)Invoke(form, "ReplaceDll"), "Locked outdated payload should fail extraction.");
-                        Check(File.ReadAllText(first) == "old-handler", "Failed extraction lost or changed the old handler.");
-                        Check(File.ReadAllText(second) == "old-common", "Failed extraction lost or changed the old common library.");
+                        using (File.Open(PayloadPath(blocked), FileMode.Open, FileAccess.Read, FileShare.Read))
+                            Check(!(bool)Invoke(form, "ReplaceDll"), "Locked outdated payload should fail extraction: " + blocked);
+                        foreach (var payload in payloads)
+                        {
+                            byte[] bytes = before[payload.Key];
+                            string path = PayloadPath(payload.Key);
+                            Check(bytes == null ? !File.Exists(path) :
+                                File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(bytes),
+                                "Failed extraction did not restore the original file state: " + payload.Key);
+                        }
+                        Check(Directory.GetFiles(directory, "*.installer.bak", SearchOption.AllDirectories).Length == 0,
+                            "Rollback left replacement backups behind.");
                     }
                     else
                     {
                         Check((bool)Invoke(form, "ReplaceDll"), "Extraction from a different working directory failed.");
-                        Check(File.ReadAllBytes(first).SequenceEqual(oldFirst),
-                            "Extracted handler did not match the current product.");
-                        Check(File.ReadAllBytes(second).SequenceEqual(oldSecond),
-                            "Extracted common library did not match the current product.");
+                        foreach (var payload in payloads)
+                            Check(File.ReadAllBytes(PayloadPath(payload.Key)).SequenceEqual(payload.Value),
+                                "Extracted file did not match embedded payload: " + payload.Key);
                     }
                 }
-                Check(Directory.GetFiles(elsewhere).Length == 0, "Extraction wrote to the working directory.");
-                Check(Directory.GetFiles(directory, "*.installer.tmp").Length == 0, "Staged files leaked.");
+                Check(Directory.GetFileSystemEntries(elsewhere).Length == 0, "Extraction wrote to the working directory.");
+                Check(Directory.GetFiles(directory, "*.installer.tmp", SearchOption.AllDirectories).Length == 0, "Staged files leaked.");
+                Invoke(form, "DeleteOldFiles");
+                Check(Directory.GetFiles(directory, "*.installer.bak", SearchOption.AllDirectories).Length == 0, "Backup cleanup failed.");
             }
             finally
             {
                 Environment.CurrentDirectory = originalCwd;
                 ((IDisposable)form).Dispose();
-                File.WriteAllBytes(first, oldFirst);
-                File.WriteAllBytes(second, oldSecond);
+                Directory.Delete(elsewhere, true);
             }
+        }
+
+        private void CleanupBackups(object form, string elsewhere)
+        {
+            var backups = new[] { "root.installer.bak", "zh-CN/satellite.installer.bak",
+                "zh-CN/nested/old.installer.bak" }.Select(PayloadPath).ToArray();
+            foreach (var path in backups)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, "old backup");
+            }
+            var retained = new[] { "keep.dll", "zh-CN/keep.resources.dll",
+                "zh-CN/nested/keep.txt", "zh-CN/nested/keep.installer.tmp" }.Select(PayloadPath).ToArray();
+            string unrelated = Path.Combine(elsewhere, "unrelated.installer.bak");
+            foreach (var path in retained.Concat(new[] { unrelated })) File.WriteAllText(path, "keep");
+            using (File.Open(backups[1], FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                Invoke(form, "DeleteOldFiles");
+                Check(File.Exists(backups[1]), "Cleanup removed a locked backup.");
+                Check(!File.Exists(backups[0]) && !File.Exists(backups[2]),
+                    "A locked backup prevented other backups from being cleaned recursively.");
+            }
+            Invoke(form, "DeleteOldFiles");
+            Check(Directory.GetFiles(directory, "*.installer.bak", SearchOption.AllDirectories).Length == 0,
+                "Recursive cleanup left an unlocked backup.");
+            foreach (var path in retained.Concat(new[] { unrelated }))
+                Check(File.ReadAllText(path) == "keep", "Cleanup changed an unrelated file: " + path);
         }
 
         private void RegistrationFailures()

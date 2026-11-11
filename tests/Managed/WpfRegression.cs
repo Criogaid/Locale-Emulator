@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using LECommonLibrary;
@@ -143,7 +142,7 @@ namespace ManagedRegression
             }
         }
 
-        internal static void ReadOnlyLanguageLoadsAndReleasesFile()
+        internal static void LocExtensionUsesUiCultureAndPropertyTypes()
         {
             var start = new System.Diagnostics.ProcessStartInfo(
                 Assembly.GetExecutingAssembly().Location, "--language-probe") { UseShellExecute = false };
@@ -152,7 +151,7 @@ namespace ManagedRegression
                 try
                 {
                     Check(child.WaitForExit(15000), "Language probe timed out.");
-                    Check(child.ExitCode == 0, "Read-only language probe failed.");
+                    Check(child.ExitCode == 0, "LocExtension language probe failed.");
                 }
                 finally { if (!child.HasExited) child.Kill(); }
             }
@@ -181,49 +180,36 @@ namespace ManagedRegression
 
         internal static void RunLanguageProbe()
         {
-            System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("zh-CN");
-            var path = Path.Combine(Path.GetDirectoryName(typeof(App).Assembly.Location), "Lang", "zh-CN.xaml");
-            var original = File.ReadAllBytes(path);
-            var expected = System.Xml.Linq.XDocument.Load(path);
-            var keyName = System.Xml.Linq.XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml");
-            var translation = System.Linq.Enumerable.First(expected.Root.Elements(), element => (string)element.Attribute(keyName) == "Save").Value;
-            var attributes = File.GetAttributes(path);
-            var moved = path + ".language-probe";
+            var originalCulture = System.Threading.Thread.CurrentThread.CurrentUICulture;
             try
             {
-                File.SetAttributes(path, attributes | FileAttributes.ReadOnly);
-                WithConfig(directory =>
+                foreach (var culture in new[] { "en", "ja", "ja-JP" })
                 {
-                    var type = typeof(App).Assembly.GetType("LEGUI.I18n", true);
-                    type.GetMethod("LoadLanguage", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
-                    Check((string)Application.Current.Resources.MergedDictionaries[0]["Save"] == translation,
-                        "The read-only external translation was not loaded.");
-                    File.SetAttributes(path, attributes);
-                    File.Move(path, moved);
-                    File.Move(moved, path);
-                    try
-                    {
-                        File.WriteAllText(path,
-                            "<ResourceDictionary xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" " +
-                            "xmlns:system=\"clr-namespace:System;assembly=mscorlib\"><system:String x:Key=\"Save\">Save</system:String></ResourceDictionary>",
-                            Encoding.UTF8);
-                        type.GetField("cacheDictionary", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, null);
-                        type.GetMethod("LoadLanguage", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
-                        var getString = type.GetMethod("GetString", BindingFlags.Static | BindingFlags.NonPublic);
-                        Check((string)getString.Invoke(null, new object[] { "MissingKey" }) == "MissingKey",
-                            "A missing translation key did not fall back to its key.");
-                    }
-                    finally
-                    {
-                        File.WriteAllBytes(path, original);
-                        type.GetField("cacheDictionary", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, null);
-                    }
-                });
+                    System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo(culture);
+                    var expectedText = culture == "en" ? "Save" : "保存";
+                    var expectedFont = culture == "en" ? "Segoe UI" : "Meiryo UI";
+                    var text = new LocExtension("Save").ProvideValue(new PropertyTarget(TextBlock.TextProperty));
+                    var font = new LocExtension("UIFont").ProvideValue(new PropertyTarget(System.Windows.Documents.TextElement.FontFamilyProperty));
+                    Check(text is string && (string)text == expectedText, "Localized text was not returned as a string.");
+                    Check(font is System.Windows.Media.FontFamily && ((System.Windows.Media.FontFamily)font).Source == expectedFont,
+                        "Localized font was not returned as a FontFamily.");
+                    Check((string)new LocExtension("MissingKey").ProvideValue(new PropertyTarget(TextBlock.TextProperty)) == "MissingKey",
+                        "A missing translation key did not fall back to its key.");
+                }
+                LocalizationRegression.AssertSatelliteLocations();
             }
-            finally
+            finally { System.Threading.Thread.CurrentThread.CurrentUICulture = originalCulture; }
+        }
+
+        private sealed class PropertyTarget : IServiceProvider, System.Windows.Markup.IProvideValueTarget
+        {
+            private readonly DependencyProperty property;
+            internal PropertyTarget(DependencyProperty property) { this.property = property; }
+            public object TargetObject { get { return null; } }
+            public object TargetProperty { get { return property; } }
+            public object GetService(Type serviceType)
             {
-                if (!File.Exists(path) && File.Exists(moved)) File.Move(moved, path);
-                File.SetAttributes(path, attributes);
+                return serviceType == typeof(System.Windows.Markup.IProvideValueTarget) ? this : null;
             }
         }
 

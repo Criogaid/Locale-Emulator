@@ -1,7 +1,8 @@
 #requires -Version 7.0
 param(
     [Parameter(Mandatory)][string]$BuildDirectory,
-    [Parameter(Mandatory)][string]$ResultsDirectory
+    [Parameter(Mandatory)][string]$ResultsDirectory,
+    [switch]$LocalizationOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -16,54 +17,52 @@ if ($buildPrefix.StartsWith($resultsPrefix, [StringComparison]::OrdinalIgnoreCas
 }
 $previousResult = Join-Path $ResultsDirectory 'result.json'
 if (Test-Path -LiteralPath $previousResult) { Remove-Item -LiteralPath $previousResult }
-$product = Join-Path $ResultsDirectory 'product'
-if (Test-Path -LiteralPath $product) { Remove-Item -LiteralPath $product -Recurse -Force }
-New-Item -ItemType Directory -Path $product -Force | Out-Null
-Copy-Item -Path (Join-Path $BuildDirectory '*') -Destination $product -Recurse -Force
-function Assert-LanguageDirectory {
-    param([string]$Directory, [string[]]$RequiredKeys)
-    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
-        throw "缺少语言资源目录：$Directory"
-    }
-    $defaultPath = Join-Path $Directory 'DefaultLanguage.xml'
-    if (-not (Test-Path -LiteralPath $defaultPath -PathType Leaf)) {
-        throw "缺少默认语言资源：$defaultPath"
-    }
-    $default = [xml](Get-Content -Raw -LiteralPath $defaultPath)
-    $defaultKeys = @($default.Strings.ChildNodes | Where-Object NodeType -eq 'Element' | ForEach-Object LocalName)
-    foreach ($name in @('DefaultLanguage.xml', 'zh-CN.xml')) {
-        $path = Join-Path $Directory $name
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            throw "缺少语言资源：$path"
+function Assert-SatelliteAssemblies {
+    param([string]$Directory, [string[]]$Projects)
+    foreach ($legacy in @('Lang', 'CommonLang', 'InstallerLang')) {
+        if (Test-Path -LiteralPath (Join-Path $Directory $legacy)) {
+            throw "产物仍含旧语言目录：$Directory/$legacy"
         }
-        $document = [xml](Get-Content -Raw -LiteralPath $path)
-        $keys = @($document.Strings.ChildNodes | Where-Object NodeType -eq 'Element' | ForEach-Object LocalName)
-        if ((Compare-Object $defaultKeys $keys)) {
-            throw "语言资源键集合不一致：$path"
-        }
-        foreach ($key in $RequiredKeys) {
-            if ($keys -notcontains $key) {
-                throw "语言资源缺少键：$path/$key"
+    }
+    foreach ($project in $Projects) {
+        foreach ($resource in Get-ChildItem -LiteralPath (Join-Path $repository $project) -Filter 'Strings.*.resx' -File) {
+            $culture = $resource.BaseName.Substring('Strings.'.Length)
+            $path = Join-Path $Directory "$culture/$project.resources.dll"
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "缺少卫星程序集：$path"
+            }
+            $assembly = [Reflection.AssemblyName]::GetAssemblyName($path)
+            if ($assembly.Name -cne "$project.resources" -or $assembly.CultureInfo.Name -cne $culture) {
+                throw "卫星程序集名称或文化不匹配：$path（$($assembly.FullName)）"
             }
         }
     }
 }
-
-function Assert-XamlLanguage {
-    param([string]$Path, [string[]]$RequiredKeys)
-    $content = Get-Content -Raw -LiteralPath $Path
-    foreach ($key in $RequiredKeys) {
-        if ($content -notmatch ('x:Key="' + [regex]::Escape($key) + '"')) {
-            throw "XAML 语言资源缺少键：$Path/$key"
-        }
-    }
+$resourceProbe = Join-Path $repository 'tests/Managed/bin/Release/ManagedRegression.exe'
+& $resourceProbe --resx-probe $repository
+if ($LASTEXITCODE -ne 0) { throw 'resx 源文件校验失败。' }
+$localizedProjects = @('LEGUI', 'LEContextMenuHandler', 'LEInstaller', 'LECommonLibrary')
+Assert-SatelliteAssemblies $BuildDirectory $localizedProjects
+$compatibility = Join-Path $BuildDirectory 'x86'
+$requiresCompatibility = $false
+$buildInfo = Join-Path $BuildDirectory 'build-info.json'
+if (Test-Path -LiteralPath $buildInfo -PathType Leaf) {
+    $metadata = Get-Content -LiteralPath $buildInfo -Raw | ConvertFrom-Json
+    $architecture = $metadata.PSObject.Properties['architecture']
+    $requiresCompatibility = $null -ne $architecture -and $architecture.Value -eq 'x64'
 }
-
-Assert-LanguageDirectory (Join-Path $product 'CommonLang') @('Title', 'CoreFilesMissing', 'Usage')
-Assert-LanguageDirectory (Join-Path $product 'InstallerLang') @('Title', 'InstallFinished', 'MissingPayload')
-Assert-XamlLanguage (Join-Path $product 'Lang/DefaultLanguage.xaml') @('Save', 'ConfirmDel')
-Assert-XamlLanguage (Join-Path $product 'Lang/zh-CN.xaml') @('Save', 'ConfirmDel')
-Write-Host 'PASS LanguageResources'
+if ($requiresCompatibility -or (Test-Path -LiteralPath $compatibility)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $compatibility 'LECommonLibrary.dll') -PathType Leaf)) {
+        throw "兼容目录缺少公共库：$compatibility/LECommonLibrary.dll"
+    }
+    Assert-SatelliteAssemblies $compatibility @('LECommonLibrary')
+}
+Write-Host 'PASS SatelliteAssemblies'
+if ($LocalizationOnly) { return }
+$product = Join-Path $ResultsDirectory 'product'
+if (Test-Path -LiteralPath $product) { Remove-Item -LiteralPath $product -Recurse -Force }
+New-Item -ItemType Directory -Path $product -Force | Out-Null
+Copy-Item -Path (Join-Path $BuildDirectory '*') -Destination $product -Recurse -Force
 $globalConfiguration = Join-Path $product 'LEConfig.xml'
 if (Test-Path -LiteralPath $globalConfiguration) { Remove-Item -LiteralPath $globalConfiguration }
 foreach ($relative in @(

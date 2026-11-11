@@ -42,6 +42,12 @@ namespace ManagedRegression
                 return 0;
             }
 
+            if (args.Length == 2 && args[0] == "--resx-probe")
+            {
+                try { LocalizationRegression.ValidateSourceResources(args[1]); return 0; }
+                catch (Exception error) { Console.Error.WriteLine(error); return 1; }
+            }
+
             if (args.Length == 1 && args[0] == "--localization-probe")
             {
                 try { LocalizationRegression.RunLanguageProbe(); return 0; }
@@ -57,7 +63,7 @@ namespace ManagedRegression
             {
                 RuntimeProductAssembliesAreAdjacent,
                 StandaloneX86DirectoryKeepsProductRoot,
-                LocalizationRegression.InstallerAndCommonResourcesUseUiCulture,
+                LocalizationRegression.ResourceManagersFollowCultureAndFallback,
                 PEFileReaderRejectsInvalidHeaders,
                 AssociationCommandWithoutArgumentsIsAccepted,
                 RuntimeConfigurationsMatchFrameworkTargets,
@@ -86,7 +92,7 @@ namespace ManagedRegression
                 WpfRegression.GlobalSaveFailureKeepsSelectedProfile,
                 WpfRegression.GlobalSaveAsFailureKeepsProfiles,
                 WpfRegression.UnavailableProfileSelectionPreservesConfiguration,
-                WpfRegression.ReadOnlyLanguageLoadsAndReleasesFile,
+                WpfRegression.LocExtensionUsesUiCultureAndPropertyTypes,
                 WpfRegression.ShortcutWithoutAssociatedIconUsesShellDefault,
                 WpfRegression.AssociatedIconPathAndIndexAreParsed
             }).ToArray();

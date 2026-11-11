@@ -97,6 +97,15 @@ namespace ManagedRegression
             var wrapper = Activator.CreateInstance(type, true);
             type.GetProperty("CurrentDirectory", Instance).SetValue(wrapper, "working directory 中文", null);
             var start = type.GetMethod("Start", Instance);
+            type.GetProperty("ApplicationName", Instance).SetValue(wrapper, "missing-timezone", null);
+            foreach (var timezone in new string[] { null, "" })
+            {
+                type.GetProperty("Timezone", Instance).SetValue(wrapper, timezone, null);
+                try { Invoke(start, wrapper); }
+                catch (ArgumentException) { continue; }
+                throw new Exception("Expected an exception for a missing time zone.");
+            }
+            type.GetProperty("Timezone", Instance).SetValue(wrapper, "Tokyo Standard Time", null);
             using (var process = Process.GetCurrentProcess())
             {
                 var processHandle = process.Handle;
@@ -138,6 +147,7 @@ namespace ManagedRegression
             var wrapper = Activator.CreateInstance(type, true);
             type.GetProperty("ApplicationName", Instance).SetValue(wrapper, "missing-native-boundary", null);
             type.GetProperty("RegistryMode", Instance).SetValue(wrapper, (uint) 1, null);
+            type.GetProperty("Timezone", Instance).SetValue(wrapper, "Tokyo Standard Time", null);
             var start = type.GetMethod("Start", Instance);
             Action call = () =>
             {
