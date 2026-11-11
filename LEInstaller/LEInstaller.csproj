@@ -84,9 +84,10 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="icon.ico" />
-    <Content Include="InstallerLang\*.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Strings.resx" />
+    <LocalizedResx Include="Strings.*.resx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LECommonLibrary\LECommonLibrary.csproj">
@@ -108,11 +109,28 @@
              Properties="Configuration=$(Configuration);Platform=$(Platform)">
       <Output TaskParameter="TargetOutputs" ItemName="_InstallerPayload" />
     </MSBuild>
+    <!-- Satellite resource assemblies of the payloads, embedded as "<culture>/<file>". -->
+    <ItemGroup>
+      <_SatellitePattern Include="@(_InstallerPayload->'%(RootDir)%(Directory)*\%(Filename).resources.dll')" />
+    </ItemGroup>
+    <CreateItem Include="@(_SatellitePattern)">
+      <Output TaskParameter="Include" ItemName="_PayloadSatellite" />
+    </CreateItem>
+    <ItemGroup>
+      <_PayloadSatellite>
+        <Dir>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName('%(FullPath)'))))</Dir>
+      </_PayloadSatellite>
+      <_PayloadSatellite>
+        <LogicalName>%(Dir)/%(Filename)%(Extension)</LogicalName>
+        <WithCulture>false</WithCulture>
+      </_PayloadSatellite>
+    </ItemGroup>
     <ItemGroup>
       <EmbeddedResource Include="@(_InstallerPayload)">
         <LogicalName>%(Filename)%(Extension)</LogicalName>
         <WithCulture>false</WithCulture>
       </EmbeddedResource>
+      <EmbeddedResource Include="@(_PayloadSatellite)" />
     </ItemGroup>
   </Target>
 </Project>

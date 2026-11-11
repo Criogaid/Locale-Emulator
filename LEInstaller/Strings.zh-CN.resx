@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Title" xml:space="preserve">
+    <value>Locale Emulator 安装程序</value>
+  </data>
+  <data name="AdminLaunchError" xml:space="preserve">
+    <value>以管理员权限启动安装程序失败。
+
+请以管理员身份运行此程序后重试。</value>
+  </data>
+  <data name="OSOutdated" xml:space="preserve">
+    <value>Locale Emulator 需要 Windows 7 或更高版本。</value>
+  </data>
+  <data name="InstallFinished" xml:space="preserve">
+    <value>安装完成。右键点击任意可执行文件即可使用 Locale Emulator。
+
+从旧版本升级时可能需要重启系统或重启 Explorer。</value>
+  </data>
+  <data name="UninstallFinished" xml:space="preserve">
+    <value>卸载完成。感谢使用 Locale Emulator。
+
+解锁部分组件可能需要重启系统。</value>
+  </data>
+  <data name="CurrentUserInstall" xml:space="preserve">
+    <value>为当前用户安装</value>
+  </data>
+  <data name="CurrentUserUninstall" xml:space="preserve">
+    <value>为当前用户卸载</value>
+  </data>
+  <data name="AllUsersInstall" xml:space="preserve">
+    <value>为所有用户安装</value>
+  </data>
+  <data name="AllUsersUninstall" xml:space="preserve">
+    <value>为所有用户卸载</value>
+  </data>
+  <data name="EditGlobal" xml:space="preserve">
+    <value>编辑全局配置列表</value>
+  </data>
+  <data name="RunWithLocaleEmulator" xml:space="preserve">
+    <value>使用 Locale Emulator 运行</value>
+  </data>
+  <data name="GroupCurrentUser" xml:space="preserve">
+    <value>（1.1）为当前用户安装</value>
+  </data>
+  <data name="GroupAllUsers" xml:space="preserve">
+    <value>（1.2）为此电脑的所有用户安装（需要管理员权限）</value>
+  </data>
+  <data name="GroupProfiles" xml:space="preserve">
+    <value>（2）自定义配置</value>
+  </data>
+  <data name="IntroText" xml:space="preserve">
+    <value>欢迎使用 Locale Emulator！
+如果不想安装而只使用便携模式，现在可以关闭此窗口。
+否则请按以下步骤操作：
+   1. 为当前用户或此电脑的所有用户安装 Locale Emulator。
+   2. 运行 LEGUI.exe 自定义配置列表。
+   3. 右键点击应用并选择 Locale Emulator 菜单项。</value>
+  </data>
+  <data name="AllUsersAdminRequired" xml:space="preserve">
+    <value>为所有用户操作需要管理员权限。</value>
+  </data>
+  <data name="NoRegisterableComTypes" xml:space="preserve">
+    <value>程序集不包含可注册的 COM 类型。</value>
+  </data>
+  <data name="CannotOpenClassesKey" xml:space="preserve">
+    <value>无法打开当前用户的 Classes 注册表项。</value>
+  </data>
+  <data name="MissingPayload" xml:space="preserve">
+    <value>安装器缺少内嵌组件。</value>
+  </data>
+  <data name="CannotCreateContextMenuKey" xml:space="preserve">
+    <value>无法创建右键菜单注册表项。</value>
+  </data>
+  <data name="MissingLauncher" xml:space="preserve">
+    <value>发行目录缺少 LEProc.exe。</value>
+  </data>
+</root>

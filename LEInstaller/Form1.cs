@@ -411,7 +411,7 @@ namespace LEInstaller
 
         private void DeleteOldFiles()
         {
-            foreach (var file in Directory.EnumerateFiles(crtDir, "*.installer.bak"))
+            foreach (var file in Directory.EnumerateFiles(crtDir, "*.installer.bak", SearchOption.AllDirectories))
             {
                 try
                 {
@@ -441,15 +441,19 @@ namespace LEInstaller
             var applied = new List<KeyValuePair<string, string>>();
             try
             {
-                var names = new[] { "LEContextMenuHandler.dll", "LECommonLibrary.dll" };
+                // Payload DLLs plus their satellite resource assemblies ("<culture>/<name>.resources.dll").
+                var names = Assembly.GetExecutingAssembly().GetManifestResourceNames()
+                    .Where(name => name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
                 var contents = names.Select(ReadEmbeddedPayload).ToArray();
                 for (int i = 0; i < names.Length; i++)
                 {
-                    var path = Path.Combine(crtDir, names[i]);
+                    var path = Path.Combine(crtDir, names[i].Replace('/', Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
                     if (File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(contents[i]))
                         continue;
-                    var staged = Path.Combine(crtDir, Guid.NewGuid() + ".installer.tmp");
-                    var backup = File.Exists(path) ? Path.Combine(crtDir, Guid.NewGuid() + ".installer.bak") : null;
+                    var staged = Path.Combine(Path.GetDirectoryName(path), Guid.NewGuid() + ".installer.tmp");
+                    var backup = File.Exists(path) ? Path.Combine(Path.GetDirectoryName(path), Guid.NewGuid() + ".installer.bak") : null;
                     try
                     {
                         File.WriteAllBytes(staged, contents[i]);

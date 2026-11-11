@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Title" xml:space="preserve">
+    <value>Locale Emulator Installer</value>
+  </data>
+  <data name="AdminLaunchError" xml:space="preserve">
+    <value>Error launching the installer with administrator privileges.
+
+Please run this application as administrator and try again.</value>
+  </data>
+  <data name="OSOutdated" xml:space="preserve">
+    <value>Locale Emulator requires Windows 7 or later.</value>
+  </data>
+  <data name="InstallFinished" xml:space="preserve">
+    <value>Installation finished. Right-click any executable to use Locale Emulator.
+
+A reboot or Explorer restart may be required when upgrading from an older version.</value>
+  </data>
+  <data name="UninstallFinished" xml:space="preserve">
+    <value>Uninstallation finished. Thank you for using Locale Emulator.
+
+A reboot may be required to unlock some components.</value>
+  </data>
+  <data name="CurrentUserInstall" xml:space="preserve">
+    <value>Install for current user</value>
+  </data>
+  <data name="CurrentUserUninstall" xml:space="preserve">
+    <value>Uninstall for current user</value>
+  </data>
+  <data name="AllUsersInstall" xml:space="preserve">
+    <value>Install for all users</value>
+  </data>
+  <data name="AllUsersUninstall" xml:space="preserve">
+    <value>Uninstall for all users</value>
+  </data>
+  <data name="EditGlobal" xml:space="preserve">
+    <value>Edit global profile list</value>
+  </data>
+  <data name="RunWithLocaleEmulator" xml:space="preserve">
+    <value>Run with Locale Emulator</value>
+  </data>
+  <data name="GroupCurrentUser" xml:space="preserve">
+    <value>(1.1) Install for yourself</value>
+  </data>
+  <data name="GroupAllUsers" xml:space="preserve">
+    <value>(1.2) Install for all users on this PC (requires administrator)</value>
+  </data>
+  <data name="GroupProfiles" xml:space="preserve">
+    <value>(2) Customize your profiles</value>
+  </data>
+  <data name="IntroText" xml:space="preserve">
+    <value>Welcome to Locale Emulator!
+If you want to use LE without installation (as a portable application), you can close this window now.
+Otherwise, follow these steps:
+   1. Install Locale Emulator for yourself or for all users on this PC.
+   2. Run LEGUI.exe to customize the profile list.
+   3. Right-click an application and choose a Locale Emulator item.</value>
+  </data>
+  <data name="AllUsersAdminRequired" xml:space="preserve">
+    <value>Administrator privileges are required for all users.</value>
+  </data>
+  <data name="NoRegisterableComTypes" xml:space="preserve">
+    <value>The assembly contains no registerable COM types.</value>
+  </data>
+  <data name="CannotOpenClassesKey" xml:space="preserve">
+    <value>Cannot open the current user's Classes key.</value>
+  </data>
+  <data name="MissingPayload" xml:space="preserve">
+    <value>The installer is missing an embedded component.</value>
+  </data>
+  <data name="CannotCreateContextMenuKey" xml:space="preserve">
+    <value>Cannot create the context menu registry key.</value>
+  </data>
+  <data name="MissingLauncher" xml:space="preserve">
+    <value>The packaged LEProc.exe is missing.</value>
+  </data>
+</root>
