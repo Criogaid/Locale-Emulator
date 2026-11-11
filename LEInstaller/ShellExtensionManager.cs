@@ -19,6 +19,7 @@ namespace LEInstaller
         {
             return File.Exists(Path.Combine(productDirectory, "ModernMenu.ps1"))
                 && File.Exists(Path.Combine(productDirectory, "AppxManifest.xml"))
+                && File.Exists(Path.Combine(productDirectory, "LEGUI.exe"))
                 && File.Exists(Path.Combine(productDirectory, "LEExplorerCommand.dll"));
         }
 

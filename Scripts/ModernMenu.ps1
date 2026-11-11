@@ -4,7 +4,7 @@
   Registers or removes the Windows 11 first-level "Run with Locale Emulator" menu for .exe files.
 .DESCRIPTION
   Registers the sparse package from Native/ExplorerCommand/AppxManifest.xml for the current user.
-  The product directory must contain LEProc.exe and LEExplorerCommand.dll (x64 package).
+  The product directory must contain LEProc.exe, LEGUI.exe (icon) and LEExplorerCommand.dll (x64 package).
   Registering a package that is not signed requires Windows Developer Mode.
   Inside a release package this script sits next to AppxManifest.xml and the product files.
 #>
@@ -58,7 +58,7 @@ try {
         throw 'AppxManifest.xml was not found next to the script or under Native/ExplorerCommand.'
     }
     $ProductDirectory = (Resolve-Path -LiteralPath $ProductDirectory).Path
-    foreach ($name in 'LEProc.exe', 'LEExplorerCommand.dll') {
+    foreach ($name in 'LEProc.exe', 'LEGUI.exe', 'LEExplorerCommand.dll') {
         if (-not (Test-Path -LiteralPath (Join-Path $ProductDirectory $name))) {
             throw "The product directory is missing ${name}: $ProductDirectory"
         }
@@ -70,7 +70,7 @@ try {
     Copy-Item -LiteralPath $manifestPath -Destination $registrationDirectory -Force
 
     Add-Type -AssemblyName System.Drawing
-    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $ProductDirectory 'LEProc.exe'))
+    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $ProductDirectory 'LEGUI.exe'))
     $bitmap = [System.Drawing.Bitmap]::new($icon.ToBitmap(), 150, 150)
     try {
         $bitmap.Save((Join-Path $assetsDirectory 'Logo.png'), [System.Drawing.Imaging.ImageFormat]::Png)

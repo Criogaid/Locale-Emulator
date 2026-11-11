@@ -150,7 +150,8 @@ public:
     IFACEMETHODIMP GetIcon(IShellItemArray*, LPWSTR* icon) override {
         WCHAR path[MAX_PATH];
         *icon = nullptr;
-        HRESULT hr = GetSiblingPath(L"LEProc.exe", path);
+        // LEProc.exe carries no icon resource; the Locale Emulator icon lives in LEGUI.exe next to it.
+        HRESULT hr = GetSiblingPath(L"LEGUI.exe", path);
         if (FAILED(hr))
             return hr;
         WCHAR spec[MAX_PATH + 4];
