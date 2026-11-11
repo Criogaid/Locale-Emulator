@@ -69,7 +69,7 @@ namespace LEContextMenuHandler
                 //Load global profiles.
                 Array.ForEach(LEConfig.GetProfiles(),
                               p =>
-                                  menuItems.Add(new LEMenuItem(p.Name,
+                                  menuItems.Add(new LEMenuItem(p.Name.Replace("&", "&&"), // "&" would otherwise become a menu mnemonic.
                                                                p.ShowInMainMenu,
                                                                _menuBmpPink,
                                                                $"-runas \"{p.Guid}\" \"%APP%\"")));
