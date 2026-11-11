@@ -180,3 +180,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - 缺陷（已修复）：一级菜单清单缺少 `unvirtualizedResources` 能力，`makeappx` 的严格校验拒绝（0x80080204）；此前的注册尝试只被“需要开发者许可证”拦下，没走到这一步。`Native/ExplorerCommand/build.ps1` 现在用 SDK `makeappx pack /nv` 校验清单架构，旧清单使构建失败、修复后通过。
 - 已查明的限制：`Add-AppxPackage -AllowUnsigned`（24H2）只支持 `-Path` 安装 `.msix`；将发布者改为 unsigned namespace 后仍被拒绝为 0x80073D2B（无签名包不能包含可执行激活），而菜单扩展必须挂在 `Application` 下，所以无签名路线不可行，注册仍需要开发人员模式或签名包。
 - 重复来源（已消除）：一级菜单在 `ExplorerCommand.cpp` 里手写了 5 种语言的标题，与传统菜单的 22 份 `Strings*.resx` 是两份来源，繁体中文用户会看到简体、其余 17 种语言只有英文。`Native/ExplorerCommand/build.ps1` 现在从 resx 生成 `MenuTexts.h`，运行时按“完整区域名 → 语言 → 英文”回退（与托管菜单一致）。实测：12 种界面语言（含 zh-TW/zh-HK/pt-BR/pt-PT/fr-CA/nb-NO）下 4 个标题与 resx 原文逐项一致。
+- 重复来源（已消除）：一级菜单的 CLSID 同时手写在 `AppxManifest.xml`（Verb 与 COM Class 两处）和 `ExplorerCommand.cpp`，任何一处不一致都只会让菜单静默不出现。现在 `build.ps1` 以清单为唯一来源：要求两处 GUID 相同，并生成到 `MenuTexts.h`；实测生成值与原值一致，故意改错一处时构建以退出码 1 失败。

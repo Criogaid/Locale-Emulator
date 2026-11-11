@@ -15,9 +15,8 @@
 #include <strsafe.h>
 #include <xmllite.h>
 
-// {7F0B3C5A-2D41-4E8B-9A67-5C1E3B8D2A94}
-static const CLSID CLSID_LERunCommand =
-    {0x7f0b3c5a, 0x2d41, 0x4e8b, {0x9a, 0x67, 0x5c, 0x1e, 0x3b, 0x8d, 0x2a, 0x94}};
+// CLSID_LERunCommand comes from the generated MenuTexts.h: build.ps1 reads it from AppxManifest.xml,
+// the only place the class id is written, so the registration and the DLL cannot disagree.
 
 static HMODULE g_module = nullptr;
 static volatile LONG g_objectCount = 0;
