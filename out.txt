@@ -1,0 +1,1 @@
+native acp=936 convert=1 first=U+5041 lcid=0x409
