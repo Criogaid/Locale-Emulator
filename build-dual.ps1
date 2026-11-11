@@ -17,6 +17,8 @@ Write-Host '[dual 1/6] 构建并回归 x86 基线'
 
 Write-Host '[dual 2/6] 构建 x64 原生组件'
 & (Join-Path $repository 'Native/LocaleEmulatorX64/build-x64.ps1') -Clean
+$explorerCommandRoot = Join-Path $dualRoot 'x64/explorer-command'
+& (Join-Path $repository 'Native/ExplorerCommand/build.ps1') -OutputDirectory $explorerCommandRoot
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
 $installation = & $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -187,6 +189,10 @@ function New-Package {
     }
     if ($IncludeX86Compatibility) {
         Copy-X86Compatibility $package $releaseRoot $releaseRoot
+        # Windows 11 first-level menu: x64 Explorer loads the x64 command DLL, so only this package carries it.
+        Copy-RequiredFile $explorerCommandRoot $package 'LEExplorerCommand.dll'
+        Copy-Item -LiteralPath (Join-Path $repository 'Native/ExplorerCommand/AppxManifest.xml') -Destination $package -Force
+        Copy-Item -LiteralPath (Join-Path $repository 'Scripts/ModernMenu.ps1') -Destination $package -Force
     }
 
     $commit = & git -C $repository rev-parse HEAD
@@ -248,6 +254,7 @@ Assert-Machine (Join-Path $x86.Package 'LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'LEProc.exe') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LoaderDll.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LocaleEmulator.dll') 'x64'
+Assert-Machine (Join-Path $x64.Package 'LEExplorerCommand.dll') 'x64'
 function Assert-LauncherSelection {
     param([string]$Package)
     $commonAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $Package 'LECommonLibrary.dll'))

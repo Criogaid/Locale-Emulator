@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sparse package: gives Explorer a package identity so the Windows 11 first-level menu can
+  load LEExplorerCommand.dll. The package contains only this manifest and its logos; the
+  executable and DLL stay in the product directory (ExternalLocation).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 desktop4 desktop5 com rescap">
+  <Identity Name="LocaleEmulator.ModernMenu" Publisher="CN=Locale Emulator" Version="1.0.0.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Locale Emulator</DisplayName>
+    <PublisherDisplayName>Locale Emulator</PublisherDisplayName>
+    <Logo>Assets\Logo.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+  </Properties>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+  <Applications>
+    <Application Id="LocaleEmulator" Executable="LEProc.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements
+        DisplayName="Locale Emulator"
+        Description="Run legacy programs with a simulated locale"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Logo.png"
+        Square44x44Logo="Assets\Logo.png"
+        AppListEntry="none" />
+      <Extensions>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type=".exe">
+              <desktop5:Verb Id="LocaleEmulatorRun" Clsid="7F0B3C5A-2D41-4E8B-9A67-5C1E3B8D2A94" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="Locale Emulator context menu">
+              <com:Class Id="7F0B3C5A-2D41-4E8B-9A67-5C1E3B8D2A94" Path="LEExplorerCommand.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>

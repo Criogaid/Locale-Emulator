@@ -1,0 +1,4 @@
+LIBRARY LEExplorerCommand
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE
