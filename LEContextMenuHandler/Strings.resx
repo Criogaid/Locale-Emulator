@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="RunDefault" xml:space="preserve">
+    <value>Run with Application Profile</value>
+  </data>
+  <data name="Submenu" xml:space="preserve">
+    <value>Locale Emulator</value>
+  </data>
+  <data name="ManageApp" xml:space="preserve">
+    <value>Modify Application Profile</value>
+  </data>
+  <data name="ManageAll" xml:space="preserve">
+    <value>Edit Global Profile List</value>
+  </data>
+</root>

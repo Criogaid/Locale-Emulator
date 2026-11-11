@@ -1,66 +1,29 @@
-﻿using System.Globalization;
-using System.IO;
-using System.Linq;
+using System.Globalization;
 using System.Reflection;
-using System.Xml;
-using System.Xml.Linq;
+using System.Resources;
 
 namespace LEContextMenuHandler
 {
-    internal class I18n
+    /// <summary>
+    /// Menu text from the standard Strings.resx; satellite assemblies provide translations and a
+    /// missing key falls back through the culture chain to the neutral English resource.
+    /// </summary>
+    internal static class I18n
     {
-        internal static readonly CultureInfo CurrentCultureInfo = CultureInfo.CurrentUICulture;
-        //internal static readonly CultureInfo CurrentCultureInfo = CultureInfo.GetCultureInfo("zh-CN");
-
-        private static XDocument cacheDictionary;
+        private static readonly ResourceManager Manager =
+            new ResourceManager("LEContextMenuHandler.Strings", Assembly.GetExecutingAssembly());
 
         internal static string GetString(string key)
         {
-            var dict = LoadDictionary();
             try
             {
-                var strings = from i in dict.Descendants("Strings").Elements() select i;
-
-                var str = (from s in strings where s.Name == key select s.Value).FirstOrDefault();
-
-                if (string.IsNullOrEmpty(str))
-                    return key;
-
-                return str;
+                var value = Manager.GetString(key, CultureInfo.CurrentUICulture);
+                return string.IsNullOrEmpty(value) ? key : value;
             }
-            catch
+            catch (MissingManifestResourceException)
             {
                 return key;
             }
-        }
-
-        private static XDocument LoadDictionary()
-        {
-            if (cacheDictionary != null)
-                return cacheDictionary;
-
-            XDocument dictionary = null;
-            try
-            {
-                var langDir = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), @"Lang\");
-
-                var firstLangPath = Path.Combine(langDir,CurrentCultureInfo.Name + ".xml");
-                var fallbackLangPath = Path.Combine(langDir,
-                                                    $@"{CurrentCultureInfo.TwoLetterISOLanguageName}.xml");
-
-                dictionary = XDocument.Load(File.Exists(firstLangPath) ? firstLangPath : fallbackLangPath);
-            }
-            catch
-            {
-            }
-
-            //If dictionary is still null, use default language.
-            if (dictionary == null)
-                dictionary = XDocument.Load(new XmlTextReader(new StringReader(Resource.DefaultLanguage)));
-
-            cacheDictionary = dictionary;
-
-            return cacheDictionary;
         }
     }
 }

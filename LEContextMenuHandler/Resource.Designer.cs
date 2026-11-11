@@ -81,22 +81,6 @@ namespace LEContextMenuHandler {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
-        ///
-        ///&lt;Strings&gt;
-        ///  &lt;RunDefault&gt;Run with Application Profile&lt;/RunDefault&gt;
-        ///  &lt;Submenu&gt;Locale Emulator&lt;/Submenu&gt;
-        ///  &lt;ManageApp&gt;Modify Application Profile&lt;/ManageApp&gt;
-        ///  &lt;ManageAll&gt;Edit Global Profile List&lt;/ManageAll&gt;
-        ///&lt;/Strings&gt;.
-        /// </summary>
-        internal static string DefaultLanguage {
-            get {
-                return ResourceManager.GetString("DefaultLanguage", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
         internal static System.Drawing.Bitmap gray {
