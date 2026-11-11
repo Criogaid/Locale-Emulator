@@ -91,7 +91,12 @@
 
 未签名的包需要开启 Windows 开发人员模式。可稍后运行安装目录中的 ModernMenu.ps1 重试。</value>
   </data>
+  <data name="ModernMenuRemoveFailed" xml:space="preserve">
+    <value>传统菜单已移除，但 Windows 11 一级菜单未能移除：{0}
+
+可稍后在安装目录中运行 ModernMenu.ps1 -Action Unregister 重试。</value>
+  </data>
   <data name="ModernMenuTimeout" xml:space="preserve">
-    <value>注册 Windows 11 一级菜单超时。</value>
+    <value>更改 Windows 11 一级菜单超时。</value>
   </data>
 </root>

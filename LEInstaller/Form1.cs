@@ -418,7 +418,7 @@ namespace LEInstaller
             }
             catch (Exception error)
             {
-                modernMenuNote = string.Format(I18n.GetString("ModernMenuFailed"), error.Message);
+                modernMenuNote = string.Format(I18n.GetString(register ? "ModernMenuFailed" : "ModernMenuRemoveFailed"), error.Message);
             }
         }
 

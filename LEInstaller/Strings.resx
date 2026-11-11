@@ -91,7 +91,12 @@ Otherwise, follow these steps:
 
 Unsigned packages need Windows Developer Mode. You can retry with ModernMenu.ps1 in the installation folder.</value>
   </data>
+  <data name="ModernMenuRemoveFailed" xml:space="preserve">
+    <value>The classic menu was removed, but the Windows 11 first-level menu could not be removed: {0}
+
+You can retry with ModernMenu.ps1 -Action Unregister in the installation folder.</value>
+  </data>
   <data name="ModernMenuTimeout" xml:space="preserve">
-    <value>Registering the Windows 11 menu timed out.</value>
+    <value>Changing the Windows 11 menu timed out.</value>
   </data>
 </root>
