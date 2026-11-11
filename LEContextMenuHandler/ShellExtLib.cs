@@ -67,23 +67,11 @@ namespace LEContextMenuHandler
 
     #region Enums & Structs
 
-    internal enum GCS : uint
-    {
-        GCS_VERBA = 0x00000000,
-        GCS_HELPTEXTA = 0x00000001,
-        GCS_VALIDATEA = 0x00000002,
-        GCS_VERBW = 0x00000004,
-        GCS_HELPTEXTW = 0x00000005,
-        GCS_VALIDATEW = 0x00000006,
-        GCS_VERBICONW = 0x00000014,
-        GCS_UNICODE = 0x00000004
-    }
-
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     internal struct CMINVOKECOMMANDINFO
     {
         public uint cbSize;
-        public CMIC fMask;
+        public uint fMask;
         public IntPtr hwnd;
         public IntPtr verb;
         [MarshalAs(UnmanagedType.LPStr)] public string parameters;
@@ -91,83 +79,11 @@ namespace LEContextMenuHandler
         public int nShow;
         public uint dwHotKey;
         public IntPtr hIcon;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct CMINVOKECOMMANDINFOEX
-    {
-        public uint cbSize;
-        public CMIC fMask;
-        public IntPtr hwnd;
-        public IntPtr verb;
-        [MarshalAs(UnmanagedType.LPStr)] public string parameters;
-        [MarshalAs(UnmanagedType.LPStr)] public string directory;
-        public int nShow;
-        public uint dwHotKey;
-        public IntPtr hIcon;
-        [MarshalAs(UnmanagedType.LPStr)] public string title;
-        public IntPtr verbW;
-        public string parametersW;
-        public string directoryW;
-        public string titleW;
-        private readonly POINT ptInvoke;
-    }
-
-    [Flags]
-    internal enum CMIC : uint
-    {
-        CMIC_MASK_ICON = 0x00000010,
-        CMIC_MASK_HOTKEY = 0x00000020,
-        CMIC_MASK_NOASYNC = 0x00000100,
-        CMIC_MASK_FLAG_NO_UI = 0x00000400,
-        CMIC_MASK_UNICODE = 0x00004000,
-        CMIC_MASK_NO_CONSOLE = 0x00008000,
-        CMIC_MASK_ASYNCOK = 0x00100000,
-        CMIC_MASK_NOZONECHECKS = 0x00800000,
-        CMIC_MASK_FLAG_LOG_USAGE = 0x04000000,
-        CMIC_MASK_SHIFT_DOWN = 0x10000000,
-        CMIC_MASK_PTINVOKE = 0x20000000,
-        CMIC_MASK_CONTROL_DOWN = 0x40000000
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct POINT
-    {
-        public int X;
-        public int Y;
     }
 
     internal enum CLIPFORMAT : uint
     {
-        CF_TEXT = 1,
-        CF_BITMAP = 2,
-        CF_METAFILEPICT = 3,
-        CF_SYLK = 4,
-        CF_DIF = 5,
-        CF_TIFF = 6,
-        CF_OEMTEXT = 7,
-        CF_DIB = 8,
-        CF_PALETTE = 9,
-        CF_PENDATA = 10,
-        CF_RIFF = 11,
-        CF_WAVE = 12,
-        CF_UNICODETEXT = 13,
-        CF_ENHMETAFILE = 14,
-        CF_HDROP = 15,
-        CF_LOCALE = 16,
-        CF_MAX = 17,
-
-        CF_OWNERDISPLAY = 0x0080,
-        CF_DSPTEXT = 0x0081,
-        CF_DSPBITMAP = 0x0082,
-        CF_DSPMETAFILEPICT = 0x0083,
-        CF_DSPENHMETAFILE = 0x008E,
-
-        CF_PRIVATEFIRST = 0x0200,
-        CF_PRIVATELAST = 0x02FF,
-
-        CF_GDIOBJFIRST = 0x0300,
-        CF_GDIOBJLAST = 0x03FF
+        CF_HDROP = 15
     }
 
     [Flags]
