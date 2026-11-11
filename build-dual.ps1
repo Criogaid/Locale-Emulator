@@ -272,6 +272,17 @@ foreach ($package in $x86.Package, $x64.Package) {
     Assert-DumpbinContains $dll '/headers' @('Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard', 'CET compatible') 'LEExplorerCommand.dll 缺少 {0}：{1}'
     Assert-DumpbinContains $dll '/exports' @('DllGetClassObject', 'DllCanUnloadNow') 'LEExplorerCommand.dll 缺少导出 {0}：{1}'
 }
+# A stray NUL or control byte (for example an escape sequence expanded while writing a file) can slip into text sources
+# unnoticed, even through a compiler. Tracked text files must contain none; tab, LF and CR are normal.
+$textExtensions = '.cs', '.cpp', '.h', '.ps1', '.md', '.xml', '.resx', '.props', '.csproj', '.json'
+foreach ($file in (& git -C $repository ls-files)) {
+    if ($textExtensions -notcontains [IO.Path]::GetExtension($file).ToLowerInvariant()) { continue }
+    $path = Join-Path $repository $file
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+    foreach ($byte in [IO.File]::ReadAllBytes($path)) {
+        if ($byte -lt 32 -and $byte -ne 9 -and $byte -ne 10 -and $byte -ne 13) { throw "文本文件含控制字节 0x$($byte.ToString('X2'))：$file" }
+    }
+}
 # The first-level menu, the static verb and the package logo take their icon from LEGUI.exe (LEProc.exe has none).
 Add-Type -Namespace BuildCheck -Name Icons -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern uint ExtractIconEx(string file, int index, System.IntPtr[] large, System.IntPtr[] small, uint count);'
 foreach ($package in $x86.Package, $x64.Package) {
