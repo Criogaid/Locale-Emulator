@@ -226,6 +226,9 @@ namespace LEProc
                 var localeID = (uint) textInfo.LCID;
                 var defaultCharset = (uint) GetCharsetFromANSICodepage(textInfo.ANSICodePage);
 
+                string standardName, daylightName;
+                TimeZoneNames.Resolve(profile.Timezone, culture, out standardName, out daylightName);
+
                 var registryMode = profile.RedirectRegistry
                     ? (profile.IsAdvancedRedirection ? 2u : 1u)
                     : 0u;
@@ -243,6 +246,8 @@ namespace LEProc
                     RegistryMode = registryMode,
                     HookUILanguageMode = profile.IsAdvancedRedirection ? 2u : 0u,
                     Timezone = profile.Timezone,
+                    StandardName = standardName,
+                    DaylightName = daylightName,
                     DebugMode = profile.RunWithSuspend
                 };
 

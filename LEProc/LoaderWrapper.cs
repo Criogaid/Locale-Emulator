@@ -86,6 +86,18 @@ namespace LEProc
             set { _environment.HookUILanguageMode = value; }
         }
 
+        internal string StandardName
+        {
+            get { return _environment.StandardNameOverride; }
+            set { _environment.StandardNameOverride = value; }
+        }
+
+        internal string DaylightName
+        {
+            get { return _environment.DaylightNameOverride; }
+            set { _environment.DaylightNameOverride = value; }
+        }
+
         internal string Timezone
         {
             get { return _environment.TimezoneId; }

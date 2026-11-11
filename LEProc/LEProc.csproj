@@ -64,6 +64,7 @@
     <Compile Include="NativeLoaderAdapter.cs" />
     <Compile Include="NativeProcess.cs" />
     <Compile Include="RuntimeEnvironment.cs" />
+    <Compile Include="TimeZoneNames.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="LaunchPlan.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
