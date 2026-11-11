@@ -275,14 +275,18 @@ foreach ($package in $x86.Package, $x64.Package) {
 # A stray NUL or control byte (for example an escape sequence expanded while writing a file) can slip into text sources
 # unnoticed, even through a compiler. Tracked text files must contain none; tab, LF and CR are normal.
 $textExtensions = '.cs', '.cpp', '.h', '.ps1', '.md', '.xml', '.resx', '.props', '.csproj', '.json'
+$scannedTextFiles = 0
 foreach ($file in ((& git -C $repository -c core.quotepath=false ls-files) -replace '^"|"$', '')) {
     if ($textExtensions -notcontains [IO.Path]::GetExtension($file).ToLowerInvariant()) { continue }
     $path = Join-Path $repository $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+    $scannedTextFiles++
     foreach ($byte in [IO.File]::ReadAllBytes($path)) {
         if ($byte -lt 32 -and $byte -ne 9 -and $byte -ne 10 -and $byte -ne 13) { throw "文本文件含控制字节 0x$($byte.ToString('X2'))：$file" }
     }
 }
+# Without git or outside a checkout the loop above would scan nothing and pass vacuously.
+if ($scannedTextFiles -lt 50) { throw "控制字节扫描只检查了 $scannedTextFiles 个文件，疑似 git 不可用或不在仓库中。" }
 # README: only the dual packages carry the first-level menu; the single x86 package from build.ps1 must not.
 # build.ps1 always ran above, so its package directory must exist; finding none means the path moved and this check went vacuous.
 $defaultPackages = @(Get-ChildItem -LiteralPath (Join-Path $artifacts 'package') -Directory -ErrorAction SilentlyContinue)
