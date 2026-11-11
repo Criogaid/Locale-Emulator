@@ -20,12 +20,21 @@ $packageName = 'LocaleEmulator.ModernMenu'
 # Holds the registered manifest and logo only; the product files stay in the product directory.
 $registrationDirectory = Join-Path $env:LOCALAPPDATA 'LocaleEmulator\ModernMenu'
 
+function Remove-RegistrationDirectory {
+    Remove-Item -LiteralPath $registrationDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    # Drop the product folder as well when nothing else lives in it.
+    $parent = Split-Path -Parent $registrationDirectory
+    if ((Test-Path -LiteralPath $parent) -and -not (Get-ChildItem -LiteralPath $parent -Force)) {
+        Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if ($Action -eq 'Unregister') {
     $existing = Get-AppxPackage -Name $packageName
     if ($existing) {
         $existing | Remove-AppxPackage
     }
-    Remove-Item -LiteralPath $registrationDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-RegistrationDirectory
     Write-Host "Removed $packageName."
     return
 }
@@ -67,6 +76,15 @@ finally {
 
 # Re-registering the same identity from another location fails, so drop an earlier registration first.
 Get-AppxPackage -Name $packageName | Remove-AppxPackage
-Add-AppxPackage -Register (Join-Path $registrationDirectory 'AppxManifest.xml') -ExternalLocation $ProductDirectory
+try {
+    Add-AppxPackage -Register (Join-Path $registrationDirectory 'AppxManifest.xml') -ExternalLocation $ProductDirectory
+}
+catch {
+    # A failed registration (for example without Developer Mode) must not leave files behind.
+    if (-not (Get-AppxPackage -Name $packageName)) {
+        Remove-RegistrationDirectory
+    }
+    throw
+}
 Write-Host "Registered $packageName for the current user; external location: $ProductDirectory"
 Write-Host 'Restart Explorer or sign in again; the .exe first-level menu then shows Run with Locale Emulator.'
