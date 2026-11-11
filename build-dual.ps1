@@ -189,11 +189,12 @@ function New-Package {
     }
     if ($IncludeX86Compatibility) {
         Copy-X86Compatibility $package $releaseRoot $releaseRoot
-        # Windows 11 first-level menu: x64 Explorer loads the x64 command DLL, so only this package carries it.
-        Copy-RequiredFile $explorerCommandRoot $package 'LEExplorerCommand.dll'
-        Copy-Item -LiteralPath (Join-Path $repository 'Native/ExplorerCommand/AppxManifest.xml') -Destination $package -Force
-        Copy-Item -LiteralPath (Join-Path $repository 'Scripts/ModernMenu.ps1') -Destination $package -Force
     }
+    # Windows 11 first-level menu: Explorer is x64 and loads the x64 command DLL in either package;
+    # the DLL only forwards the selected EXE to the LEProc.exe beside it.
+    Copy-RequiredFile $explorerCommandRoot $package 'LEExplorerCommand.dll'
+    Copy-Item -LiteralPath (Join-Path $repository 'Native/ExplorerCommand/AppxManifest.xml') -Destination $package -Force
+    Copy-Item -LiteralPath (Join-Path $repository 'Scripts/ModernMenu.ps1') -Destination $package -Force
 
     $commit = & git -C $repository rev-parse HEAD
     if ($LASTEXITCODE -ne 0) { throw '无法读取构建提交。' }
@@ -254,6 +255,7 @@ Assert-Machine (Join-Path $x86.Package 'LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'LEProc.exe') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LoaderDll.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LocaleEmulator.dll') 'x64'
+Assert-Machine (Join-Path $x86.Package 'LEExplorerCommand.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LEExplorerCommand.dll') 'x64'
 function Assert-LauncherSelection {
     param([string]$Package)
