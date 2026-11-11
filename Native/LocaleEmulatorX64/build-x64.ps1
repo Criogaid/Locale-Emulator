@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $nativeRoot = Join-Path $repoRoot 'Native\LocaleEmulatorX64'
 $coreRoot = Join-Path $nativeRoot 'LocaleEmulatorPlus'
 $loaderRoot = Join-Path $nativeRoot 'LoaderDll'
@@ -15,8 +15,8 @@ $objectRoot = Join-Path $outputRoot 'obj'
 $libraryRoot = Join-Path $outputRoot 'lib'
 $binaryRoot = Join-Path $outputRoot 'bin'
 
-if ($Clean -and (Test-Path $outputRoot)) {
-    Remove-Item -Recurse -Force $outputRoot
+if ($Clean -and (Test-Path -LiteralPath $outputRoot)) {
+    Remove-Item -Recurse -Force -LiteralPath $outputRoot
 }
 New-Item -ItemType Directory -Force $objectRoot, $libraryRoot, $binaryRoot | Out-Null
 
@@ -112,7 +112,7 @@ foreach ($definition in @('lep_ntdll_x64', 'lep_k32_x64', 'kernel32_lep_x64')) {
 Write-Host '[x64 2/5] 编译 native support'
 $supportObjects = @()
 foreach ($directory in @('runtime', 'native', 'pe', 'patch')) {
-    $supportSources = Get-ChildItem (Join-Path $coreRoot "support\$directory") -Filter '*.cpp' -File | Sort-Object FullName
+    $supportSources = Get-ChildItem -LiteralPath (Join-Path $coreRoot "support\$directory") -Filter '*.cpp' -File | Sort-Object FullName
     foreach ($source in $supportSources) {
         $supportObjects += Compile-Source $source.FullName -ObjectName "Support_${directory}_$($source.BaseName).obj"
     }

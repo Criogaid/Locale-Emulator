@@ -111,7 +111,7 @@ $hashes = Get-ChildItem -File -Recurse -LiteralPath $package | Sort-Object FullN
 }
 $hashes | Set-Content -LiteralPath (Join-Path $package 'SHA256SUMS') -Encoding utf8NoBOM
 $archive = Join-Path $artifacts "$packageName.zip"
-Compress-Archive -Path (Join-Path $package '*') -DestinationPath $archive -CompressionLevel Optimal -Force
+Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $package -Force).FullName -DestinationPath $archive -CompressionLevel Optimal -Force
 
 # 从实际 ZIP 解包后复测，验证发行包没有依赖源码目录的文件。
 $unpacked = Join-Path $artifacts 'package-smoke'

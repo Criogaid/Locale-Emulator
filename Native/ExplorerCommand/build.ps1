@@ -14,7 +14,7 @@ $hostBin = $toolchain.HostBin
 $env:Path = "$hostBin;$env:Path"
 
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
-$OutputDirectory = (Resolve-Path $OutputDirectory).Path
+$OutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $object = Join-Path $OutputDirectory 'ExplorerCommand.obj'
 $dll = Join-Path $OutputDirectory 'LEExplorerCommand.dll'
 

@@ -62,7 +62,7 @@ if ($LocalizationOnly) { return }
 $product = Join-Path $ResultsDirectory 'product'
 if (Test-Path -LiteralPath $product) { Remove-Item -LiteralPath $product -Recurse -Force }
 New-Item -ItemType Directory -Path $product -Force | Out-Null
-Copy-Item -Path (Join-Path $BuildDirectory '*') -Destination $product -Recurse -Force
+Get-ChildItem -LiteralPath $BuildDirectory -Force | Copy-Item -Destination $product -Recurse -Force
 $globalConfiguration = Join-Path $product 'LEConfig.xml'
 if (Test-Path -LiteralPath $globalConfiguration) { Remove-Item -LiteralPath $globalConfiguration }
 foreach ($relative in @(
@@ -222,7 +222,7 @@ public static class RegressionWindow {
 $uiDirectory = Join-Path $ResultsDirectory 'ui-smoke'
 if (Test-Path -LiteralPath $uiDirectory) { Remove-Item -LiteralPath $uiDirectory -Recurse -Force }
 New-Item -ItemType Directory -Path $uiDirectory -Force | Out-Null
-Copy-Item -Path (Join-Path $BuildDirectory '*') -Destination $uiDirectory -Recurse -Force
+Get-ChildItem -LiteralPath $BuildDirectory -Force | Copy-Item -Destination $uiDirectory -Recurse -Force
 $uiResults = @()
 foreach ($entry in @(@{ Name = 'LEGUI.exe'; Class = 'HwndWrapper' }, @{ Name = 'LEInstaller.exe'; Class = 'WindowsForms10.Window' })) {
     $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $uiDirectory $entry.Name))

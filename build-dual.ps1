@@ -217,7 +217,7 @@ function New-Package {
     }
     $hashLines | Set-Content -LiteralPath (Join-Path $package 'SHA256SUMS') -Encoding utf8NoBOM
     $archive = Join-Path $packageRoot "$name.zip"
-    Compress-Archive -Path (Join-Path $package '*') -DestinationPath $archive -CompressionLevel Optimal -Force
+    Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $package -Force).FullName -DestinationPath $archive -CompressionLevel Optimal -Force
 
     $smoke = Join-Path $packageRoot "smoke-$Architecture"
     if (Test-Path -LiteralPath $smoke) {
