@@ -240,15 +240,18 @@ $x64 = New-Package -Architecture x64 -ManagedRoot $managedX64Root -NativeRoot $n
 
 . (Join-Path $repository 'Native/Toolchain.ps1')
 $dumpbin = Join-Path (Get-OfficialToolchain).HostBin 'dumpbin.exe'
+# Every PE check below reads dumpbin output; $Mode is '/headers' or '/exports', $Patterns are regexes that must all match.
+function Assert-DumpbinContains {
+    param([string]$Image, [string]$Mode, [string[]]$Patterns, [string]$FailureFormat)
+    $text = & $dumpbin $Mode $Image 2>&1 | Out-String
+    foreach ($pattern in $Patterns) {
+        if ($text -notmatch $pattern) { throw ($FailureFormat -f $pattern, $Image) }
+    }
+}
 function Assert-Machine {
     param([string]$Executable, [string]$Expected)
-    $headers = & $dumpbin /headers $Executable 2>&1 | Out-String
-    if ($Expected -eq 'x86' -and $headers -notmatch '14C machine \(x86\)') {
-        throw "x86 PE 校验失败：$Executable"
-    }
-    if ($Expected -eq 'x64' -and $headers -notmatch '8664 machine \(x64\)') {
-        throw "x64 PE 校验失败：$Executable"
-    }
+    $pattern = if ($Expected -eq 'x86') { '14C machine \(x86\)' } else { '8664 machine \(x64\)' }
+    Assert-DumpbinContains $Executable '/headers' @($pattern) "$Expected PE 校验失败：{1}"
 }
 Assert-Machine (Join-Path $x86.Package 'LEProc.exe') 'x86'
 Assert-Machine (Join-Path $x86.Package 'LocaleEmulator.dll') 'x86'
@@ -261,19 +264,13 @@ Assert-Machine (Join-Path $x64.Package 'LEExplorerCommand.dll') 'x64'
 # Both Loaders keep CFG on (the x64 one needs the protected delay-load IAT handling in LepDelayLoad_x86_x64.cpp).
 foreach ($package in $x86.Package, $x64.Package) {
     $loader = Join-Path $package 'LoaderDll.dll'
-    if ((& $dumpbin /headers $loader 2>&1 | Out-String) -notmatch 'Control Flow Guard') { throw "LoaderDll.dll 缺少 Control Flow Guard：$loader" }
+    Assert-DumpbinContains $loader '/headers' @('Control Flow Guard') 'LoaderDll.dll 缺少 {0}：{1}'
 }
 # The Shell loads this DLL into Explorer: require the mitigations the build asks for and the two COM exports.
 foreach ($package in $x86.Package, $x64.Package) {
     $dll = Join-Path $package 'LEExplorerCommand.dll'
-    $headers = & $dumpbin /headers $dll 2>&1 | Out-String
-    foreach ($flag in 'Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard', 'CET compatible') {
-        if ($headers -notmatch [regex]::Escape($flag)) { throw "LEExplorerCommand.dll 缺少 $flag：$dll" }
-    }
-    $exports = & $dumpbin /exports $dll 2>&1 | Out-String
-    foreach ($export in 'DllGetClassObject', 'DllCanUnloadNow') {
-        if ($exports -notmatch $export) { throw "LEExplorerCommand.dll 缺少导出 $export：$dll" }
-    }
+    Assert-DumpbinContains $dll '/headers' @('Dynamic base', 'High Entropy Virtual Addresses', 'NX compatible', 'Control Flow Guard', 'CET compatible') 'LEExplorerCommand.dll 缺少 {0}：{1}'
+    Assert-DumpbinContains $dll '/exports' @('DllGetClassObject', 'DllCanUnloadNow') 'LEExplorerCommand.dll 缺少导出 {0}：{1}'
 }
 function Assert-LauncherSelection {
     param([string]$Package)
