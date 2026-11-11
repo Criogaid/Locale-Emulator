@@ -179,19 +179,20 @@ extern "C" PVOID WINAPI __delayLoadHelper2(PCImgDelayDescr Descriptor, PVOID *Th
         while (_InterlockedCompareExchange(&ProtectLock, 1, 0) != 0)
             YieldProcessor();
 
-        Status = NtProtectVirtualMemory(NtCurrentProcess(), &Page, &PageSize, PAGE_READWRITE, &OldProtect);
-        if (NT_SUCCESS(Status))
-        {
-            *ThunkAddress = Procedure;
+        // An unprotected IAT (the core DLL's) is already writable, so a failed unprotect must not fail the
+        // import: store anyway, exactly as before this handling existed.
+        const BOOL Unprotected = NT_SUCCESS(NtProtectVirtualMemory(NtCurrentProcess(), &Page, &PageSize, PAGE_READWRITE, &OldProtect));
 
+        *ThunkAddress = Procedure;
+
+        if (Unprotected)
+        {
             Page = ThunkAddress;
             PageSize = sizeof(PVOID);
             NtProtectVirtualMemory(NtCurrentProcess(), &Page, &PageSize, OldProtect, &OldProtect);
         }
 
         _InterlockedExchange(&ProtectLock, 0);
-        if (NT_FAILED(Status))
-            return nullptr;
     }
 
     return Procedure;
