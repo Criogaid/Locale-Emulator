@@ -45,6 +45,9 @@ namespace LEProc
                 return 1;
             }
 
+            if (Args0IsAttach(args))
+                return RunAttach(args);
+
             try
             {
                 Args = args;
@@ -96,6 +99,52 @@ namespace LEProc
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
+        }
+
+        // "-attach <pid> <tid> <hex>" is the internal entry a Core uses when a target spawns a child of
+        // the other architecture: this launcher matches the child, so it brings the suspended child under
+        // the runtime environment given as hex. It is silent (no dialogs) and exits with the NTSTATUS.
+        private static bool Args0IsAttach(string[] args)
+        {
+            return args.Length == 4 && args[0] == "-attach";
+        }
+
+        private static int RunAttach(string[] args)
+        {
+            const uint StatusInvalidParameter = 0xC000000D;
+            const uint StatusUnsuccessful = 0xC0000001;
+            try
+            {
+                uint processId, threadId;
+                var environment = ParseHex(args[3]);
+                if (!uint.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out processId) ||
+                    !uint.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out threadId) ||
+                    environment == null)
+                    return unchecked((int)StatusInvalidParameter);
+
+                return unchecked((int)LoaderWrapper.Attach(processId, threadId, environment));
+            }
+            catch (Exception)
+            {
+                return unchecked((int)StatusUnsuccessful);
+            }
+        }
+
+        private static byte[] ParseHex(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length % 2 != 0 || text.Length > 2 * 1024 * 1024)
+                return null;
+
+            var bytes = new byte[text.Length / 2];
+            for (var index = 0; index < bytes.Length; index++)
+            {
+                byte value;
+                if (!byte.TryParse(text.Substring(index * 2, 2), NumberStyles.AllowHexSpecifier,
+                        CultureInfo.InvariantCulture, out value))
+                    return null;
+                bytes[index] = value;
+            }
+            return bytes;
         }
 
         private static bool IsCurrentExecutable(string launcher)

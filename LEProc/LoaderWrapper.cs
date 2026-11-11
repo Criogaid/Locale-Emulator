@@ -76,6 +76,55 @@ namespace LEProc
             }
         }
 
+        // Brings a suspended child that another process created, and that this launcher's architecture
+        // matches, under an already serialized runtime environment. Returns the NTSTATUS of the attach.
+        internal static uint Attach(uint processId, uint threadId, byte[] serializedEnvironment)
+        {
+            const uint ProcessAllAccess = 0x001FFFFF;
+            const uint ProcessInjectionAccess = 0x00000008 | 0x00000010 | 0x00000020 | 0x00000400; // VM op/read/write, query
+            const uint StatusInvalidParameter = 0xC000000D;
+            const uint StatusAccessDenied = 0xC0000022;
+
+            if (serializedEnvironment == null || serializedEnvironment.Length == 0)
+                return StatusInvalidParameter;
+
+            var process = OpenProcess(ProcessAllAccess, false, processId);
+            if (process == IntPtr.Zero)
+                process = OpenProcess(ProcessInjectionAccess, false, processId);
+            if (process == IntPtr.Zero)
+                return StatusAccessDenied;
+
+            var environment = Marshal.AllocHGlobal(serializedEnvironment.Length);
+            try
+            {
+                Marshal.Copy(serializedEnvironment, 0, environment, serializedEnvironment.Length);
+                var clientId = new NativeClientId
+                {
+                    Process = new IntPtr(processId),
+                    Thread = new IntPtr(threadId)
+                };
+                return AttachProcess(environment, process, ref clientId);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(environment);
+                CloseHandle(process);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeClientId
+        {
+            internal IntPtr Process;
+            internal IntPtr Thread;
+        }
+
+        [DllImport("LoaderDll.dll", EntryPoint = "LeAttachProcess")]
+        private static extern uint AttachProcess(IntPtr environment, IntPtr process, ref NativeClientId clientId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
+
         [DllImport("LoaderDll.dll", EntryPoint = "LeCreateProcess", CharSet = CharSet.Unicode)]
         private static extern uint CreateProcess(
             IntPtr environment,
