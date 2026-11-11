@@ -52,6 +52,18 @@ namespace LEProc
                     || (Args[0] == "-runas" && Args.Length < 3))
                     throw new ArgumentException(Localization.GetString("MissingArguments"));
 
+                // Every launching entry point hands the target to the launcher matching its architecture.
+                var target = Args[0] == "-run" ? Args[1]
+                    : Args[0] == "-runas" ? Args[2]
+                    : Args[0] == "-manage" || Args[0] == "-global" ? null
+                    : Args[0];
+                if (target != null && File.Exists(target))
+                {
+                    var launcher = GlobalHelper.GetLauncherPath(target);
+                    if (launcher != null && !IsCurrentExecutable(launcher))
+                        return ForwardToLauncher(launcher);
+                }
+
                 switch (Args[0])
                 {
                     case "-run": //-run %APP%
@@ -82,6 +94,28 @@ namespace LEProc
                     Localization.GetString("Title"),
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
+            }
+        }
+
+        private static bool IsCurrentExecutable(string launcher)
+        {
+            return string.Equals(Path.GetFullPath(launcher),
+                Path.GetFullPath(Assembly.GetExecutingAssembly().Location),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Static Explorer verbs always point at one launcher; hand the target to the
+        // launcher whose architecture matches it (e.g. x86\LEProc.exe for 32-bit targets).
+        private static int ForwardToLauncher(string launcher)
+        {
+            var startInfo = new ProcessStartInfo(launcher, WindowsCommandLine.JoinArguments(Args))
+            {
+                UseShellExecute = false
+            };
+            using (var process = Process.Start(startInfo))
+            {
+                process.WaitForExit();
+                return process.ExitCode;
             }
         }
 
@@ -238,7 +272,7 @@ namespace LEProc
             try
             {
                 SystemHelper.RunWithElevatedProcess(
-                    Path.Combine(GlobalHelper.RuntimeDirectory, "LEProc.exe"),
+                    Assembly.GetExecutingAssembly().Location,
                     Args);
                 return true;
             }
