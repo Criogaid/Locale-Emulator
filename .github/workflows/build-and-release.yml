@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-2025
     timeout-minutes: 90
     permissions:
       contents: read
@@ -24,7 +24,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # windows-2019 was retired by GitHub on 2025-06-30. The hosted windows-2022 image is not
+      # windows-2019 was retired by GitHub on 2025-06-30. windows-2025 shares the Windows 11 24H2 kernel (build 26100)
+      # the native Core was verified on; windows-2022 is build 20348. The hosted image is not
       # guaranteed to carry VS2019 (16.x), which the native toolchain scripts require, so install
       # the C++ build tools and Windows SDK 10.0.19041.0 when vswhere cannot find them.
       - name: Ensure Visual Studio 2019 Build Tools
@@ -55,7 +56,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
-    runs-on: windows-2022
+    runs-on: windows-2025
     timeout-minutes: 15
     permissions:
       contents: write
