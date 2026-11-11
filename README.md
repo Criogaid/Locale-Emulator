@@ -64,7 +64,7 @@ Windows 11 下传统菜单位于“显示更多选项”。为 `.exe` 另提供�
 - **实现**：x64 的 `LEExplorerCommand.dll`（`IExplorerCommand`）只把动作转发给同目录的 `LEProc.exe`（`-run`、`-runas`、`-manage`、`-global`），由它按目标架构选择 helper。Explorer 本身是 x64，所以 `build-dual.ps1` 生成的 x86 与 x64 包都携带同一个 x64 DLL，连同 `AppxManifest.xml` 和 `ModernMenu.ps1`；默认 `build.ps1` 的单一 x86 包不含它们。
 - **注册**：“为当前用户安装/卸载”会自动注册或移除（也可手动运行 `powershell -File ./ModernMenu.ps1`，`-Action Unregister` 移除），Explorer 重启后生效。未签名的稀疏包需要开启 Windows 开发人员模式；无法注册时，传统菜单仍照常安装，安装器只提示一行失败原因。
 - **静态入口**（上文“使用 Locale Emulator 运行”）：调用包内同架构的 `LEProc.exe` 默认配置路径，x64 包用于 x64 目标，x86 包用于 x86 目标。
-- **验证状态**：该菜单目前未经过真实 Explorer 界面的验证，仅验证了 COM 命令的行为（含多语言标题与单选/多选状态）、清单架构与包内容。
+- **验证状态**：该菜单目前未经过真实 Explorer 界面的验证，仅验证了 COM 命令的行为（含多语言标题与单选/多选状态）、清单架构与包内容，并用系统 shell32 加载该 DLL 枚举过子菜单；未验证包注册、Windows 11 一级菜单的实际渲染和点击启动。
 “为所有用户安装/卸载”继续管理传统的机器级菜单；静态入口是当前用户注册表项，因此只随“为当前用户安装/卸载”管理。构建回归只打开和关闭安装器，不点击安装按钮，也不修改 Shell 注册。
 
 界面语言跟随 Windows 的 UI 语言。所有界面与诊断文本使用标准 `.resx` 资源：各项目的 `Strings.resx` 为英文中性资源，译文以 `Strings.<culture>.resx` 编译为卫星程序集（发行包中的 `<culture>\*.resources.dll`），缺少译文时按文化链回退到英文。语言选择不会改变目标程序的区域模拟语言。
