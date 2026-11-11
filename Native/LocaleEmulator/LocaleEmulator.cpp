@@ -124,6 +124,19 @@ NTSTATUS ReadFileInSystemDirectory(NtFileMemory &File, PUNICODE_STRING Path)
     return Status;
 }
 
+// Entry for the loader's attach mode: injects this Core into an existing suspended child of the same
+// architecture. Only meaningful in a loader process (the loader has a Core instance but no hooked target).
+// Exported undecorated so the loader can find it by name.
+#pragma comment(linker, "/EXPORT:LeInjectChild=_LeInjectChild@8")
+extern "C" NTSTATUS NTAPI LeInjectChild(HANDLE Process, PCLIENT_ID Cid)
+{
+    PLeGlobalData GlobalData = LeGetGlobalData();
+
+    if (GlobalData == nullptr || !IsLeLoader() || Process == nullptr || Cid == nullptr)
+        return STATUS_INVALID_PARAMETER;
+    return GlobalData->InjectSelfToChildProcess(Process, Cid);
+}
+
 NTSTATUS LeGlobalData::Initialize()
 {
     BOOL            IsLoader;

@@ -39,25 +39,11 @@ static NTSTATUS PrepareRuntimeEnvironment(PLE_RUNTIME_INPUT Input, PLEPEB LePeb)
     return STATUS_SUCCESS;
 }
 
-EXTC
-NTSTATUS
-NTAPI
-LeCreateProcess(
-    PLE_RUNTIME_INPUT       Environment,
-    PCWSTR                  ApplicationName,
-    PWSTR                   CommandLine,
-    PCWSTR                  CurrentDirectory,
-    ULONG                   CreationFlags,
-    LPSTARTUPINFOW          StartupInfo,
-    PLE_PROCESS_INFORMATION ProcessInformation,
-    LPSECURITY_ATTRIBUTES   ProcessAttributes,
-    LPSECURITY_ATTRIBUTES   ThreadAttributes,
-    PVOID                   EnvironmentBlock,
-    HANDLE                  Token
-    )
+// Loads the Core into this (loader) process with the runtime environment prepared for it. The frame
+// stays owned by the caller: it marks the process as a loader for as long as the caller needs the Core.
+static NTSTATUS LoadCoreIntoLoader(PLE_RUNTIME_INPUT Environment, TEB_ACTIVE_FRAME &frame, PVOID *LeDllHandle)
 {
     NTSTATUS Status;
-    PVOID LeDllHandle;
     ULONG_PTR Length;
     PWSTR DllFullPath;
     PLDR_MODULE Module;
@@ -114,13 +100,40 @@ LeCreateProcess(
     LePeb->LeDllDirPath[Length / sizeof(WCHAR) - 1] = 0;
 
     UNICODE_STRING DllFullPathString;
-    TEB_ACTIVE_FRAME frame(LE_LOADER_PROCESS);
     frame.Data = (ULONG_PTR)LePeb;
     frame.Push();
 
     RtlInitUnicodeString(&DllFullPathString, DllFullPath);
-    Status = LdrLoadDll(nullptr, nullptr, &DllFullPathString, &LeDllHandle);
+    Status = LdrLoadDll(nullptr, nullptr, &DllFullPathString, LeDllHandle);
     CloseLePeb(LePeb);
+    if (NT_FAILED(Status))
+        return Status;
+
+    return STATUS_SUCCESS;
+}
+
+EXTC
+NTSTATUS
+NTAPI
+LeCreateProcess(
+    PLE_RUNTIME_INPUT       Environment,
+    PCWSTR                  ApplicationName,
+    PWSTR                   CommandLine,
+    PCWSTR                  CurrentDirectory,
+    ULONG                   CreationFlags,
+    LPSTARTUPINFOW          StartupInfo,
+    PLE_PROCESS_INFORMATION ProcessInformation,
+    LPSECURITY_ATTRIBUTES   ProcessAttributes,
+    LPSECURITY_ATTRIBUTES   ThreadAttributes,
+    PVOID                   EnvironmentBlock,
+    HANDLE                  Token
+    )
+{
+    NTSTATUS Status;
+    PVOID LeDllHandle;
+    TEB_ACTIVE_FRAME frame(LE_LOADER_PROCESS);
+
+    Status = LoadCoreIntoLoader(Environment, frame, &LeDllHandle);
     if (NT_FAILED(Status))
         return Status;
 
@@ -135,4 +148,36 @@ LeCreateProcess(
         ThreadAttributes,
         EnvironmentBlock,
         Token);
+}
+
+// Brings an already created, still suspended child of the same architecture under the runtime
+// environment: the Core loaded here injects itself into it exactly as it does for a child created by the
+// target. Used by the other-architecture helper when a target spawns a child this process cannot inject.
+EXTC
+NTSTATUS
+NTAPI
+LeAttachProcess(
+    PLE_RUNTIME_INPUT   Environment,
+    HANDLE              Process,
+    PCLIENT_ID          Cid
+    )
+{
+    NTSTATUS Status;
+    PVOID LeDllHandle;
+    TEB_ACTIVE_FRAME frame(LE_LOADER_PROCESS);
+    NTSTATUS (NTAPI *InjectChild)(HANDLE, PCLIENT_ID);
+
+    if (Process == nullptr || Cid == nullptr)
+        return STATUS_INVALID_PARAMETER;
+
+    Status = LoadCoreIntoLoader(Environment, frame, &LeDllHandle);
+    if (NT_FAILED(Status))
+        return Status;
+
+    *(PVOID *)&InjectChild = LookupExportTable(LeDllHandle, "LeInjectChild");
+    // LookupExportTable reports a missing export as IMAGE_INVALID_VA, not as null.
+    if (InjectChild == nullptr || (PVOID)InjectChild == IMAGE_INVALID_VA)
+        return STATUS_ENTRYPOINT_NOT_FOUND;
+
+    return InjectChild(Process, Cid);
 }
