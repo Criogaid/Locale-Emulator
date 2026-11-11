@@ -72,6 +72,7 @@ namespace ManagedRegression
                 ProfileParametersRemainRaw,
                 TargetWorkingDirectoryAndArgumentsReachChild,
                 MissingTargetIsRejected,
+                DefaultProfileFactoryPopulatesAllFields,
                 ProfileXmlRoundTrip,
                 OptionalProfileFieldsKeepDefaults,
                 InvalidConfigKeepsEmptyResultContract,
@@ -313,6 +314,35 @@ namespace ManagedRegression
             Throws<ArgumentException>(() => CreateLaunchPlan(" ", "", new string[0]));
         }
 
+        private static void DefaultProfileFactoryPopulatesAllFields()
+        {
+            Check(LEProfile.DefaultLocation == "ja-JP" && LEProfile.DefaultTimezone == "Tokyo Standard Time",
+                "Built-in profile defaults changed.");
+            foreach (var runAsAdmin in new[] { false, true })
+            {
+                const string name = "Regression 日本語";
+                var first = LEProfile.CreateDefault(name, runAsAdmin);
+                var second = LEProfile.CreateDefault(name, runAsAdmin);
+                AssertDefaultProfile(first, name, runAsAdmin);
+                AssertDefaultProfile(second, name, runAsAdmin);
+                Check(first.Guid != second.Guid, "Repeated default profile creation reused a GUID.");
+            }
+        }
+
+        private static void AssertDefaultProfile(LEProfile profile, string name, bool runAsAdmin)
+        {
+            Guid guid;
+            Check(Guid.TryParse(profile.Guid, out guid) && guid != Guid.Empty,
+                "Default profile has an invalid or empty GUID.");
+            Check(profile.Name == name && profile.RunAsAdmin == runAsAdmin,
+                "Default profile did not preserve the requested name or elevation.");
+            Check(profile.Location == LEProfile.DefaultLocation && profile.Timezone == LEProfile.DefaultTimezone,
+                "Default profile did not use the built-in region and time zone.");
+            Check(profile.Parameter == string.Empty && profile.RedirectRegistry && !profile.ShowInMainMenu
+                && !profile.RunWithSuspend && !profile.IsAdvancedRedirection,
+                "Default profile flags or parameters changed.");
+        }
+
         private static void ProfileXmlRoundTrip()
         {
             InTemporaryDirectory(directory =>
@@ -328,7 +358,7 @@ namespace ManagedRegression
                 try
                 {
                     LEConfig.GlobalConfigPath = Path.Combine(directory, "LEConfig.xml");
-                    var second = new LEProfile(true);
+                    var second = LEProfile.CreateDefault("Second profile", false);
                     LEConfig.SaveGlobalConfigFile(profile, second);
                     var profiles = LEConfig.GetProfiles();
                     Check(profiles.Length == 2 && profiles[0].Equals(profile) && profiles[1].Equals(second),
@@ -344,7 +374,7 @@ namespace ManagedRegression
             InTemporaryDirectory(directory =>
             {
                 var path = Path.Combine(directory, "legacy.xml");
-                LEConfig.SaveApplicationConfigFile(path, new LEProfile(true));
+                LEConfig.SaveApplicationConfigFile(path, LEProfile.CreateDefault("Regression", false));
                 var document = XDocument.Load(path);
                 foreach (var name in new[] { "RunAsAdmin", "RedirectRegistry", "IsAdvancedRedirection", "RunWithSuspend" })
                     document.Descendants(name).Remove();
@@ -383,9 +413,10 @@ namespace ManagedRegression
                     Check(!LEConfig.CheckGlobalConfigFile(false), "Read-only check created a config.");
                     Check(LEConfig.CheckGlobalConfigFile(true), "Default config was not created.");
                     var defaults = LEConfig.GetProfiles();
-                    Check(defaults.Length == 2 && !defaults[0].RunAsAdmin && defaults[1].RunAsAdmin
-                        && defaults.All(p => p.Location == "ja-JP" && p.Timezone == "Tokyo Standard Time" && p.RedirectRegistry)
-                        && defaults[0].Guid != defaults[1].Guid, "Default profiles changed.");
+                    Check(defaults.Length == 2, "Default config must contain two profiles.");
+                    AssertDefaultProfile(defaults[0], "Run in Japanese", false);
+                    AssertDefaultProfile(defaults[1], "Run in Japanese (Admin)", true);
+                    Check(defaults[0].Guid != defaults[1].Guid, "Default config profiles reused a GUID.");
                     File.WriteAllText(LEConfig.GlobalConfigPath, "<invalid>");
                     Check(LEConfig.CheckGlobalConfigFile(true), "Existing config was not detected.");
                     Check(File.ReadAllText(LEConfig.GlobalConfigPath) == "<invalid>", "Existing config was overwritten.");
@@ -401,7 +432,7 @@ namespace ManagedRegression
                 var path = Path.Combine(directory, "locked.xml");
                 File.WriteAllText(path, "preserve-me");
                 using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                    Throws<IOException>(() => LEConfig.SaveApplicationConfigFile(path, new LEProfile(true)));
+                    Throws<IOException>(() => LEConfig.SaveApplicationConfigFile(path, LEProfile.CreateDefault("Regression", false)));
                 Check(File.ReadAllText(path) == "preserve-me", "Failed save modified the existing config.");
             });
         }
@@ -411,7 +442,7 @@ namespace ManagedRegression
             InTemporaryDirectory(directory =>
             {
                 var path = Path.Combine(directory, "existing.xml");
-                var original = new LEProfile(true);
+                var original = LEProfile.CreateDefault("Regression", false);
                 LEConfig.SaveApplicationConfigFile(path, original);
                 var bytes = File.ReadAllBytes(path);
                 foreach (var invalid in new[] { "before\u0001after", "unpaired\ud800" })

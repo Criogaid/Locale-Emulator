@@ -16,7 +16,7 @@ namespace ManagedRegression
         private const string CommandLine = "mutable command 日本語";
         private const uint StubFailureStatus = 0xC0000001;
         private const int HandleIterations = 200;
-        private const int AllocationIterations = 100;
+        private const int AllocationIterations = 512;
         private const int ChildTimeoutMilliseconds = 30000;
         private const int ShutdownTimeoutMilliseconds = 5000;
 
@@ -94,18 +94,37 @@ namespace ManagedRegression
 
         private static void CheckSdkBoundary(Type type)
         {
-            var wrapper = Activator.CreateInstance(type, true);
+            var environmentType = type.Assembly.GetType("LEProc.RuntimeEnvironment", true);
+            var environment = Activator.CreateInstance(environmentType, true);
+            var wrapper = CreateWrapper(type, environment);
+            Check(ReferenceEquals(type.GetProperty("Environment", Instance).GetValue(wrapper, null), environment),
+                "LoaderWrapper did not retain the injected runtime environment.");
+            try
+            {
+                CreateWrapper(type, null);
+                throw new Exception("Expected ArgumentNullException for a null runtime environment.");
+            }
+            catch (ArgumentNullException error)
+            {
+                Check(error.ParamName == "environment", "Null environment rejection identified the wrong parameter.");
+            }
+            environmentType.GetProperty("AnsiCodePage", Instance).SetValue(environment, (uint) 932, null);
+            environmentType.GetProperty("OemCodePage", Instance).SetValue(environment, (uint) 936, null);
+            environmentType.GetProperty("LocaleID", Instance).SetValue(environment, (uint) 0x411, null);
+            environmentType.GetProperty("FontCharset", Instance).SetValue(environment, (uint) 128, null);
+            environmentType.GetProperty("RegistryMode", Instance).SetValue(environment, (uint) 2, null);
+            environmentType.GetProperty("HookUILanguageMode", Instance).SetValue(environment, (uint) 2, null);
             type.GetProperty("CurrentDirectory", Instance).SetValue(wrapper, "working directory 中文", null);
             var start = type.GetMethod("Start", Instance);
             type.GetProperty("ApplicationName", Instance).SetValue(wrapper, "missing-timezone", null);
             foreach (var timezone in new string[] { null, "" })
             {
-                type.GetProperty("Timezone", Instance).SetValue(wrapper, timezone, null);
+                environmentType.GetProperty("TimezoneId", Instance).SetValue(environment, timezone, null);
                 try { Invoke(start, wrapper); }
                 catch (ArgumentException) { continue; }
                 throw new Exception("Expected an exception for a missing time zone.");
             }
-            type.GetProperty("Timezone", Instance).SetValue(wrapper, "Tokyo Standard Time", null);
+            environmentType.GetProperty("TimezoneId", Instance).SetValue(environment, "Tokyo Standard Time", null);
             using (var process = Process.GetCurrentProcess())
             {
                 var processHandle = process.Handle;
@@ -144,10 +163,21 @@ namespace ManagedRegression
         {
             Check(!File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LoaderDll.dll")),
                 "Missing DLL check unexpectedly contains LoaderDll.dll.");
-            var wrapper = Activator.CreateInstance(type, true);
+            var environmentType = type.Assembly.GetType("LEProc.RuntimeEnvironment", true);
+            var environment = Activator.CreateInstance(environmentType, true);
+            environmentType.GetProperty("RegistryMode", Instance).SetValue(environment, (uint) 1, null);
+            environmentType.GetProperty("TimezoneId", Instance).SetValue(environment, "Tokyo Standard Time", null);
+            const int nameOverrideCharacters = 16384;
+            var nameOverride = new string('x', nameOverrideCharacters);
+            environmentType.GetProperty("StandardNameOverride", Instance).SetValue(environment, nameOverride, null);
+            environmentType.GetProperty("DaylightNameOverride", Instance).SetValue(environment, nameOverride, null);
+            var environmentSize = ((byte[])Invoke(environmentType.GetMethod("Serialize", Instance), environment)).Length;
+            // 未释放的环境块必须超过容忍阈值，避免短时区字符串让回归失去检出能力。
+            const long maxRetainedBytes = 16L * 1024 * 1024;
+            Check((long)environmentSize * AllocationIterations > 2 * maxRetainedBytes,
+                "Allocation stress must exceed twice the retained-memory threshold if cleanup is missing.");
+            var wrapper = CreateWrapper(type, environment);
             type.GetProperty("ApplicationName", Instance).SetValue(wrapper, "missing-native-boundary", null);
-            type.GetProperty("RegistryMode", Instance).SetValue(wrapper, (uint) 1, null);
-            type.GetProperty("Timezone", Instance).SetValue(wrapper, "Tokyo Standard Time", null);
             var start = type.GetMethod("Start", Instance);
             Action call = () =>
             {
@@ -160,10 +190,15 @@ namespace ManagedRegression
             var before = PrivateBytes();
             for (var iteration = 0; iteration < AllocationIterations; iteration++) call();
             var retained = PrivateBytes() - before;
-            // 漏掉 FreeHGlobal 会保留大量原生内存；16 MiB 留给 CLR 堆提交和异常处理波动。
-            const long maxRetainedBytes = 16L * 1024 * 1024;
+            // 16 MiB 留给 CLR 堆提交和异常处理波动。
             Console.WriteLine("Missing DLL x" + AllocationIterations + " private byte delta: " + retained);
             Check(retained < maxRetainedBytes, "Unmanaged launch allocations were retained after missing DLL errors.");
+        }
+
+        private static object CreateWrapper(Type type, object environment)
+        {
+            try { return Activator.CreateInstance(type, Instance, null, new[] { environment }, null); }
+            catch (TargetInvocationException error) { throw error.InnerException ?? error; }
         }
 
         private static object Invoke(MethodInfo method, object target, params object[] arguments)

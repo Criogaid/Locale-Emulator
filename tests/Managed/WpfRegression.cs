@@ -21,7 +21,7 @@ namespace ManagedRegression
                 Directory.CreateDirectory(Path.GetDirectoryName(configPath));
                 typeof(App).GetField("StandaloneFilePath", BindingFlags.Static | BindingFlags.NonPublic)
                     .SetValue(null, configPath);
-                LEConfig.SaveApplicationConfigFile(configPath, new LEProfile(true));
+                LEConfig.SaveApplicationConfigFile(configPath, LEProfile.CreateDefault("Regression", false));
                 var window = new AppConfig();
                 try
                 {
@@ -52,7 +52,7 @@ namespace ManagedRegression
         {
             WithConfig(directory =>
             {
-                var original = new LEProfile(true);
+                var original = LEProfile.CreateDefault("Regression", false);
                 LEConfig.SaveGlobalConfigFile(original);
                 var window = new GlobalConfig();
                 try
@@ -77,7 +77,7 @@ namespace ManagedRegression
         {
             WithConfig(directory =>
             {
-                var original = new LEProfile(true);
+                var original = LEProfile.CreateDefault("Regression", false);
                 LEConfig.SaveGlobalConfigFile(original);
                 var window = new GlobalConfig();
                 try
@@ -105,7 +105,7 @@ namespace ManagedRegression
             {
                 WithConfig(directory =>
                 {
-                    var original = new LEProfile(true);
+                    var original = LEProfile.CreateDefault("Regression", false);
                     if (missing == "location") original.Location = "unavailable-culture";
                     else original.Timezone = "Unavailable Time Zone";
                     var path = Path.Combine(directory, "target.exe.le.config");
