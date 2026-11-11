@@ -12,4 +12,5 @@
       <FileWrites Include="$(AppConfig)" />
     </ItemGroup>
   </Target>
+  <Import Project="$(MSBuildThisFileDirectory)Localization.targets" />
 </Project>

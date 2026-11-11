@@ -110,13 +110,22 @@ function Copy-RequiredFile {
     }
 }
 
+# Satellite resource assemblies: <culture>\<Assembly>.resources.dll
+function Copy-SatelliteAssemblies {
+    param([string]$SourceRoot, [string]$DestinationRoot)
+    Get-ChildItem -LiteralPath $SourceRoot -Directory |
+        Where-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.resources.dll' -File } |
+        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $DestinationRoot -Recurse -Force }
+}
+
 function Copy-PackageCommon {
     param([string]$DestinationRoot)
     foreach ($name in @(
         'LEGUI.exe', 'LEGUI.exe.config', 'LEInstaller.exe', 'LEInstaller.exe.config',
-        'LEContextMenuHandler.dll', 'Lang', 'CommonLang', 'InstallerLang', 'LEVersion.xml')) {
+        'LEContextMenuHandler.dll', 'Lang', 'InstallerLang', 'LEVersion.xml')) {
         Copy-RequiredFile $releaseRoot $DestinationRoot $name
     }
+    Copy-SatelliteAssemblies $releaseRoot $DestinationRoot
     Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination $DestinationRoot -Force
     Copy-Item -LiteralPath (Join-Path $repository 'Directory.Build.props') -Destination $DestinationRoot -Force
     $docs = Join-Path $DestinationRoot 'docs'
@@ -148,6 +157,7 @@ function Copy-X86Compatibility {
     foreach ($name in @('LoaderDll.dll', 'LocaleEmulator.dll')) {
         Copy-RequiredFile $NativeRoot $compatibility $name
     }
+    Copy-SatelliteAssemblies $ManagedRoot $compatibility
 }
 
 

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Title" xml:space="preserve">
+    <value>Locale Emulator</value>
+  </data>
+  <data name="VersionTitle" xml:space="preserve">
+    <value>Locale Emulator Version {0}</value>
+  </data>
+  <data name="CoreFilesMissing" xml:space="preserve">
+    <value>Core DLLs are missing from the application directory. Please check the installation.
+
+Required files:
+LoaderDll.dll
+LocaleEmulator.dll
+
+Application directory: {0}
+https://github.com/Criogaid/Locale-Emulator/issues</value>
+  </data>
+  <data name="DebugReport" xml:space="preserve">
+    <value>Error code: 0x{0:X}
+Command line: {1}
+System: {2}
+Application directory: {3}
+Current directory: {4}
+{5}
+Please submit the error code, command line and system version to help diagnose the startup failure.
+https://github.com/Criogaid/Locale-Emulator/issues
+
+Press CTRL+C to copy this window.</value>
+  </data>
+  <data name="ElevatedLaunchError" xml:space="preserve">
+    <value>Error when running LE with elevated privileges.
+Executable: {0}
+Arguments: {1}</value>
+  </data>
+  <data name="MissingArguments" xml:space="preserve">
+    <value>Required launch arguments are missing: -run and -manage need a path; -runas needs a profile GUID and a path.</value>
+  </data>
+  <data name="Usage" xml:space="preserve">
+    <value>Welcome to the Locale Emulator command line tool.
+
+Usage: LEProc.exe
+    path
+    -run path [args]
+    -runas guid path [args]
+    -manage path
+    -global
+
+path    Full path of the target application.
+guid    GUID of the target profile in LEConfig.xml.
+args    Additional arguments passed to the target application.
+
+path    Run an application with its own profile, the first global profile, or the default ja-JP profile.
+-run    Run an application with its own profile.
+-runas  Run an application with a global profile identified by GUID.
+-manage Modify the profile of one application.
+-global Open Global Profile Manager.
+
+Press CTRL+C to copy this message to the clipboard.</value>
+  </data>
+  <data name="InvalidCommand" xml:space="preserve">
+    <value>The target program or command is invalid: {0}</value>
+  </data>
+  <data name="GlobalProfileMissing" xml:space="preserve">
+    <value>The specified global profile was not found: {0}</value>
+  </data>
+  <data name="ApplicationProfileInvalid" xml:space="preserve">
+    <value>The application profile is empty or invalid: {0}</value>
+  </data>
+  <data name="MissingTargetFile" xml:space="preserve">
+    <value>The target program was not found: {0}</value>
+  </data>
+  <data name="DebugModeWarning" xml:space="preserve">
+    <value>You are running an executable with the CREATE_SUSPENDED flag.
+
+The executable will start after you click Yes, but it will run as a background process without notifications. You can attach a debugger or stop it with Task Manager.</value>
+  </data>
+  <data name="StartupError" xml:space="preserve">
+    <value>Unable to start Locale Emulator: {0}</value>
+  </data>
+  <data name="UnsupportedRegistryType" xml:space="preserve">
+    <value>Registry data type {0} is not supported yet.</value>
+  </data>
+  <data name="ProcessWaitError" xml:space="preserve">
+    <value>The target process returned an unexpected status: {0}</value>
+  </data>
+  <data name="ApplicationNameMissing" xml:space="preserve">
+    <value>ApplicationName cannot be null or empty.</value>
+  </data>
+  <data name="MissingTargetPath" xml:space="preserve">
+    <value>Please specify the target program path.</value>
+  </data>
+  <data name="LauncherArchitectureMismatch" xml:space="preserve">
+    <value>The installed Locale Emulator package has no launcher matching the target program architecture.</value>
+  </data>
+  <data name="InvalidXmlText" xml:space="preserve">
+    <value>Configuration contains characters that XML does not allow. Please check profile names and parameters.</value>
+  </data>
+  <data name="NullCharacterArgument" xml:space="preserve">
+    <value>Arguments cannot contain a null character.</value>
+  </data>
+</root>

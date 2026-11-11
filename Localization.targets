@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Standard .resx localization without al.exe.
+
+  The repository's declared toolchain (VS Build Tools + NuGet reference assemblies) does not ship the
+  Assembly Linker that MSBuild uses for satellite assemblies, so they are produced here with csc instead.
+  The output is the standard layout: <OutDir>\<culture>\<AssemblyName>.resources.dll, resolved at run time by
+  ResourceManager. A project opts in by listing its culture-specific resources:
+
+    <LocalizedResx Include="Strings.*.resx" />   (file name: <BaseName>.<culture>.resx)
+
+  The neutral Strings.resx stays an ordinary EmbeddedResource in the main assembly.
+-->
+<Project>
+  <Target Name="BuildSatelliteAssemblies" AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'@(LocalizedResx)' != ''">
+    <ItemGroup>
+      <_Loc Include="@(LocalizedResx)">
+        <Culture>$([System.IO.Path]::GetExtension('%(Filename)').Substring(1))</Culture>
+      </_Loc>
+      <_Loc>
+        <Res>$(IntermediateOutputPath)loc\%(Culture)\$(RootNamespace).%(Filename).resources</Res>
+        <Info>$(IntermediateOutputPath)loc\%(Culture)\SatelliteInfo.cs</Info>
+        <Dll>$(OutDir)%(Culture)\$(AssemblyName).resources.dll</Dll>
+      </_Loc>
+      <_LocRes Include="%(_Loc.Res)">
+        <Culture>%(_Loc.Culture)</Culture>
+        <Info>%(_Loc.Info)</Info>
+        <Dll>%(_Loc.Dll)</Dll>
+        <LogicalName>$(RootNamespace).%(_Loc.Filename).resources</LogicalName>
+      </_LocRes>
+    </ItemGroup>
+
+    <MakeDir Directories="@(_Loc->'$(IntermediateOutputPath)loc\%(Culture)')" />
+    <GenerateResource Sources="@(_Loc)" OutputResources="@(_Loc->'%(Res)')" ExecuteAsTool="false" />
+
+    <WriteLinesToFile File="%(_Loc.Info)" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="using System.Reflection%3B;[assembly: AssemblyCulture(&quot;%(_Loc.Culture)&quot;)]" />
+
+    <MakeDir Directories="@(_Loc->'$(OutDir)%(Culture)')" />
+    <Csc Sources="%(_LocRes.Info)"
+         Resources="@(_LocRes)"
+         References="@(ReferencePath)"
+         OutputAssembly="%(_LocRes.Dll)"
+         TargetType="library"
+         NoConfig="true"
+         NoStandardLib="true"
+         KeyFile="$(AssemblyOriginatorKeyFile)"
+         EmitDebugInformation="false"
+         Deterministic="true"
+         ToolPath="$(CscToolPath)"
+         ToolExe="$(CscToolExe)" />
+
+    <ItemGroup>
+      <FileWrites Include="@(_Loc->'%(Res)');@(_Loc->'%(Info)');@(_Loc->'%(Dll)')" />
+    </ItemGroup>
+  </Target>
+</Project>
