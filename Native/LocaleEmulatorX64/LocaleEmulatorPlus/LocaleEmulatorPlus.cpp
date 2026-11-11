@@ -456,6 +456,11 @@ NTSTATUS LepGlobalData::Initialize(PLEP_BOOTSTRAP_PAYLOAD Payload, BOOL OwnPaylo
     LEP_DIAG_FAIL_RETURN(L"HookNtdllRoutines", Status);
 
 #if !LEP_DIAG_PROCESS_ONLY
+    {
+        PLDR_MODULE EarlyKernelBase = FindLdrModuleByName(&USTR(L"KERNELBASE.dll"));
+        KernelBaseAttachedAtInit = EarlyKernelBase != nullptr &&
+                                   FLAG_ON(EarlyKernelBase->Flags, LDRP_PROCESS_ATTACH_CALLED);
+    }
     HackAnsiOemCodeHashNodes();
 
     PLDR_MODULE Kernel32Ldr;

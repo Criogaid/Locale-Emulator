@@ -827,6 +827,9 @@ class LepGlobalData
 {
 protected:
     BOOLEAN Wow64 : 1;
+    // Set when the process had already finished attaching kernelbase before LEP initialized (managed
+    // targets); consumed by the single ANSI/OEM hash node rebuild that such a process needs.
+    BOOLEAN KernelBaseAttachedAtInit : 1;
     BOOLEAN HasWin32U : 1; //windows 10.0.14295 or higher
 
     LEP_RUNTIME_STATE RuntimeState;
