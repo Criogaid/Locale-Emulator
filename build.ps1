@@ -111,7 +111,11 @@ $hashes = Get-ChildItem -File -Recurse -LiteralPath $package | Sort-Object FullN
 }
 $hashes | Set-Content -LiteralPath (Join-Path $package 'SHA256SUMS') -Encoding utf8NoBOM
 $archive = Join-Path $artifacts "$packageName.zip"
-Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $package -Force).FullName -DestinationPath $archive -CompressionLevel Optimal -Force
+# Compress-Archive treats -DestinationPath as a wildcard path and fails for repository paths containing '[',
+# so build the archive with .NET directly (entries stay relative to the package root).
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+[IO.Compression.ZipFile]::CreateFromDirectory($package, $archive, [IO.Compression.CompressionLevel]::Optimal, $false)
 
 # 从实际 ZIP 解包后复测，验证发行包没有依赖源码目录的文件。
 $unpacked = Join-Path $artifacts 'package-smoke'
