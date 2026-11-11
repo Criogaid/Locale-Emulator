@@ -101,6 +101,15 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 
 已删除无调用且固定 SDK16299 的旧签名脚本。当前本地构建输出未签名；发行者选择证书后的签名应发生在最终哈希和打包之前，Strong Name 不能代替发布者签名。
 
+## Windows 11 一级菜单与安装器无窗口模式
+
+维护期间新增了两项用户可见能力，行为说明以 [README](../README.md) 为准，逐项验证和缺陷修复记录在 [QUALITY](QUALITY.md)：
+
+- **一级菜单**：`Native/ExplorerCommand/` 是 x64 的 `IExplorerCommand` DLL，只把动作转发给同目录的 `LEProc.exe`；`Scripts/ModernMenu.ps1` 注册或移除稀疏包。只覆盖 `.exe`，原因见 README。仅发布在 `build-dual.ps1` 的两个包里，默认 `build.ps1` 的 x86 包不含它。
+- **安装器无窗口模式**：`LEInstaller.exe --InstallUser` / `--UninstallUser`，退出码 0 成功、1 失败、2 表示经典菜单已处理而可选的一级菜单没有处理成功。
+- **构建约束**：原生工具链的版本统一由 `Native/Toolchain.ps1` 提供；`build-dual.ps1` 对 x64 DLL 与 Loader 的 CFG、`LEExplorerCommand.dll` 的缓解标志和导出做断言。
+- **未验证**：稀疏包注册需要开发人员模式或已签名的包，Windows 11 新菜单的真实渲染（含图标）从未在真实 Explorer 里验证，只用系统 shell32 验证过命令行为。维护者的待决事项：新增代码的许可标注，以及 Core DLL 因私有 NLS 调用而未启用 CFG。
+
 ## 历史提交元数据说明
 
 本轮审查发现历史提交 `3057efd`、`6f3bf66`、`e4dadeb`、`f996108` 和 `beeff20` 的提交正文含有未展开的 `Co-Authored-By: :PI_MODEL <noreply@pi.dev>`。这些提交已经成为当前本地分支的历史，源码、构建和发行包不读取该字段；本轮不改写历史，避免改变已记录的里程碑哈希、审查证据和后续父子关系。自 `d6cefaa` 起的新提交均在提交前读取实际 `PI_MODEL`，使用完整的协作者值；若发行者要求历史元数据重写，应作为独立的仓库维护操作重新生成全部受影响哈希并重建证据目录。
