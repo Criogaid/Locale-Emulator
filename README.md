@@ -93,7 +93,7 @@ C# 工程保留原目录；`Native/` 包含注入器与语言模拟实现；`tes
 
 ## 许可
 
-前端保留 LGPL-3.0 的 `COPYING`、`COPYING.LESSER`。传统 Shell 扩展中的 Microsoft 示例代码另按 Ms-PL 授权，图标保留上游来源。
+前端保留 LGPL-3.0 的 `COPYING`、`COPYING.LESSER`。传统 Shell 扩展中的 Microsoft 示例代码另按 Ms-PL 授权，图标保留上游来源。本仓库新增的一级菜单、`ModernMenu.ps1`、`Toolchain.ps1` 及安装器无窗口模式同样按 LGPL-3.0 分发，详见 [源码来源](docs/SOURCES.md)。
 
 Core 保留 `Native/LICENSE-GPL.txt`、`Native/LICENSE-LGPL.txt`，其上游 README 明确授予 Loader、LoaderDll、LocaleEmulator 三个源码目录 LGPL-3.0。具体来源、第三方边界及 Fork 调查取舍见 [源码来源](docs/SOURCES.md)。发行包携带许可文本及来源记录。
 

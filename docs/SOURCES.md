@@ -9,7 +9,7 @@
 
 合仓提交的第一父提交是前端版本，第二父提交是原始 Core 版本。导入时 `Native/` 的 Git tree 与 Core 原始 tree 完全一致；后续维护在独立提交中进行。Core 的 31 个原始提交均保留为祖先，可用 `git log --all` 查看。上游附带的工具链归档也保留在原始历史中。
 
-`Native/ExplorerCommand/`、`Scripts/ModernMenu.ps1` 以及安装器的无窗口模式与一级菜单集成是本仓库新增的代码，不来自任何上游导入或外部 Fork。该部分尚未单独指定许可证；它随仓库分发，沿用前端的归属记录，是否另行声明由维护者决定。
+`Native/ExplorerCommand/`、`Scripts/ModernMenu.ps1` 以及安装器的无窗口模式与一级菜单集成是本仓库新增的代码，不来自任何上游导入或外部 Fork。许可：这部分按 LGPL-3.0 分发，与前端一致，许可文本即根目录的 `COPYING` 与 `COPYING.LESSER`。其中安装器的无窗口模式与一级菜单集成本来就是对 LGPL 前端文件的修改；`Native/ExplorerCommand/`、`Scripts/ModernMenu.ps1`、`Native/Toolchain.ps1` 是独立的新文件，选用同一许可以免仓库内出现第二套条款。这些文件没有拷贝 Microsoft 示例代码，是对照公开的 `IExplorerCommand` 接口头文件独立编写的，因此不适用下文的 Ms-PL 例外。这是维护期间作出的决定，如需改用其他许可，以此处为准修改即可。
 
 前端保留根目录 `COPYING` 和 `COPYING.LESSER`；Shell 示例代码另有 Microsoft Public License，图标来源见上游前端历史。Core 保留 `Native/LICENSE-GPL.txt` 与 `Native/LICENSE-LGPL.txt`。原始 Core README 明确将 `Loader`、`LoaderDll`、`LocaleEmulator` 三目录源码以 LGPL-3.0 授权；Microsoft 工具链、SDK/WDK 等依赖的授权另行适用。
 
