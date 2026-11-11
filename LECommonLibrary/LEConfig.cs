@@ -18,11 +18,24 @@ namespace LECommonLibrary
             return GetProfiles(GlobalConfigPath);
         }
 
+        // Runtime readers (launcher, shell menu) keep every profile that parses and skip malformed ones, so one
+        // bad entry does not hide the rest. A file that is not valid XML yields no profiles.
         public static LEProfile[] GetProfiles(string configPath)
         {
             try
             {
-                return ReadProfiles(configPath);
+                var profiles = new System.Collections.Generic.List<LEProfile>();
+                foreach (var element in LoadProfileElements(configPath))
+                {
+                    try
+                    {
+                        profiles.Add(ParseProfile(element));
+                    }
+                    catch (Exception error) when (error is NullReferenceException || error is FormatException)
+                    {
+                    }
+                }
+                return profiles.ToArray();
             }
             catch
             {
@@ -30,27 +43,31 @@ namespace LECommonLibrary
             }
         }
 
-        // Unlike GetProfiles this reports an unreadable file, so callers that rewrite the file can refuse to
-        // replace profiles they merely failed to parse.
+        // Unlike GetProfiles this reports an unreadable file or profile, so callers that rewrite the file can
+        // refuse to replace profiles they merely failed to parse.
         public static LEProfile[] ReadProfiles(string configPath)
         {
+            return LoadProfileElements(configPath).Select(ParseProfile).ToArray();
+        }
+
+        private static XElement[] LoadProfileElements(string configPath)
+        {
             var dict = XDocument.Load(configPath);
+            return dict.Descendants("LEConfig").Elements("Profiles").Elements().ToArray();
+        }
 
-            var pros = from i in dict.Descendants("LEConfig").Elements("Profiles").Elements()
-                       select i;
-
-            return pros.Select(p => new LEProfile(p.Attribute("Name").Value,
-                                                  p.Attribute("Guid").Value,
-                                                  bool.Parse(p.Attribute("MainMenu").Value),
-                                                  p.Element("Parameter").Value,
-                                                  p.Element("Location").Value,
-                                                  p.Element("Timezone").Value,
-                                                  bool.Parse(p.TryGetValue("RunAsAdmin", "false")),
-                                                  bool.Parse(p.TryGetValue("RedirectRegistry", "true")),
-                                                  bool.Parse(p.TryGetValue("IsAdvancedRedirection", "false")),
-                                                  bool.Parse(p.TryGetValue("RunWithSuspend", "false"))
-                                  )
-                ).ToArray();
+        private static LEProfile ParseProfile(XElement p)
+        {
+            return new LEProfile(p.Attribute("Name").Value,
+                                 p.Attribute("Guid").Value,
+                                 bool.Parse(p.Attribute("MainMenu").Value),
+                                 p.Element("Parameter").Value,
+                                 p.Element("Location").Value,
+                                 p.Element("Timezone").Value,
+                                 bool.Parse(p.TryGetValue("RunAsAdmin", "false")),
+                                 bool.Parse(p.TryGetValue("RedirectRegistry", "true")),
+                                 bool.Parse(p.TryGetValue("IsAdvancedRedirection", "false")),
+                                 bool.Parse(p.TryGetValue("RunWithSuspend", "false")));
         }
 
         public static bool CheckGlobalConfigFile(bool buildNewConfig)
