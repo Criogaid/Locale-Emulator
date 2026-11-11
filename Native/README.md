@@ -68,6 +68,15 @@ LoaderDll 已启用编译器 `/guard:cf` 和链接器 `/GUARD:CF`。核心 DLL �
 - `HardeningMessages`：在真实注入的 CP932/936 进程检查 EDIT 消息容量和尾部、私有核心映像无 RWX、官方 security cookie 初始化和宿主 CFG 策略。两种防护测试项目均显式启用 CFG，不依赖环境变量开关。
 
 测试项目统一导入 `Toolchain.props`，输出到 `Build/Release`，中间文件按项目隔离；均不进入发行包。Windows build、UBR 和被测 DLL 哈希由 `Scripts/Test.ps1` 每轮重新记录，精确支持边界及复审问题见根目录 `docs/QUALITY.md`。
+## Windows 11 一级菜单（ExplorerCommand）
+
+`ExplorerCommand/` 是本仓库新增的 x64 COM DLL（`IExplorerCommand`），为 `.exe` 提供 Windows 11 一级右键菜单；它只把动作转发给同目录的 `LEProc.exe`，不含注入逻辑。`ExplorerCommand/build.ps1` 用与 x64 Core 相同的官方 Hostx86d 工具链构建（`/W4 /WX /guard:cf`），输出到 `Build/Dual/x64/explorer-command`。构建时还会：
+
+- 从 `LEContextMenuHandler/Strings*.resx` 生成菜单标题表，从 `AppxManifest.xml` 读取 CLSID（Verb 与 COM Class 两处必须相同），源码里不手写这两份数据；
+- 用 SDK 的 `makeappx pack /nv` 校验稀疏包清单的 Appx 架构。
+
+注册由 `Scripts/ModernMenu.ps1` 完成（稀疏包，未签名时需要开启开发人员模式）；`LEInstaller.exe` 的“为当前用户安装/卸载”会自动调用它。行为细节与已验证范围见仓库根目录 README 与 `docs/QUALITY.md`。
+
 ## 来源与许可证
 
 原作者将 Loader、LoaderDll 和 LocaleEmulator 源码按 LGPL-3.0 发布，具体条款见 [LICENSE-LGPL.txt](LICENSE-LGPL.txt)，其引用的 GPL 条款见 [LICENSE-GPL.txt](LICENSE-GPL.txt)。保留原作者归属及文件内声明。本目录中的官方工具链迁移与缺陷修复不改变原代码的许可证义务；分发修改后的内核时应依许可证提供对应源码及声明。
