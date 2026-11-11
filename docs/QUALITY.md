@@ -122,7 +122,7 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 | 安装与菜单 | DLL 替换失败回滚并停止注册；注册失败可观察且恢复映射；菜单遵守 ID 预算，回收全部位图和注册表句柄 |
 | 启动与 SDK 边界 | 提权保留当前目录，关联程序保留参数；原生命令行可写，结构大小和失败资源回收正确 |
 | 原生故障 | 注入失败终止本次子进程并返回失败；完整/部分补丁失败恢复原字节并释放 shadow；成功路径继续传播区域模拟 |
-| 原生构建防护 | 两产品 W4/WX、GS、ASLR、DEP、SafeSEH，无 RWX 节；跳板发布为 RX，Loader 启用 CFG，核心的实际 CFG 限制独立记录 |
+| 原生构建防护 | 两产品 W4/WX、GS、ASLR、DEP、SafeSEH，无 RWX 节；跳板发布为 RX，x86 Loader 启用 CFG（x64 Loader 未启用，见 Native/README.md），核心的实际 CFG 限制独立记录 |
 | x64 双包兼容链 | x64 包根目录与 `x86/` 分别携带匹配的 LEProc/Loader/Core；Shell、GUI 保存运行和桌面快捷方式按目标 PE 架构自动选择，独立 x86 包根目录不会因目录名为 `x86` 而误用父目录；x64 与 x86 `cmd.exe` 双烟测通过 |
 | SDK 分配与格式化边界 | 普通可失败分配显式 nothrow，失败仍可恢复且配对释放；格式化携带真实容量并拒绝缺少 NUL 的路径结果；PE 依赖集合与自定义入口不变 |
 | 受限权限创建 | 注入期间持有私有操作句柄；对外句柄权限/继承与系统基线一致，失败不遗留挂起子进程 |
@@ -191,3 +191,4 @@ Core 的 NLS/PEB 替换、私有调用扫描和 hooks 是当前仿真机制的�
 - reuse-review（范围 `7ae7ff5..HEAD`）：两处重复知识已消除。其一，x64 原生工具链的发现逻辑（vswhere 查询、MSVC `14.29.30133`、SDK 版本、`Hostx86d`）原先在 `build-x64.ps1` 和 `ExplorerCommand/build.ps1` 里逐字重复，且 SDK 版本另存于 `Toolchain.props`；现在由 `Native/Toolchain.ps1` 的 `Get-OfficialToolchain` 统一提供，SDK 版本从 `Toolchain.props` 读取。两个脚本都不进发布包，无包内容变化。其二，包标识名 `LocaleEmulator.ModernMenu` 同时写在清单与 `ModernMenu.ps1`，不一致会让 `Unregister` 与“先移除旧包”静默什么都不做；现在构建校验两者相同，故意改任一处都使构建以退出码 1 失败。有意保留的重复：菜单命令行格式在 C# 传统菜单与 C++ 一级菜单各一份（跨语言，权威在 `LEProc/Program.cs`，已用真实 shell32 点击核对一致）；原生一侧只读 `LEConfig.xml` 的 `Profile` 的 `Name`/`Guid`，是刻意的最小契约。验证：辅助函数返回值与旧字面量逐项相同；完整 `build-dual.ps1` 退出码 0，146 项 PASS 与重构前完全一致。因二进制每次构建的时间戳不同，哈希比对不能证明等价，故未采用。
 - overengineering-review（同一范围）：整体没有过度设计，`IExplorerCommand` 的枚举器、工厂与 `Kind` 分派都是接口契约要求的复杂度，`IsCanonicalGuid` 与 64 项上限处在真实的信任边界，均保留。两处小清理：`ModernMenu.ps1` 的 `-ManifestPath` 参数没有任何调用方（安装器只传 `-Action`，文档也未提及），默认的两处查找已覆盖包内与仓库两种布局，已移除；`-ProductDirectory` 在从仓库检出运行时有真实用途，保留。`Native/ExplorerCommand/build.ps1` 里 4 个资源键名写了两遍，合并为 `$menuKeys`。验证：生成的 `MenuTexts.h` 与改动前逐字节相同；脚本三条路径（包内注册走到部署层、缺清单给出一行提示、`Unregister`）行为符合预期。
 - 加固：`build-dual.ps1` 对两个包中的 `LEExplorerCommand.dll` 增加断言（该 DLL 会被加载进 Explorer）：必须带 Dynamic base、High Entropy VA、NX compatible、Control Flow Guard，并导出 `DllGetClassObject` 与 `DllCanUnloadNow`，缺任一项构建失败。同时发现 `build-dual.ps1` 里 dumpbin 路径仍硬编码 MSVC `14.29.30133`（上一轮 reuse-review 漏掉的第三处），改为使用 `Get-OfficialToolchain`。验证：完整 `build-dual.ps1` 退出码 0、146 项 PASS；反向核对用不含 COM 导出的 `LoaderDll.dll` 确认导出断言会判失败。过程中一次把正则写坏（`` 被写成了退格字符）导致断言误报，已改为不含转义的写法，并确认文件中无控制字符。
+- 审计：逐个列出两个包中原生二进制的 ASLR/DEP/CFG 标志。发现文档写“Loader 启用 CFG”，但只有 x86 Loader（`LoaderDll.vcxproj`）如此，x64 Loader（`build-x64.ps1`）没有。尝试给 x64 Loader 的编译与链接加 `/guard:cf`：可链接、DLL 带 CFG，但完整 `build-dual.ps1` 在真实注入的 x64 属性表边界探针处失败（目标进程 `0xC0000005`，另有 NativeProbe 矩阵未执行），撤销后回到 146 项 PASS。结论：不开启，已把 `Native/README.md` 与本表中的说法改为只指 x86 Loader，并注明 x64 Loader 的崩溃原因尚未定位。`LEContextMenuHandler.dll` 是托管程序集，不适用这些原生标志。

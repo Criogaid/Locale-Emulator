@@ -50,7 +50,7 @@ Windows 11 x64 24H2（26100.9168）已验证源码构建与官方 v2.5.0.1 在�
 
 两个 DLL 的自定义入口在进入 GS 保护代码前调用官方 `__security_init_cookie`。子进程私有映像没有系统 DLL 入口调用，且早期尚未映射 KERNEL32，因此先在父进程的临时映像内调用该映像自身的官方初始化函数，再重定位并传输；子进程入口再次调用官方初始化函数确认已初始化状态。不手工生成或写入 cookie 值。
 
-LoaderDll 已启用编译器 `/guard:cf` 和链接器 `/GUARD:CF`。核心 DLL 暂不启用 CFG：在 Windows 11 x64 24H2 的真实 CFG 检查下，`LeSetupAnsiOemCodeHashNodes` 对扫描所得 KERNELBASE 私有 NLS 函数的间接调用触发 `FAST_FAIL_GUARD_ICALL_CHECK_FAILURE`（10）。手工映射实验必须接入系统实际的 CFG 检查函数；仅保留文件中的 no-op 检查指针所得的通过结果不成立。未修改系统 DLL 的 CFG 目标有效性，也未使用批量 `nocf`。后续开启核心 CFG 需要替换私有 NLS 调用方案，或明确评审针对该调用的安全例外。
+x86 LoaderDll 已启用编译器 `/guard:cf` 和链接器 `/GUARD:CF`。x64 LoaderDll 由 `build-x64.ps1` 构建，目前未启用：给它的编译与链接都加上 `/guard:cf` 后可以链接，但真实注入的 x64 属性表边界探针中目标进程访问冲突（0xC0000005），因此已撤销；原因尚未定位，开启前需要先查清。核心 DLL 同样暂不启用 CFG：在 Windows 11 x64 24H2 的真实 CFG 检查下，`LeSetupAnsiOemCodeHashNodes` 对扫描所得 KERNELBASE 私有 NLS 函数的间接调用触发 `FAST_FAIL_GUARD_ICALL_CHECK_FAILURE`（10）。手工映射实验必须接入系统实际的 CFG 检查函数；仅保留文件中的 no-op 检查指针所得的通过结果不成立。未修改系统 DLL 的 CFG 目标有效性，也未使用批量 `nocf`。后续开启核心 CFG 需要替换私有 NLS 调用方案，或明确评审针对该调用的安全例外。
 
 微软[建议在所有编译代码上启用 CFG](https://learn.microsoft.com/en-us/cpp/build/reference/guard-enable-control-flow-guard)，这不是所有 Win32 应用必须满足的编译要求。动态可执行页默认可作为 CFG 调用目标；本项目跳板使用该默认行为，未宣称已收紧到每个合法入口。汇编跳转不自动获得 C++ 间接调用检查。
 
