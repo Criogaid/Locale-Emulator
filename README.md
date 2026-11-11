@@ -60,7 +60,7 @@ Visual Studio 可打开 `LocaleEmulator.sln` 构建默认 x86 产品；x64 原�
 需要右键菜单时运行发行包中的 `LEInstaller.exe`。选择“为当前用户安装”会一次性注册原有的配置菜单和一个静态的“使用 Locale Emulator 运行”入口；选择“为当前用户卸载”会一起移除。整个流程不要求用户额外执行 PowerShell 脚本。需要脚本化部署时，`LEInstaller.exe --InstallUser` 与 `--UninstallUser` 以无窗口方式执行同一套当前用户安装/卸载（含失败回滚），成功时退出码为 0 且不弹出提示，失败时显示错误并返回 1；经典菜单已处理但可选的 Windows 11 一级菜单没有处理成功（例如未开启开发人员模式）时返回 2，经典菜单不受影响；`--InstallAll`、`--UninstallAll` 仍按原样需要管理员授权。
 Windows 11 下传统菜单位于“显示更多选项”。为 `.exe` 另提供一级菜单项 Locale Emulator：
 
-- **菜单内容**：只在选中单个 `.exe` 时出现。传统菜单的范围更广：它在运行时按文件关联找到关联程序，只要那是原生可执行文件就会出现（例如关联到某个程序的 `.bat`、`.jar`）；而 Windows 11 稀疏包清单只能静态列出扩展名，无法表达“关联程序是否为 PE”，所以一级菜单不覆盖这些类型，它们仍可用传统菜单（“显示更多选项”）。子菜单为按应用配置运行、`LEConfig.xml` 中的每个全局配置（最多 64 个，名称超过 127 个字符时截断显示）、修改此程序的配置、编辑全局配置列表。标题由构建脚本从 `LEContextMenuHandler/Strings*.resx` 生成，与传统菜单同源，覆盖全部已翻译语言，随系统界面语言选择。
+- **菜单内容**：只在选中单个 `.exe` 时出现。传统菜单的范围更广：它在运行时按文件关联找到关联程序，只要那是原生可执行文件就会出现（例如 `.txt` 关联到记事本；`.bat`、`.cmd` 的打开命令是 `"%1" %*`，解析不出原生程序，传统菜单也不会出现）；而 Windows 11 稀疏包清单只能静态列出扩展名，无法表达“关联程序是否为 PE”，所以一级菜单不覆盖这些类型，它们仍可用传统菜单（“显示更多选项”）。子菜单为按应用配置运行、`LEConfig.xml` 中的每个全局配置（最多 64 个，名称超过 127 个字符时截断显示）、修改此程序的配置、编辑全局配置列表。标题由构建脚本从 `LEContextMenuHandler/Strings*.resx` 生成，与传统菜单同源，覆盖全部已翻译语言，随系统界面语言选择。
 - **实现**：x64 的 `LEExplorerCommand.dll`（`IExplorerCommand`）只把动作转发给同目录的 `LEProc.exe`（`-run`、`-runas`、`-manage`、`-global`），由它按目标架构选择 helper。Explorer 本身是 x64，所以 `build-dual.ps1` 生成的 x86 与 x64 包都携带同一个 x64 DLL，连同 `AppxManifest.xml` 和 `ModernMenu.ps1`；默认 `build.ps1` 的单一 x86 包不含它们。
 - **注册**：“为当前用户安装/卸载”会自动注册或移除（也可手动运行 `powershell -File ./ModernMenu.ps1`，`-Action Unregister` 移除），Explorer 重启后生效。未签名的稀疏包需要开启 Windows 开发人员模式；无法注册时，传统菜单仍照常安装，安装器只提示一行失败原因。
 - **静态入口**（上文“使用 Locale Emulator 运行”）：调用包内同架构的 `LEProc.exe` 默认配置路径，x64 包用于 x64 目标，x86 包用于 x86 目标。
