@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>Segoe UI</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>Insira o argumento aqui (se houver)</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Salvar</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>Criar atalho</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancelar</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>Salvar como ...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>Novo nome de perfil:</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Excluir</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>Tem certeza que quer excluir este perfil?</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>Localização</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>Definições de localização</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>Definições de fuso horário</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>Fuso horário</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>Advanced Options</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>Executar como administrador</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>Registro falso</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>Interface em falso</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>Criar processo com CREATE__SUSPENDED</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>Miscelânea</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>Exibir este perfil no menu principal</value>
+  </data>
+</root>

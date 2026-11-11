@@ -1,9 +1,9 @@
 ﻿<Window x:Class="LEGUI.GlobalConfig"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:legui="clr-namespace:LEGUI"
         Title="LEGUI GLOBAL" Height="377.16" Width="310"
         WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
-    <Grid TextElement.FontFamily="{DynamicResource UIFont}">
+    <Grid TextElement.FontFamily="{legui:Loc UIFont}">
         <Grid x:Name="mainGrid">
             <Grid.RowDefinitions>
                 <RowDefinition Height="60" />
@@ -23,11 +23,11 @@
                           Margin="3,3,3,4"
                           VerticalContentAlignment="Center" Grid.ColumnSpan="3"
                           SelectionChanged="cbGlobalProfiles_SelectionChanged" />
-                <Button x:Name="bSaveGlobalSetting" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Save}"
+                <Button x:Name="bSaveGlobalSetting" Grid.Row="1" Grid.Column="0" Content="{legui:Loc Save}"
                         Margin="3,0,3,5" Click="bSaveGlobalSetting_Click" />
-                <Button x:Name="bSaveGlobalSettingAs" Grid.Row="1" Grid.Column="1" Content="{DynamicResource SaveAs}"
+                <Button x:Name="bSaveGlobalSettingAs" Grid.Row="1" Grid.Column="1" Content="{legui:Loc SaveAs}"
                         Margin="3,0,3,5" Click="bSaveGlobalSettingAs_Click" />
-                <Button x:Name="bDeleteGlobalSetting" Grid.Row="1" Grid.Column="2" Content="{DynamicResource Delete}"
+                <Button x:Name="bDeleteGlobalSetting" Grid.Row="1" Grid.Column="2" Content="{legui:Loc Delete}"
                         Margin="3,0,3,5" Click="bDeleteGlobalSetting_Click" />
             </Grid>
             <Grid Grid.Row="1" Margin="0,0,0,10">
@@ -38,30 +38,30 @@
                         <RowDefinition Height="2*" />
                         <RowDefinition Height="1*" />
                     </Grid.RowDefinitions>
-                    <GroupBox Grid.Row="0" Header="{DynamicResource LocationSettings}" Margin="4,0">
+                    <GroupBox Grid.Row="0" Header="{legui:Loc LocationSettings}" Margin="4,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="101*" />
                                 <ColumnDefinition Width="167*" />
                             </Grid.ColumnDefinitions>
-                            <Label Grid.Column="0" Content="{DynamicResource Location}"
+                            <Label Grid.Column="0" Content="{legui:Loc Location}"
                                    VerticalContentAlignment="Center" />
                             <ComboBox x:Name="cbLocation" Grid.Column="1" Height="Auto" SelectedIndex="0" Margin="0,3" />
                         </Grid>
                     </GroupBox>
-                    <GroupBox Grid.Row="1" Header="{DynamicResource TimezoneSettings}" Margin="4,0">
+                    <GroupBox Grid.Row="1" Header="{legui:Loc TimezoneSettings}" Margin="4,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="101*" />
                                 <ColumnDefinition Width="167*" />
                             </Grid.ColumnDefinitions>
-                            <Label Grid.Row="0" Grid.Column="0" Content="{DynamicResource Timezone}"
+                            <Label Grid.Row="0" Grid.Column="0" Content="{legui:Loc Timezone}"
                                    VerticalContentAlignment="Center" />
                             <ComboBox Grid.Row="0" Grid.Column="1" Height="Auto" x:Name="cbTimezone" SelectedIndex="0"
                                       Margin="0,3" />
                         </Grid>
                     </GroupBox>
-                    <GroupBox Grid.Row="2" Header="{DynamicResource DebugOptions}" Margin="4,0">
+                    <GroupBox Grid.Row="2" Header="{legui:Loc DebugOptions}" Margin="4,0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="1*" />
@@ -70,26 +70,26 @@
                                 <RowDefinition Height="1*" />
                             </Grid.RowDefinitions>
                             <CheckBox x:Name="cbStartAsAdmin" Grid.Row="0"
-                                      Content="{DynamicResource AsAdmin}" Margin="5,0,0,0"
+                                      Content="{legui:Loc AsAdmin}" Margin="5,0,0,0"
                                       VerticalAlignment="Center" />
                             <CheckBox x:Name="cbRedirectRegistry" Grid.Row="1"
-                                      Content="{DynamicResource RedirectRegistry}" Margin="5,0,0,0"
+                                      Content="{legui:Loc RedirectRegistry}" Margin="5,0,0,0"
                                       VerticalAlignment="Center" IsChecked="True" />
                             <CheckBox x:Name="cbIsAdvancedRedirection" Grid.Row="2"
-                                      Content="{DynamicResource IsAdvancedRedirection}" Margin="5,0,0,0"
+                                      Content="{legui:Loc IsAdvancedRedirection}" Margin="5,0,0,0"
                                       VerticalAlignment="Center" IsChecked="false" />
                             <CheckBox x:Name="cbStartAsSuspend" Grid.Row="3"
-                                      Content="{DynamicResource WithCREATESUSPENDED}" Margin="5,0,0,0"
+                                      Content="{legui:Loc WithCREATESUSPENDED}" Margin="5,0,0,0"
                                       VerticalAlignment="Center" />
                         </Grid>
                     </GroupBox>
-                    <GroupBox Grid.Row="3" Header="{DynamicResource Miscellaneous}" Margin="4,0">
+                    <GroupBox Grid.Row="3" Header="{legui:Loc Miscellaneous}" Margin="4,0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <CheckBox x:Name="cbShowInMainMenu" Grid.Row="0"
-                                      Content="{DynamicResource ShowInMainMenu}" Margin="5,0,0,0"
+                                      Content="{legui:Loc ShowInMainMenu}" Margin="5,0,0,0"
                                       VerticalAlignment="Center" />
                         </Grid>
                     </GroupBox>

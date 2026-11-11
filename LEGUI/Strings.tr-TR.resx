@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>Segoe UI</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>Argümanı buraya gir (eğer varsa)</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Kaydet</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>Kısayol ekle</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>İptal</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>Farklı Kaydet ...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>Yeni profil ismi:</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Sil</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>Bu profili silmek istediğinize emin misiniz?</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>Konum</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>Konum Ayarları</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>Saat Dilimi Ayarları</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>Saat dilimi</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>Gelişmiş Ayarlar</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>Yönetici olarak çalıştır</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>Kayıt Defterinde dil bağlantılı sahte anahtarlar</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>Sahte sistem arayüz dili</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>İşlemi CREATE__SUSPENDED ile yarat</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>Çeşitli</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>Bu profili ana menüde göster</value>
+  </data>
+</root>

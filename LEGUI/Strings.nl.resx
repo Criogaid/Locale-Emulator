@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>Segoe UI</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>Hier argument invoeren (indien aanwezig)</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Opslaan</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>Sneltoets maken</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Annuleren</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>Opslaan als ...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>Nieuwe profielnaam:</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Verwijderen</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>Weet u zeker dat u dit profiel wilt verwijderen?</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>Locatie</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>Locatie instellingen</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>Tijdzone instellingen</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>Tijdzone</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>Geavanceerde opties</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>Uitvoeren als beheerder</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>Nep-register</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>Nep-systeem interface taal</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>Proces maken met CREATE__SUSPENDED</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>Diversen</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>Dit profiel weergeven in het hoofdmenu</value>
+  </data>
+</root>

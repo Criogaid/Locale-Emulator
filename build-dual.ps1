@@ -122,7 +122,7 @@ function Copy-PackageCommon {
     param([string]$DestinationRoot)
     foreach ($name in @(
         'LEGUI.exe', 'LEGUI.exe.config', 'LEInstaller.exe', 'LEInstaller.exe.config',
-        'LEContextMenuHandler.dll', 'Lang', 'InstallerLang', 'LEVersion.xml')) {
+        'LEContextMenuHandler.dll', 'LEVersion.xml')) {
         Copy-RequiredFile $releaseRoot $DestinationRoot $name
     }
     Copy-SatelliteAssemblies $releaseRoot $DestinationRoot

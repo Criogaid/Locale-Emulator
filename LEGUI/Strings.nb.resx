@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>Segoe UI</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>Skriv inn argumenter her (Valgfritt)</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Lagre</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>Lag en snarvei</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Lukk</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>Lagre som ...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>Navnet til den nye profilen:</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Slett</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>Er du sikker på at du vil slette denne profilen?</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>Posisjon</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>Posisjonsinnstillinger</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>Tidssoneinnstillinger</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>Tidssone</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>Avanserte innstillinger</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>Kjør som administrator</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>Imiter et systemregister</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>Imiter et systemgrensesnittsspråk</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>Lag en prosess med CREATE__SUSPENDED</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>Diverse</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>Vis denne profilen i hovedmenyen</value>
+  </data>
+</root>

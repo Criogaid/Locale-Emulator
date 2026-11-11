@@ -34,7 +34,6 @@ namespace LEGUI
                     I18n.GetString("Title"), MessageBoxButton.OK, MessageBoxImage.Error);
             };
 
-            I18n.LoadLanguage();
             base.OnStartup(e);
         }
 

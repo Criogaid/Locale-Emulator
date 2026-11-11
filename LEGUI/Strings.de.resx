@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>Segoe UI</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>Parameter (falls benötigt)</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Speichern</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>Verknüpfung anlegen</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Abbrechen</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>Speichern unter...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>Neuer Profilname:</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Löschen</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>Möchten Sie dieses Profil wirklich löschen?</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>Sprachumgebung</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>Sprachumgebung</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>Zeitzone</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>Zeitzone</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>Erweitert</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>Als Administrator ausführen</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>Registrierungseinträge vortäuschen</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>System-UI Sprache vortäuschen</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>Prozess mit CREATE__SUSPENDED aufrufen</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>Sonstiges</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>Profil im Kontextmenü anzeigen</value>
+  </data>
+</root>

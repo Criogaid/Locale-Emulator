@@ -62,12 +62,10 @@ $requiredFiles = @(
 foreach ($name in $requiredFiles) {
     Copy-Item -LiteralPath (Join-Path $buildDirectory $name) -Destination $package
 }
-Copy-Item -LiteralPath (Join-Path $buildDirectory 'Lang') -Destination $package -Recurse
 # Satellite resource assemblies: <culture>\<Assembly>.resources.dll
 Get-ChildItem -LiteralPath $buildDirectory -Directory |
     Where-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.resources.dll' -File } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $package -Recurse }
-Copy-Item -LiteralPath (Join-Path $buildDirectory 'InstallerLang') -Destination $package -Recurse
 Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination $package
 Copy-Item -LiteralPath (Join-Path $repository 'Directory.Build.props') -Destination $package
 $packageDocs = Join-Path $package 'docs'

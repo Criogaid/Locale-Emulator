@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>微軟正黑體</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>在此輸入執行參數</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>儲存</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>在桌面放置捷徑</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>另存為...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>設定名稱：</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>刪除</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>確定刪除此設定嗎？</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>位置</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>位置設定</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>時區設定</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>時區</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>進階選項</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>以管理員身分執行</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>偽造語言註冊表中語言相關選項</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>偽造系統 UI 語言</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>用 CREATE__SUSPENDED 標誌建立進程</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>其它</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>在主選單中顯示此設定</value>
+  </data>
+</root>

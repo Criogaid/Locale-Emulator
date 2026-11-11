@@ -65,10 +65,6 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Lang\DefaultLanguage.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="AppConfig.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -87,6 +83,7 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="I18n.cs" />
+    <Compile Include="LocExtension.cs" />
     <Compile Include="GlobalConfig.xaml.cs">
       <DependentUpon>GlobalConfig.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -132,8 +129,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
-    <Content Include="Lang\*.xaml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <EmbeddedResource Include="Strings.resx" />
+    <LocalizedResx Include="Strings.*.resx" />
   </ItemGroup>
 </Project>

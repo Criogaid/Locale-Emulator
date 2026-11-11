@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>微软雅黑</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>在此输入运行参数</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>建立快捷方式</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>保存为...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>配置名：</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>确认删除此配置么？</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>预置配置</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>位置设定</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>时区设置</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>时区</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>高级选项</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>以管理员权限运行</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>伪造语言相关注册表键值</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>伪造系统 UI 语言</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>用 CREATE__SUSPENDED 标志创建进程</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>其它</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>在一级菜单中显示此配置</value>
+  </data>
+  <data name="Title" xml:space="preserve">
+    <value>Locale Emulator</value>
+  </data>
+  <data name="InvalidProfileSelection" xml:space="preserve">
+    <value>请选择当前系统可用的区域和时区。</value>
+  </data>
+  <data name="SaveOperationError" xml:space="preserve">
+    <value>无法保存配置或完成文件操作：{0}</value>
+  </data>
+  <data name="HomeDirectoryNotWritable" xml:space="preserve">
+    <value>主目录不可写。
+请将 LE 移动到其他位置。
+主目录：{0}</value>
+  </data>
+  <data name="StandaloneDirectoryNotWritable" xml:space="preserve">
+    <value>目录不可写。
+请改用全局配置。
+当前目录：{0}</value>
+  </data>
+  <data name="ElevationError" xml:space="preserve">
+    <value>LEGUI 需要管理员权限才能写入当前目录。</value>
+  </data>
+  <data name="CreateConfigError" xml:space="preserve">
+    <value>无法创建配置文件：{0}</value>
+  </data>
+  <data name="ShortcutDescription" xml:space="preserve">
+    <value>使用 Locale Emulator 运行 {0}</value>
+  </data>
+</root>

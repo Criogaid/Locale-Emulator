@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UIFont" xml:space="preserve">
+    <value>Segoe UI</value>
+  </data>
+  <data name="EnterArgument" xml:space="preserve">
+    <value>Параметры командной строки для запуска приложения (если есть)</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Сохранить</value>
+  </data>
+  <data name="Shortcut" xml:space="preserve">
+    <value>Создать ярлык</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Отмена</value>
+  </data>
+  <data name="SaveAs" xml:space="preserve">
+    <value>Сохранить как ...</value>
+  </data>
+  <data name="SaveAsInstruction" xml:space="preserve">
+    <value>Имя нового профиля:</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Удалить</value>
+  </data>
+  <data name="ConfirmDel" xml:space="preserve">
+    <value>Уверены, что хотите удалить этот профиль?</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>Местоположение</value>
+  </data>
+  <data name="LocationSettings" xml:space="preserve">
+    <value>Настройки местоположения</value>
+  </data>
+  <data name="TimezoneSettings" xml:space="preserve">
+    <value>Настройки часового пояса</value>
+  </data>
+  <data name="Timezone" xml:space="preserve">
+    <value>Часовой пояс</value>
+  </data>
+  <data name="DebugOptions" xml:space="preserve">
+    <value>Дополнительные настройки</value>
+  </data>
+  <data name="AsAdmin" xml:space="preserve">
+    <value>Запуск от имени администратора</value>
+  </data>
+  <data name="RedirectRegistry" xml:space="preserve">
+    <value>Подменять реестр</value>
+  </data>
+  <data name="IsAdvancedRedirection" xml:space="preserve">
+    <value>Подменять язык интерфейса системы</value>
+  </data>
+  <data name="WithCREATESUSPENDED" xml:space="preserve">
+    <value>Создать процесс с параметром CREATE__SUSPENDED</value>
+  </data>
+  <data name="Miscellaneous" xml:space="preserve">
+    <value>Разное</value>
+  </data>
+  <data name="ShowInMainMenu" xml:space="preserve">
+    <value>Показать этот профиль в главном меню</value>
+  </data>
+</root>
