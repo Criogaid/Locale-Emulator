@@ -144,7 +144,7 @@ VS2019 的旧 WPF 临时工程不自动导入 NuGet targets，因此共享参考
 
 **仍未解决**：
 - `GetLocalTime` 等直接读本地时间的 API 仍返回宿主时间（原生探针 localHour-utcHour 为宿主偏移）。决定不模拟：本地时间的偏差来自 `KUSER_SHARED_DATA`，不经过系统调用，只能逐个钩用户态时间 API，范围和风险远大于收益；时区查询类 API（`GetTimeZoneInformation`、`GetDynamicTimeZoneInformation`）是目前的模拟范围。
-- 子进程继承只在同架构内成立，这是已有的明确边界（见 `docs/GOAL.md`、`docs/QUALITY.md`；Core 日志为 `skip unsupported cross-architecture child injection`）。用一个托管探针启动子进程实测（x64 包，`ja-JP` / Tokyo 配置）：x64 父进程启动 x64 子进程、x86 父进程启动 x86 子进程，子进程得到 bias -540、键名 Tokyo；跨架构的子进程完全没有模拟，连 `GetTimeZoneInformation` 都是宿主的 bias 240。代码页是否同样丢失未测。要支持它需要完整、可验证的另一架构 broker，`docs/GOAL.md` 禁止在没有它的情况下重新引入旧做法。
+- 子进程继承只在同架构内成立，这是已有的明确边界（见 `docs/GOAL.md`、`docs/QUALITY.md`；Core 日志为 `skip unsupported cross-architecture child injection`）。用一个托管探针启动子进程实测（x64 包，`ja-JP` / Tokyo 配置）：x64 父进程启动 x64 子进程、x86 父进程启动 x86 子进程，子进程得到 bias -540、键名 Tokyo；跨架构的子进程完全没有模拟，连 `GetTimeZoneInformation` 都是宿主的 bias 240。代码页、文化也一并丢失（托管探针实测：x64→x86、x86→x64 的子进程得到 GetACP=936、LCID 0x409、en-US、宿主时区；x64→x64 为 932、0x411、ja-JP、Tokyo）。要支持它需要完整、可验证的另一架构 broker，`docs/GOAL.md` 禁止在没有它的情况下重新引入旧做法。
 
 ## 历史提交元数据说明
 
