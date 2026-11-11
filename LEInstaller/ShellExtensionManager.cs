@@ -90,7 +90,9 @@ namespace LEInstaller
 
                 key.SetValue(null, I18n.GetString("RunWithLocaleEmulator"), RegistryValueKind.String);
                 key.SetValue("MUIVerb", I18n.GetString("RunWithLocaleEmulator"), RegistryValueKind.String);
-                key.SetValue("Icon", launcherPath, RegistryValueKind.String);
+                // LEProc.exe has no icon resource; the product icon is in LEGUI.exe next to it.
+                var iconPath = Path.Combine(Path.GetDirectoryName(launcherPath) ?? string.Empty, "LEGUI.exe");
+                key.SetValue("Icon", File.Exists(iconPath) ? iconPath : launcherPath, RegistryValueKind.String);
                 key.SetValue("NeverDefault", string.Empty, RegistryValueKind.String);
                 key.SetValue("MultiSelectModel", "Single", RegistryValueKind.String);
 
