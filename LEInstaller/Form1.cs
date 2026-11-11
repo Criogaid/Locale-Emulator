@@ -15,7 +15,13 @@ namespace LEInstaller
 {
     public partial class Form1 : Form
     {
+        internal const int ModeInstallAll = 1;
+        internal const int ModeUninstallAll = 2;
+        internal const int ModeInstallUser = 3;
+        internal const int ModeUninstallUser = 4;
+
         private int cmdMode = 0;
+        private bool IsHeadlessMode => cmdMode == ModeInstallUser || cmdMode == ModeUninstallUser;
         private readonly string crtDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         private Exception operationError;
         
@@ -31,6 +37,12 @@ namespace LEInstaller
             InitializeComponent();
             ApplyLanguage();
             cmdMode = CmdMode;
+            if (IsHeadlessMode)
+            {
+                // Scripted per-user (un)install: no visible window; the exit code reports the result.
+                Opacity = 0;
+                ShowInTaskbar = false;
+            }
         }
 
         private void ApplyLanguage()
@@ -102,6 +114,8 @@ namespace LEInstaller
                 buttonInstall.Enabled = false;
                 buttonInstallAllUsers.Enabled = false;
                 ShowOperationError();
+                if (IsHeadlessMode)
+                    Environment.Exit(1);
                 return;
             }
 
@@ -114,15 +128,29 @@ namespace LEInstaller
 
             switch (cmdMode)
             {
-                case 1:
+                case ModeInstallAll:
                     buttonInstallAllUsers.PerformClick();
                     break;
-                case 2:
+                case ModeUninstallAll:
                     buttonUninstallAllUsers.PerformClick();
+                    break;
+                case ModeInstallUser:
+                case ModeUninstallUser:
+                    RunHeadless(cmdMode == ModeInstallUser);
                     break;
                 default:
                     break;
             }
+        }
+
+        private void RunHeadless(bool register)
+        {
+            var succeeded = ChangeRegistration(false, register);
+            if (succeeded)
+                NotifyShell();
+            else
+                ShowOperationError();
+            Environment.Exit(succeeded ? 0 : 1);
         }
 
         private void buttonInstall_Click(object sender, EventArgs e)

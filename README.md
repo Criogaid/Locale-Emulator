@@ -57,7 +57,7 @@ Visual Studio 可打开 `LocaleEmulator.sln` 构建默认 x86 产品；x64 原�
 
 使用 `LEGUI.exe` 编辑全局配置；将目标程序拖到 LEGUI 可创建应用配置，再通过 `LEProc.exe -run <目标程序> [参数]` 使用它。配置中的 Parameter 仍是完整 Windows 命令行片段，并优先于额外传入的参数。
 
-需要右键菜单时运行发行包中的 `LEInstaller.exe`。选择“为当前用户安装”会一次性注册原有的配置菜单和一个静态的“使用 Locale Emulator 运行”入口；选择“为当前用户卸载”会一起移除。整个流程不要求用户额外执行 PowerShell 脚本。
+需要右键菜单时运行发行包中的 `LEInstaller.exe`。选择“为当前用户安装”会一次性注册原有的配置菜单和一个静态的“使用 Locale Emulator 运行”入口；选择“为当前用户卸载”会一起移除。整个流程不要求用户额外执行 PowerShell 脚本。需要脚本化部署时，`LEInstaller.exe --InstallUser` 与 `--UninstallUser` 以无窗口方式执行同一套当前用户安装/卸载（含失败回滚），成功时退出码为 0 且不弹出提示，失败时显示错误并返回 1；`--InstallAll`、`--UninstallAll` 仍按原样需要管理员授权。
 Windows 11 下菜单可能位于“显示更多选项”；新式一级菜单尚未加入。静态入口调用包内同架构的 `LEProc.exe` 默认配置路径，x64 包用于 x64 目标，x86 包用于 x86 目标。
 “为所有用户安装/卸载”继续管理传统的机器级菜单；静态入口是当前用户注册表项，因此只随“为当前用户安装/卸载”管理。构建回归只打开和关闭安装器，不点击安装按钮，也不修改 Shell 注册。
 
