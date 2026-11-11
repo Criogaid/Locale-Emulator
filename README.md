@@ -57,7 +57,7 @@ Visual Studio 可打开 `LocaleEmulator.sln` 构建默认 x86 产品；x64 原�
 
 使用 `LEGUI.exe` 编辑全局配置；将目标程序拖到 LEGUI 可创建应用配置，再通过 `LEProc.exe -run <目标程序> [参数]` 使用它。配置中的 Parameter 仍是完整 Windows 命令行片段，并优先于额外传入的参数。
 
-需要右键菜单时运行发行包中的 `LEInstaller.exe`。选择“为当前用户安装”会一次性注册原有的配置菜单和一个静态的“使用 Locale Emulator 运行”入口；选择“为当前用户卸载”会一起移除。整个流程不要求用户额外执行 PowerShell 脚本。需要脚本化部署时，`LEInstaller.exe --InstallUser` 与 `--UninstallUser` 以无窗口方式执行同一套当前用户安装/卸载（含失败回滚），成功时退出码为 0 且不弹出提示，失败时显示错误并返回 1；`--InstallAll`、`--UninstallAll` 仍按原样需要管理员授权。
+需要右键菜单时运行发行包中的 `LEInstaller.exe`。选择“为当前用户安装”会一次性注册原有的配置菜单和一个静态的“使用 Locale Emulator 运行”入口；选择“为当前用户卸载”会一起移除。整个流程不要求用户额外执行 PowerShell 脚本。需要脚本化部署时，`LEInstaller.exe --InstallUser` 与 `--UninstallUser` 以无窗口方式执行同一套当前用户安装/卸载（含失败回滚），成功时退出码为 0 且不弹出提示，失败时显示错误并返回 1；经典菜单已处理但可选的 Windows 11 一级菜单没有处理成功（例如未开启开发人员模式）时返回 2，经典菜单不受影响；`--InstallAll`、`--UninstallAll` 仍按原样需要管理员授权。
 Windows 11 下传统菜单位于“显示更多选项”。为 `.exe` 另提供一级菜单项 Locale Emulator：
 
 - **菜单内容**：只在选中单个 `.exe` 时出现（与传统菜单一致），子菜单为按应用配置运行、`LEConfig.xml` 中的每个全局配置（最多 64 个，名称超过 127 个字符时截断显示）、修改此程序的配置、编辑全局配置列表。标题由构建脚本从 `LEContextMenuHandler/Strings*.resx` 生成，与传统菜单同源，覆盖全部已翻译语言，随系统界面语言选择。

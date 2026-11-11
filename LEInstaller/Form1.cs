@@ -151,7 +151,8 @@ namespace LEInstaller
                 NotifyShell();
             else
                 ShowOperationError();
-            Environment.Exit(succeeded ? 0 : 1);
+            // 2: the classic menu was changed but the optional Windows 11 first-level menu was not.
+            Environment.Exit(!succeeded ? 1 : modernMenuNote != null ? 2 : 0);
         }
 
         private void buttonInstall_Click(object sender, EventArgs e)
