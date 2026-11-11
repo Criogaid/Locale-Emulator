@@ -284,7 +284,10 @@ foreach ($file in ((& git -C $repository -c core.quotepath=false ls-files) -repl
     }
 }
 # README: only the dual packages carry the first-level menu; the single x86 package from build.ps1 must not.
-foreach ($defaultPackage in (Get-ChildItem -LiteralPath (Join-Path $artifacts 'package') -Directory -ErrorAction SilentlyContinue)) {
+# build.ps1 always ran above, so its package directory must exist; finding none means the path moved and this check went vacuous.
+$defaultPackages = @(Get-ChildItem -LiteralPath (Join-Path $artifacts 'package') -Directory -ErrorAction SilentlyContinue)
+if ($defaultPackages.Count -eq 0) { throw "未找到 build.ps1 生成的默认包目录：$(Join-Path $artifacts 'package')" }
+foreach ($defaultPackage in $defaultPackages) {
     foreach ($name in 'LEExplorerCommand.dll', 'AppxManifest.xml', 'ModernMenu.ps1') {
         if (Test-Path -LiteralPath (Join-Path $defaultPackage.FullName $name)) { throw "默认 x86 包不应包含一级菜单文件 ${name}：$($defaultPackage.FullName)" }
     }
