@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,7 +16,8 @@ namespace LEGUI
     public partial class GlobalConfig
     {
         private readonly List<CultureInfo> _cultureInfos = new List<CultureInfo>();
-        private readonly List<LEProfile> _profiles = new List<LEProfile>();
+        private List<LEProfile> _profiles = new List<LEProfile>();
+        private Exception _unreadableConfig;
         private readonly List<TimeZoneInfo> _timezones = new List<TimeZoneInfo>();
 
         public GlobalConfig()
@@ -31,8 +33,25 @@ namespace LEGUI
             cbTimezone.ItemsSource = _timezones.Select(t => t.DisplayName);
 
             //Profiles.
-            _profiles = LEConfig.GetProfiles().ToList();
+            try
+            {
+                _profiles = LEConfig.ReadProfiles(LEConfig.GlobalConfigPath).ToList();
+            }
+            catch (Exception error)
+            {
+                // A missing file is an empty list; an existing but unreadable one must not be overwritten.
+                if (File.Exists(LEConfig.GlobalConfigPath))
+                    _unreadableConfig = error;
+            }
             cbGlobalProfiles.ItemsSource = _profiles.Select(p => p.Name);
+        }
+
+        private void SaveGlobalProfiles(params LEProfile[] profiles)
+        {
+            if (_unreadableConfig != null)
+                throw new InvalidDataException(_unreadableConfig.Message, _unreadableConfig);
+
+            LEConfig.SaveGlobalConfigFile(profiles);
         }
 
         private void bSaveGlobalSetting_Click(object sender, RoutedEventArgs e)
@@ -54,7 +73,7 @@ namespace LEGUI
 
             var profiles = _profiles.ToArray();
             profiles[cbGlobalProfiles.SelectedIndex] = crt;
-            LEConfig.SaveGlobalConfigFile(profiles);
+            SaveGlobalProfiles(profiles);
 
             _profiles[cbGlobalProfiles.SelectedIndex] = crt;
         }
@@ -123,7 +142,7 @@ namespace LEGUI
                                     cbIsAdvancedRedirection.IsChecked != null && (bool)cbIsAdvancedRedirection.IsChecked,
                                     cbStartAsSuspend.IsChecked != null && (bool)cbStartAsSuspend.IsChecked);
 
-            LEConfig.SaveGlobalConfigFile(_profiles.Concat(new[] { pro }).ToArray());
+            SaveGlobalProfiles(_profiles.Concat(new[] { pro }).ToArray());
 
             _profiles.Add(pro);
 
@@ -140,7 +159,7 @@ namespace LEGUI
                 return;
 
             var selectedIndex = cbGlobalProfiles.SelectedIndex;
-            LEConfig.SaveGlobalConfigFile(_profiles.Where((profile, index) => index != selectedIndex).ToArray());
+            SaveGlobalProfiles(_profiles.Where((profile, index) => index != selectedIndex).ToArray());
 
             _profiles.RemoveAt(selectedIndex);
 

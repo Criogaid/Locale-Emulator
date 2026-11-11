@@ -22,31 +22,35 @@ namespace LECommonLibrary
         {
             try
             {
-                var dict = XDocument.Load(configPath);
-
-                var pros = from i in dict.Descendants("LEConfig").Elements("Profiles").Elements()
-                           select i;
-
-                var profiles =
-                    pros.Select(p => new LEProfile(p.Attribute("Name").Value,
-                                                   p.Attribute("Guid").Value,
-                                                   bool.Parse(p.Attribute("MainMenu").Value),
-                                                   p.Element("Parameter").Value,
-                                                   p.Element("Location").Value,
-                                                   p.Element("Timezone").Value,
-                                                   bool.Parse(p.TryGetValue("RunAsAdmin", "false")),
-                                                   bool.Parse(p.TryGetValue("RedirectRegistry", "true")),
-                                                   bool.Parse(p.TryGetValue("IsAdvancedRedirection", "false")),
-                                                   bool.Parse(p.TryGetValue("RunWithSuspend", "false"))
-                                         )
-                        ).ToArray();
-
-                return profiles;
+                return ReadProfiles(configPath);
             }
             catch
             {
                 return new LEProfile[0];
             }
+        }
+
+        // Unlike GetProfiles this reports an unreadable file, so callers that rewrite the file can refuse to
+        // replace profiles they merely failed to parse.
+        public static LEProfile[] ReadProfiles(string configPath)
+        {
+            var dict = XDocument.Load(configPath);
+
+            var pros = from i in dict.Descendants("LEConfig").Elements("Profiles").Elements()
+                       select i;
+
+            return pros.Select(p => new LEProfile(p.Attribute("Name").Value,
+                                                  p.Attribute("Guid").Value,
+                                                  bool.Parse(p.Attribute("MainMenu").Value),
+                                                  p.Element("Parameter").Value,
+                                                  p.Element("Location").Value,
+                                                  p.Element("Timezone").Value,
+                                                  bool.Parse(p.TryGetValue("RunAsAdmin", "false")),
+                                                  bool.Parse(p.TryGetValue("RedirectRegistry", "true")),
+                                                  bool.Parse(p.TryGetValue("IsAdvancedRedirection", "false")),
+                                                  bool.Parse(p.TryGetValue("RunWithSuspend", "false"))
+                                  )
+                ).ToArray();
         }
 
         public static bool CheckGlobalConfigFile(bool buildNewConfig)
