@@ -51,3 +51,22 @@ Invoke-Native (Join-Path $hostBin 'link.exe') @(
     $object, 'kernel32.lib', 'user32.lib', 'ole32.lib', 'shell32.lib', 'shlwapi.lib', 'xmllite.lib')
 
 Write-Host "LEExplorerCommand.dll 已生成：$dll"
+
+# Validate the sparse-package manifest against the real Appx schema. Registration cannot be exercised
+# in every environment (it needs Developer Mode or a signed package), but schema errors such as a
+# missing capability are caught here. /nv skips payload checks: the files live in the external location.
+$makeappx = Join-Path $sdkRoot "bin\$sdkVersion\x64\makeappx.exe"
+if (-not (Test-Path -LiteralPath $makeappx)) {
+    throw "未找到 makeappx.exe：$makeappx"
+}
+$validation = Join-Path $OutputDirectory 'manifest-validation'
+Remove-Item -LiteralPath $validation -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $validation | Out-Null
+try {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'AppxManifest.xml') -Destination $validation
+    Invoke-Native $makeappx @('pack', '/nv', '/o', '/d', $validation, '/p', (Join-Path $OutputDirectory 'manifest-validation.msix'))
+}
+finally {
+    Remove-Item -LiteralPath $validation, (Join-Path $OutputDirectory 'manifest-validation.msix') -Recurse -Force -ErrorAction SilentlyContinue
+}
+Write-Host 'AppxManifest.xml 通过 Appx 架构校验。'
