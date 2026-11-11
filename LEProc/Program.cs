@@ -235,20 +235,22 @@ namespace LEProc
                     : 0u;
 
 
-                var l = new LoaderWrapper
+                var l = new LoaderWrapper(new RuntimeEnvironment
+                {
+                    AnsiCodePage = ansiCodePage,
+                    OemCodePage = oemCodePage,
+                    LocaleID = localeID,
+                    FontCharset = defaultCharset,
+                    RegistryMode = registryMode,
+                    HookUILanguageMode = profile.IsAdvancedRedirection ? 2u : 0u,
+                    TimezoneId = profile.Timezone,
+                    StandardNameOverride = standardName,
+                    DaylightNameOverride = daylightName
+                })
                 {
                     ApplicationName = applicationName,
                     CommandLine = commandLine,
                     CurrentDirectory = currentDirectory,
-                    AnsiCodePage = ansiCodePage,
-                    OemCodePage = oemCodePage,
-                    LocaleID = localeID,
-                    DefaultCharset = defaultCharset,
-                    RegistryMode = registryMode,
-                    HookUILanguageMode = profile.IsAdvancedRedirection ? 2u : 0u,
-                    Timezone = profile.Timezone,
-                    StandardName = standardName,
-                    DaylightName = daylightName,
                     DebugMode = profile.RunWithSuspend
                 };
 

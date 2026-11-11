@@ -14,98 +14,26 @@ namespace LEProc
         private const uint Infinite = 0xFFFFFFFF;
         private const uint AttachParentProcess = 0x0FFFFFFFF;
 
-        private readonly RuntimeEnvironment _environment;
-
-        internal LoaderWrapper()
-            : this(null, null, null)
+        internal LoaderWrapper(RuntimeEnvironment environment)
         {
+            if (environment == null)
+                throw new ArgumentNullException("environment");
+            Environment = environment;
         }
 
-        internal LoaderWrapper(string applicationName)
-            : this(applicationName, null, null)
-        {
-        }
-
-        internal LoaderWrapper(string applicationName, string commandLine, string currentDirectory)
-        {
-            ApplicationName = applicationName;
-            CommandLine = commandLine;
-            CurrentDirectory = currentDirectory;
-            // Locale, code pages and time zone come from the caller's profile; none is assumed here.
-            _environment = new RuntimeEnvironment
-            {
-                RegistryMode = 0,
-                HookUILanguageMode = 0,
-                StandardNameOverride = string.Empty,
-                DaylightNameOverride = string.Empty
-            };
-        }
-
+        // Locale, code pages and time zone come from the caller's profile; none is assumed here.
+        internal RuntimeEnvironment Environment { get; private set; }
         internal string ApplicationName { get; set; }
         internal string CommandLine { get; set; }
         internal string CurrentDirectory { get; set; }
         internal bool DebugMode { get; set; }
-
-        internal uint AnsiCodePage
-        {
-            get { return _environment.AnsiCodePage; }
-            set { _environment.AnsiCodePage = value; }
-        }
-
-        internal uint OemCodePage
-        {
-            get { return _environment.OemCodePage; }
-            set { _environment.OemCodePage = value; }
-        }
-
-        internal uint LocaleID
-        {
-            get { return _environment.LocaleID; }
-            set { _environment.LocaleID = value; }
-        }
-
-        internal uint DefaultCharset
-        {
-            get { return _environment.FontCharset; }
-            set { _environment.FontCharset = value; }
-        }
-
-        internal uint RegistryMode
-        {
-            get { return _environment.RegistryMode; }
-            set { _environment.RegistryMode = value; }
-        }
-
-        internal uint HookUILanguageMode
-        {
-            get { return _environment.HookUILanguageMode; }
-            set { _environment.HookUILanguageMode = value; }
-        }
-
-        internal string StandardName
-        {
-            get { return _environment.StandardNameOverride; }
-            set { _environment.StandardNameOverride = value; }
-        }
-
-        internal string DaylightName
-        {
-            get { return _environment.DaylightNameOverride; }
-            set { _environment.DaylightNameOverride = value; }
-        }
-
-        internal string Timezone
-        {
-            get { return _environment.TimezoneId; }
-            set { _environment.TimezoneId = value; }
-        }
 
         internal uint Start()
         {
             if (string.IsNullOrEmpty(ApplicationName))
                 throw new ArgumentException(Localization.GetString("ApplicationNameMissing"));
 
-            var serializedEnvironment = _environment.Serialize();
+            var serializedEnvironment = Environment.Serialize();
             var environment = Marshal.AllocHGlobal(serializedEnvironment.Length);
             var processInformation = new NativeProcessInformation();
             try
@@ -114,14 +42,18 @@ namespace LEProc
                 AttachConsole(AttachParentProcess);
                 var startupInfo = new NativeStartupInfo { Size = Marshal.SizeOf(typeof(NativeStartupInfo)) };
                 var commandLine = CommandLine == null ? null : new StringBuilder(CommandLine);
-                var result = NativeLoaderAdapter.Start(
+                var result = CreateProcess(
                     environment,
                     ApplicationName,
                     commandLine,
                     CurrentDirectory,
                     DebugMode ? CreateSuspended : CreateNormal,
                     ref startupInfo,
-                    out processInformation);
+                    out processInformation,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    IntPtr.Zero);
 
                 if (result == 0)
                 {
@@ -143,6 +75,20 @@ namespace LEProc
                 Marshal.FreeHGlobal(environment);
             }
         }
+
+        [DllImport("LoaderDll.dll", EntryPoint = "LeCreateProcess", CharSet = CharSet.Unicode)]
+        private static extern uint CreateProcess(
+            IntPtr environment,
+            [MarshalAs(UnmanagedType.LPWStr)] string applicationName,
+            [In, Out] StringBuilder commandLine,
+            [MarshalAs(UnmanagedType.LPWStr)] string currentDirectory,
+            uint creationFlags,
+            ref NativeStartupInfo startupInfo,
+            out NativeProcessInformation processInformation,
+            IntPtr processAttributes,
+            IntPtr threadAttributes,
+            IntPtr environmentBlock,
+            IntPtr token);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
