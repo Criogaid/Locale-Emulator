@@ -184,7 +184,8 @@ NTSTATUS LeGlobalData::Initialize()
             }
             else
             {
-                Status = ResolveRuntimeTimeZone(LePeb->TimezoneId, &LePeb->Environment.Timezone);
+                Status = ResolveRuntimeTimeZone(LePeb->TimezoneId, LePeb->StandardNameOverride,
+                    LePeb->DaylightNameOverride, &LePeb->Environment.Timezone);
                 if (NT_SUCCESS(Status) && !LeValidateRuntimeConfig(&LePeb->Environment))
                     Status = STATUS_INVALID_PARAMETER;
             }

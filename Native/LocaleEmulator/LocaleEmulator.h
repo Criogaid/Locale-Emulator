@@ -5,7 +5,7 @@
 #include "../RuntimeEnvironment.h"
 #include <limits.h>
 
-NTSTATUS ResolveRuntimeTimeZone(PCWSTR Id, PLE_RUNTIME_TIME_ZONE_INFORMATION Zone);
+NTSTATUS ResolveRuntimeTimeZone(PCWSTR Id, PCWSTR StandardNameOverride, PCWSTR DaylightNameOverride, PLE_RUNTIME_TIME_ZONE_INFORMATION Zone);
 
 
 #define ROOTDIR_SYSTEM32            L"\\SystemRoot\\system32\\"
@@ -272,6 +272,8 @@ typedef struct
     WCHAR       LeDllDirPath[MAX_NTPATH];
     LE_RUNTIME_CONFIG Environment;
     WCHAR       TimezoneId[128];
+    WCHAR       StandardNameOverride[32];
+    WCHAR       DaylightNameOverride[32];
 } LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, *PLOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, LEPEB, *PLEPEB;
 
 inline

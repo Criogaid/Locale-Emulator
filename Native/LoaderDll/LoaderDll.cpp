@@ -1,5 +1,6 @@
 #include "ml.cpp"
 #include "LoaderDll.h"
+#include "../TimeZoneResolver.h"
 
 // 自定义入口必须先初始化官方 GS cookie，再进入任何受保护的导出函数。
 extern "C" __declspec(safebuffers) BOOL WINAPI LeLoaderEntry(PVOID, DWORD reason, PVOID)
@@ -31,6 +32,10 @@ static NTSTATUS PrepareRuntimeEnvironment(PLE_RUNTIME_INPUT Input, PLEPEB LePeb)
     LePeb->Environment.HookUILanguageMode = Input->HookUILanguageMode;
     CopyMemory(LePeb->TimezoneId, Base + Input->TimezoneIdOffset,
         (TimezoneCharacters + 1) * sizeof(WCHAR));
+    LeTimeZone::CopyBoundedName(LePeb->StandardNameOverride, countof(LePeb->StandardNameOverride),
+        (PCWSTR)(Base + Input->StandardNameOffset), Input->StandardNameLength);
+    LeTimeZone::CopyBoundedName(LePeb->DaylightNameOverride, countof(LePeb->DaylightNameOverride),
+        (PCWSTR)(Base + Input->DaylightNameOffset), Input->DaylightNameLength);
     return STATUS_SUCCESS;
 }
 
