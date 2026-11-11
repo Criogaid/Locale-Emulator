@@ -17,12 +17,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $packageName = 'LocaleEmulator.ModernMenu'
+# Holds the registered manifest and logo only; the product files stay in the product directory.
+$registrationDirectory = Join-Path $env:LOCALAPPDATA 'LocaleEmulator\ModernMenu'
 
 if ($Action -eq 'Unregister') {
     $existing = Get-AppxPackage -Name $packageName
     if ($existing) {
         $existing | Remove-AppxPackage
     }
+    Remove-Item -LiteralPath $registrationDirectory -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "Removed $packageName."
     return
 }
@@ -46,8 +49,7 @@ foreach ($name in 'LEProc.exe', 'LEExplorerCommand.dll') {
     }
 }
 
-# The registered manifest folder holds the manifest and logos only; keep it stable per user.
-$registrationDirectory = Join-Path $env:LOCALAPPDATA 'LocaleEmulator\ModernMenu'
+# The registered manifest folder must stay in place for as long as the package is registered.
 $assetsDirectory = Join-Path $registrationDirectory 'Assets'
 New-Item -ItemType Directory -Force $assetsDirectory | Out-Null
 Copy-Item -LiteralPath $ManifestPath -Destination $registrationDirectory -Force
