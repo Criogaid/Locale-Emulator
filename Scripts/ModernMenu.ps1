@@ -11,8 +11,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Register', 'Unregister')][string]$Action = 'Register',
-    [string]$ProductDirectory,
-    [string]$ManifestPath
+    [string]$ProductDirectory
 )
 
 try {
@@ -50,14 +49,13 @@ try {
     if (-not $ProductDirectory) {
         $ProductDirectory = $PSScriptRoot
     }
+    # Inside a package the manifest sits next to this script; in a checkout it is under Native/.
+    $ManifestPath = @(
+        (Join-Path $PSScriptRoot 'AppxManifest.xml'),
+        (Join-Path $PSScriptRoot '..\Native\ExplorerCommand\AppxManifest.xml')
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $ManifestPath) {
-        $ManifestPath = @(
-            (Join-Path $PSScriptRoot 'AppxManifest.xml'),
-            (Join-Path $PSScriptRoot '..\Native\ExplorerCommand\AppxManifest.xml')
-        ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    }
-    if (-not $ManifestPath) {
-        throw 'AppxManifest.xml was not found; pass -ManifestPath.'
+        throw 'AppxManifest.xml was not found next to the script or under Native/ExplorerCommand.'
     }
     $ProductDirectory = (Resolve-Path -LiteralPath $ProductDirectory).Path
     foreach ($name in 'LEProc.exe', 'LEExplorerCommand.dll') {

@@ -47,13 +47,16 @@ function ConvertTo-WideLiteral {
     return $builder.Append('"').ToString()
 }
 
+# The resource keys, in the field order of the native Texts struct in ExplorerCommand.cpp.
+$menuKeys = 'Submenu', 'RunDefault', 'ManageApp', 'ManageAll'
+
 function Get-MenuTexts {
     param([string]$ResxPath, [hashtable]$Fallback)
     $values = @{}
     foreach ($node in ([xml](Get-Content -LiteralPath $ResxPath -Raw -Encoding UTF8)).root.data) {
         $values[$node.name] = $node.value
     }
-    foreach ($key in 'Submenu', 'RunDefault', 'ManageApp', 'ManageAll') {
+    foreach ($key in $menuKeys) {
         if (-not $values.ContainsKey($key)) {
             if ($null -eq $Fallback) { throw "$ResxPath 缺少 $key。" }
             $values[$key] = $Fallback[$key]
@@ -64,7 +67,7 @@ function Get-MenuTexts {
 
 function Format-MenuTexts {
     param([hashtable]$Texts)
-    return '{' + ((@('Submenu', 'RunDefault', 'ManageApp', 'ManageAll') | ForEach-Object { ConvertTo-WideLiteral $Texts[$_] }) -join ', ') + '}'
+    return '{' + (($menuKeys | ForEach-Object { ConvertTo-WideLiteral $Texts[$_] }) -join ', ') + '}'
 }
 
 $menuResources = Join-Path $PSScriptRoot '..\..\LEContextMenuHandler'
