@@ -31,15 +31,11 @@ namespace LEProc
             ApplicationName = applicationName;
             CommandLine = commandLine;
             CurrentDirectory = currentDirectory;
+            // Locale, code pages and time zone come from the caller's profile; none is assumed here.
             _environment = new RuntimeEnvironment
             {
-                AnsiCodePage = 932,
-                OemCodePage = 932,
-                LocaleID = 0x411,
-                FontCharset = 128,
                 RegistryMode = 0,
                 HookUILanguageMode = 0,
-                TimezoneId = "Tokyo Standard Time",
                 StandardNameOverride = string.Empty,
                 DaylightNameOverride = string.Empty
             };
