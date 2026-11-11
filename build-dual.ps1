@@ -258,6 +258,11 @@ Assert-Machine (Join-Path $x64.Package 'LoaderDll.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LocaleEmulator.dll') 'x64'
 Assert-Machine (Join-Path $x86.Package 'LEExplorerCommand.dll') 'x64'
 Assert-Machine (Join-Path $x64.Package 'LEExplorerCommand.dll') 'x64'
+# Both Loaders keep CFG on (the x64 one needs the protected delay-load IAT handling in LepDelayLoad_x86_x64.cpp).
+foreach ($package in $x86.Package, $x64.Package) {
+    $loader = Join-Path $package 'LoaderDll.dll'
+    if ((& $dumpbin /headers $loader 2>&1 | Out-String) -notmatch 'Control Flow Guard') { throw "LoaderDll.dll 缺少 Control Flow Guard：$loader" }
+}
 # The Shell loads this DLL into Explorer: require the mitigations the build asks for and the two COM exports.
 foreach ($package in $x86.Package, $x64.Package) {
     $dll = Join-Path $package 'LEExplorerCommand.dll'

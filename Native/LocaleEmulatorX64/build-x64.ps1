@@ -165,12 +165,12 @@ Invoke-Native $linker $coreLinkArguments
 
 Write-Host '[x64 5/5] 编译并链接 LoaderDll.dll'
 $loaderObjects = @(
-    (Compile-Source (Join-Path $loaderRoot 'LoaderDll.cpp') -ExtraArguments @('/DLEP_LOADER_DLL=1') -ObjectName 'LoaderDll.obj'),
-    (Compile-Source (Join-Path $loaderRoot 'Environment.cpp') -ExtraArguments @('/DLEP_LOADER_DLL=1') -ObjectName 'Environment.obj')
+    (Compile-Source (Join-Path $loaderRoot 'LoaderDll.cpp') -ExtraArguments @('/DLEP_LOADER_DLL=1', '/guard:cf') -ObjectName 'LoaderDll.obj'),
+    (Compile-Source (Join-Path $loaderRoot 'Environment.cpp') -ExtraArguments @('/DLEP_LOADER_DLL=1', '/guard:cf') -ObjectName 'Environment.obj')
 )
 $loaderLinkArguments = @(
     '/nologo', '/dll', '/noentry', '/nodefaultlib', '/debug:none', '/opt:ref',
-    '/manifest:no', '/machine:x64', "/out:$(Join-Path $binaryRoot 'LoaderDll.dll')",
+    '/manifest:no', '/machine:x64', '/guard:cf', "/out:$(Join-Path $binaryRoot 'LoaderDll.dll')",
     "/implib:$(Join-Path $libraryRoot 'LoaderDll.lib')",
     "/def:$(Join-Path $loaderRoot 'LoaderDll.def')",
     '/delayload:KERNEL32_LEP.dll'
