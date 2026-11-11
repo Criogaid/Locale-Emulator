@@ -283,6 +283,12 @@ foreach ($file in (& git -C $repository ls-files)) {
         if ($byte -lt 32 -and $byte -ne 9 -and $byte -ne 10 -and $byte -ne 13) { throw "文本文件含控制字节 0x$($byte.ToString('X2'))：$file" }
     }
 }
+# The installer runs ModernMenu.ps1 with Windows PowerShell 5.1, which reads a BOM-less file as the ANSI code page:
+# any non-ASCII byte would be misread there, so the shipped script must be pure ASCII.
+foreach ($package in $x86.Package, $x64.Package) {
+    $script = Join-Path $package 'ModernMenu.ps1'
+    if ([IO.File]::ReadAllBytes($script) | Where-Object { $_ -gt 127 } | Select-Object -First 1) { throw "ModernMenu.ps1 必须是纯 ASCII：$script" }
+}
 # The first-level menu, the static verb and the package logo take their icon from LEGUI.exe (LEProc.exe has none).
 Add-Type -Namespace BuildCheck -Name Icons -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern uint ExtractIconEx(string file, int index, System.IntPtr[] large, System.IntPtr[] small, uint count);'
 foreach ($package in $x86.Package, $x64.Package) {
