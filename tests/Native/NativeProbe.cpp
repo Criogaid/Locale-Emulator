@@ -1,6 +1,5 @@
 #include <Windows.h>
 #include <DbgHelp.h>
-#pragma comment(lib, "Dbghelp.lib")
 #include "WindowsCommandLine.h"
 
 // 退出码位：1 ACP、2 默认转换、4 显式转换、8 字体、16 工作目录、32 子进程、64 报告写入；128 参数错误。
@@ -21,12 +20,22 @@ static LONG CALLBACK DumpControlException(EXCEPTION_POINTERS* exception) {
     static LONG dumping;
     if (InterlockedCompareExchange(&dumping, 1, 0)) return EXCEPTION_CONTINUE_SEARCH;
     Record("control_exception_code", code);
-    HANDLE dump = CreateFileW(dumpPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (dump != INVALID_HANDLE_VALUE) {
-        MINIDUMP_EXCEPTION_INFORMATION info = {GetCurrentThreadId(), exception, FALSE};
-        Record("control_dump_written", MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump, MiniDumpNormal, &info, nullptr, nullptr));
-        CloseHandle(dump);
+    // 仅在异常后加载，避免诊断改变被测进程的初始 DLL 顺序。
+    HMODULE diagnostics = LoadLibraryExW(L"dbghelp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!diagnostics) {
+        Record("control_dump_load_error", GetLastError());
+        return EXCEPTION_CONTINUE_SEARCH;
     }
+    auto writeDump = reinterpret_cast<decltype(&MiniDumpWriteDump)>(GetProcAddress(diagnostics, "MiniDumpWriteDump"));
+    if (writeDump) {
+        HANDLE dump = CreateFileW(dumpPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (dump != INVALID_HANDLE_VALUE) {
+            MINIDUMP_EXCEPTION_INFORMATION info = {GetCurrentThreadId(), exception, FALSE};
+            Record("control_dump_written", writeDump(GetCurrentProcess(), GetCurrentProcessId(), dump, MiniDumpNormal, &info, nullptr, nullptr));
+            CloseHandle(dump);
+        } else Record("control_dump_open_error", GetLastError());
+    } else Record("control_dump_export_error", GetLastError());
+    FreeLibrary(diagnostics);
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -332,6 +341,7 @@ int wmain(int argc, WCHAR** argv) {
     if (child) {
         dumpPath = std::wstring(argv[1]) + L".dmp";
         PVOID handler = AddVectoredExceptionHandler(1, DumpControlException);
+        Record("control_exception_handler_installed", handler != nullptr);
         if (!CheckControls()) failures |= 32;
         if (handler) RemoveVectoredExceptionHandler(handler);
     }
