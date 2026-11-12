@@ -150,6 +150,32 @@ namespace LEGUI
             cbGlobalProfiles.ItemsSource = _profiles.Select(p => p.Name);
         }
 
+        // "New" offers a menu of language presets; picking one creates and selects a ready-to-use profile.
+        private void bNewGlobalSetting_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = new ContextMenu { PlacementTarget = bNewGlobalSetting };
+            foreach (var preset in LanguagePresets.All)
+            {
+                var chosen = preset;
+                var item = new MenuItem { Header = chosen.Language };
+                item.Click += (s, args) => AddPreset(chosen);
+                menu.Items.Add(item);
+            }
+            menu.IsOpen = true;
+        }
+
+        private void AddPreset(LanguagePreset preset)
+        {
+            var name = LanguagePresets.UniqueName(preset.DefaultName, _profiles.Select(p => p.Name));
+            var pro = preset.CreateProfile(name);
+
+            SaveGlobalProfiles(_profiles.Concat(new[] { pro }).ToArray());
+
+            _profiles.Add(pro);
+            cbGlobalProfiles.ItemsSource = _profiles.Select(p => p.Name);
+            cbGlobalProfiles.SelectedIndex = _profiles.Count - 1;
+        }
+
         private void bDeleteGlobalSetting_Click(object sender, RoutedEventArgs e)
         {
             if (cbGlobalProfiles.SelectedIndex == -1)

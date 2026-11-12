@@ -27,6 +27,9 @@
   <data name="Cancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
+  <data name="NewProfile" xml:space="preserve">
+    <value>新規</value>
+  </data>
   <data name="SaveAs" xml:space="preserve">
     <value>名前を付けて保存</value>
   </data>

@@ -27,6 +27,9 @@
   <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="NewProfile" xml:space="preserve">
+    <value>New</value>
+  </data>
   <data name="SaveAs" xml:space="preserve">
     <value>Save As ...</value>
   </data>

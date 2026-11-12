@@ -83,6 +83,7 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="I18n.cs" />
+    <Compile Include="LanguagePresets.cs" />
     <Compile Include="LocExtension.cs" />
     <Compile Include="GlobalConfig.xaml.cs">
       <DependentUpon>GlobalConfig.xaml</DependentUpon>

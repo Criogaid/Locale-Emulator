@@ -18,16 +18,19 @@
                     <ColumnDefinition Width="1*" />
                     <ColumnDefinition Width="1*" />
                     <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="1*" />
                 </Grid.ColumnDefinitions>
                 <ComboBox SelectedIndex="0" x:Name="cbGlobalProfiles" Grid.Row="0" Grid.Column="0" Height="Auto"
                           Margin="3,3,3,4"
-                          VerticalContentAlignment="Center" Grid.ColumnSpan="3"
+                          VerticalContentAlignment="Center" Grid.ColumnSpan="4"
                           SelectionChanged="cbGlobalProfiles_SelectionChanged" />
-                <Button x:Name="bSaveGlobalSetting" Grid.Row="1" Grid.Column="0" Content="{legui:Loc Save}"
+                <Button x:Name="bNewGlobalSetting" Grid.Row="1" Grid.Column="0" Content="{legui:Loc NewProfile}"
+                        Margin="3,0,3,5" Click="bNewGlobalSetting_Click" />
+                <Button x:Name="bSaveGlobalSetting" Grid.Row="1" Grid.Column="1" Content="{legui:Loc Save}"
                         Margin="3,0,3,5" Click="bSaveGlobalSetting_Click" />
-                <Button x:Name="bSaveGlobalSettingAs" Grid.Row="1" Grid.Column="1" Content="{legui:Loc SaveAs}"
+                <Button x:Name="bSaveGlobalSettingAs" Grid.Row="1" Grid.Column="2" Content="{legui:Loc SaveAs}"
                         Margin="3,0,3,5" Click="bSaveGlobalSettingAs_Click" />
-                <Button x:Name="bDeleteGlobalSetting" Grid.Row="1" Grid.Column="2" Content="{legui:Loc Delete}"
+                <Button x:Name="bDeleteGlobalSetting" Grid.Row="1" Grid.Column="3" Content="{legui:Loc Delete}"
                         Margin="3,0,3,5" Click="bDeleteGlobalSetting_Click" />
             </Grid>
             <Grid Grid.Row="1" Margin="0,0,0,10">
