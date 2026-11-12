@@ -39,4 +39,6 @@ pwsh -NoProfile -File ./Scripts/Test.ps1 `
 
 WPF 回归在 STA 线程实例化真实配置窗口，触发保存和快捷方式事件，确认失败不继续启动或关闭，持久化失败不改变内存列表；不可用区域或时区必须重新选择后保存。独立语言子进程验证 `LocExtension` 对普通字符串属性返回字符串，对 `TextElement.FontFamily` 返回 `FontFamily`，英文字体为 `Segoe UI`，日语及其区域文化为 `Meiryo UI`。资源运行期探针通过 `Assembly.LoadFrom` 加载四个实际产品程序集，切换 `CurrentUICulture`，核对简繁中文、日文文化链、未提供翻译的 `sv-SE` 英文回退、GUI 缺键英文回退、未知键返回键名，以及简体中文安装器窗口。
 
+双架构入口将 x64 烟测报告写入 `artifacts/tests/dual-x64/`。控件初始化触发访问冲突或非法指令时，原生探针尝试写出 `.dmp`；同次构建的 x64 `NativeProbe.exe` 和 PDB 随测试证据上传，便于核对托管环境中的异常位置。
+
 实际数量和失败详情以每轮 `managed.log`、`shell64.log` 为准，系统 build/UBR 和实际产品哈希在 `environment.json`。Dispatcher 的交互式对话框、UAC 以及实际 Explorer 中的完整 Shell 安装需要各自验收，不能由参数、配置或受控宿主测试推定。

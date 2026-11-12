@@ -421,6 +421,9 @@ function Assert-X64NativeReport {
 }
 $x64NativeProbe = Join-Path $nativeX64Root 'NativeProbe.exe'
 $x64NativeLaunch = Join-Path $nativeX64Root 'NativeLaunch.exe'
+foreach ($name in @('NativeProbe.exe', 'NativeProbe.pdb')) {
+    Copy-Item -LiteralPath (Join-Path $nativeX64Root $name) -Destination $smokeRoot -Force
+}
 foreach ($codePage in @(932, 936)) {
     $report = Join-Path $smokeRoot "native-x64-$codePage.txt"
     & $x64NativeLaunch $x64.Package $x64NativeProbe $report "$codePage" $smokeRoot

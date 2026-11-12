@@ -1,15 +1,33 @@
 #include <Windows.h>
+#include <DbgHelp.h>
+#pragma comment(lib, "Dbghelp.lib")
 #include "WindowsCommandLine.h"
 
 // 退出码位：1 ACP、2 默认转换、4 显式转换、8 字体、16 工作目录、32 子进程、64 报告写入；128 参数错误。
 static HANDLE report;
 static DWORD failures;
+static std::wstring dumpPath;
 
 static void Record(const char* key, DWORD value) {
     char line[128];
     const int length = wsprintfA(line, "%s=%lu\r\n", key, value);
     DWORD written = 0;
     if (!WriteFile(report, line, length, &written, nullptr) || written != static_cast<DWORD>(length)) failures |= 64;
+}
+
+static LONG CALLBACK DumpControlException(EXCEPTION_POINTERS* exception) {
+    const DWORD code = exception->ExceptionRecord->ExceptionCode;
+    if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION) return EXCEPTION_CONTINUE_SEARCH;
+    static LONG dumping;
+    if (InterlockedCompareExchange(&dumping, 1, 0)) return EXCEPTION_CONTINUE_SEARCH;
+    Record("control_exception_code", code);
+    HANDLE dump = CreateFileW(dumpPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (dump != INVALID_HANDLE_VALUE) {
+        MINIDUMP_EXCEPTION_INFORMATION info = {GetCurrentThreadId(), exception, FALSE};
+        Record("control_dump_written", MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump, MiniDumpNormal, &info, nullptr, nullptr));
+        CloseHandle(dump);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
 static bool ParseCodePage(const WCHAR* text, UINT& value) {
@@ -311,7 +329,12 @@ int wmain(int argc, WCHAR** argv) {
             }
         }
     }
-    if (child && !CheckControls()) failures |= 32;
+    if (child) {
+        dumpPath = std::wstring(argv[1]) + L".dmp";
+        PVOID handler = AddVectoredExceptionHandler(1, DumpControlException);
+        if (!CheckControls()) failures |= 32;
+        if (handler) RemoveVectoredExceptionHandler(handler);
+    }
     Record("failures", failures);
     CloseHandle(report);
     return static_cast<int>(failures);
