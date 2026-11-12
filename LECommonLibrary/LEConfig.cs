@@ -90,10 +90,10 @@ namespace LECommonLibrary
 
         private static void BuildGlobalConfigFile()
         {
+            // One profile per language; elevation is a property of the profile, not a second menu entry.
             var defaultProfiles = new[]
                                   {
-                                      LEProfile.CreateDefault("Run in Japanese", false),
-                                      LEProfile.CreateDefault("Run in Japanese (Admin)", true)
+                                      LEProfile.CreateDefault("Run in Japanese", false)
                                   };
             WriteConfig(GlobalConfigPath, defaultProfiles);
         }
