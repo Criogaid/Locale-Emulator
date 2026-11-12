@@ -334,7 +334,7 @@ Assert-Machine (Join-Path $x64.Package 'x86/LoaderDll.dll') 'x86'
 Assert-Machine (Join-Path $x64.Package 'x86/LocaleEmulator.dll') 'x86'
 
 Write-Host '[dual 6/6] 运行 x64 Loader 启动烟测'
-$smokeRoot = Join-Path $packageRoot 'x64-launch-smoke'
+$smokeRoot = Join-Path $repository 'artifacts/tests/dual-x64'
 if (Test-Path -LiteralPath $smokeRoot) {
     Remove-Item -LiteralPath $smokeRoot -Recurse -Force
 }
