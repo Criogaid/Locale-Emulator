@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,6 +15,79 @@ namespace ManagedRegression
     internal static class WpfRegression
     {
         private static App application;
+
+        internal static void LanguagePresetsResolveCulturesAndTimezones()
+        {
+            var presets = GetLanguagePresets();
+            Check(presets.Length > 0, "No language presets were offered.");
+            foreach (var preset in presets)
+            {
+                var type = preset.GetType();
+                CultureInfo.GetCultureInfo((string)type.GetProperty("Location").GetValue(preset, null));
+                TimeZoneInfo.FindSystemTimeZoneById((string)type.GetProperty("Timezone").GetValue(preset, null));
+            }
+        }
+
+        internal static void LanguagePresetsHaveUniqueLanguagesAndLocations()
+        {
+            var languages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var locations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var preset in GetLanguagePresets())
+            {
+                var type = preset.GetType();
+                var language = (string)type.GetProperty("Language").GetValue(preset, null);
+                var location = (string)type.GetProperty("Location").GetValue(preset, null);
+                Check(languages.Add(language), "Duplicate preset language: " + language);
+                Check(locations.Add(location), "Duplicate preset location: " + location);
+            }
+        }
+
+        internal static void LanguagePresetsCreateProfilesWithFreshGuidsAndDefaults()
+        {
+            var guids = new HashSet<Guid>();
+            foreach (var preset in GetLanguagePresets())
+            {
+                var type = preset.GetType();
+                var location = (string)type.GetProperty("Location").GetValue(preset, null);
+                var timezone = (string)type.GetProperty("Timezone").GetValue(preset, null);
+                var createProfile = (Func<string, LEProfile>)Delegate.CreateDelegate(typeof(Func<string, LEProfile>),
+                    preset, type.GetMethod("CreateProfile"));
+                const string name = "Preset regression";
+                foreach (var profile in new[] { createProfile(name), createProfile(name) })
+                {
+                    Guid guid;
+                    Check(Guid.TryParse(profile.Guid, out guid) && guid != Guid.Empty && guids.Add(guid),
+                        "Preset profile has an invalid, empty or reused GUID: " + profile.Guid);
+                    Check(profile.Name == name && profile.Location == location && profile.Timezone == timezone,
+                        "Preset profile did not preserve its requested name, region and time zone.");
+                    Check(!profile.RunAsAdmin && profile.RedirectRegistry && !profile.ShowInMainMenu,
+                        "Preset profile elevation, registry redirection or main menu defaults changed.");
+                }
+            }
+        }
+
+        internal static void LanguagePresetNamesAvoidCollisions()
+        {
+            var type = typeof(App).Assembly.GetType("LEGUI.LanguagePresets", true);
+            var uniqueName = (Func<string, IEnumerable<string>, string>)Delegate.CreateDelegate(
+                typeof(Func<string, IEnumerable<string>, string>), type.GetMethod("UniqueName"));
+            const string name = "Run in X";
+            Check(uniqueName(name, new string[0]) == name, "An unused preset name was changed.");
+            Check(uniqueName(name, new[] { "Run in Y", "Run in X (2)" }) == name,
+                "An unused base name was changed because a suffixed name was taken.");
+            Check(uniqueName(name, new[] { name }) == "Run in X (2)",
+                "A duplicate preset name did not receive the first suffix.");
+            Check(uniqueName(name, new[] { "run IN x" }) == "Run in X (2)",
+                "Preset name collisions were not case-insensitive.");
+            Check(uniqueName(name, new[] { "RUN IN X", "run in x (2)" }) == "Run in X (3)",
+                "Preset naming did not skip a taken suffix case-insensitively.");
+        }
+
+        private static object[] GetLanguagePresets()
+        {
+            var type = typeof(App).Assembly.GetType("LEGUI.LanguagePresets", true);
+            return ((IEnumerable)type.GetField("All").GetValue(null)).Cast<object>().ToArray();
+        }
 
         internal static void AppConfigSaveFailureDoesNotLaunchOrShutdown()
         {

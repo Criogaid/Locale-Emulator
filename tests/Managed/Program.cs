@@ -89,6 +89,10 @@ namespace ManagedRegression
                 LaunchInteropRegression.LoaderMissingDllReleasesAllocation
             }.Concat(ShellRegression.Tests).Concat(new Action[]
             {
+                WpfRegression.LanguagePresetsResolveCulturesAndTimezones,
+                WpfRegression.LanguagePresetsHaveUniqueLanguagesAndLocations,
+                WpfRegression.LanguagePresetsCreateProfilesWithFreshGuidsAndDefaults,
+                WpfRegression.LanguagePresetNamesAvoidCollisions,
                 WpfRegression.AppConfigSaveFailureDoesNotLaunchOrShutdown,
                 WpfRegression.GlobalSaveFailureKeepsSelectedProfile,
                 WpfRegression.GlobalSaveAsFailureKeepsProfiles,
@@ -413,10 +417,8 @@ namespace ManagedRegression
                     Check(!LEConfig.CheckGlobalConfigFile(false), "Read-only check created a config.");
                     Check(LEConfig.CheckGlobalConfigFile(true), "Default config was not created.");
                     var defaults = LEConfig.GetProfiles();
-                    Check(defaults.Length == 2, "Default config must contain two profiles.");
+                    Check(defaults.Length == 1, "Default config must contain one profile.");
                     AssertDefaultProfile(defaults[0], "Run in Japanese", false);
-                    AssertDefaultProfile(defaults[1], "Run in Japanese (Admin)", true);
-                    Check(defaults[0].Guid != defaults[1].Guid, "Default config profiles reused a GUID.");
                     File.WriteAllText(LEConfig.GlobalConfigPath, "<invalid>");
                     Check(LEConfig.CheckGlobalConfigFile(true), "Existing config was not detected.");
                     Check(File.ReadAllText(LEConfig.GlobalConfigPath) == "<invalid>", "Existing config was overwritten.");
