@@ -271,16 +271,54 @@ namespace ManagedRegression
 
         private void RegistrationFailures()
         {
+            string path = @"Software\LE-ShellRegression-" + Guid.NewGuid();
+            using (var currentUser = Registry.CurrentUser.OpenSubKey(string.Empty, true))
+            {
+                try
+                {
+                    using (var isolated = currentUser.CreateSubKey(path))
+                    {
+                        using (isolated.CreateSubKey(@"Software\Classes")) { }
+                        var root = new IntPtr(unchecked((int)0x80000001));
+                        Check(RegOverridePredefKey(root, isolated.Handle.DangerousGetHandle()) == 0,
+                            "Could not isolate HKCU for registration tests.");
+                        try { RegistrationFailuresCore(); }
+                        finally
+                        {
+                            Check(RegOverridePredefKey(root, IntPtr.Zero) == 0,
+                                "Could not restore HKCU after registration tests.");
+                        }
+                    }
+                }
+                finally { currentUser.DeleteSubKeyTree(path, false); }
+            }
+        }
+
+        private void RegistrationFailuresCore()
+        {
             var form = Activator.CreateInstance(formType, new object[] { 0 });
+            var manager = formType.Assembly.GetType("LEInstaller.ShellExtensionManager", true);
+            var keyName = manager.GetField("keyName", BindingFlags.Static | BindingFlags.NonPublic);
+            string isolatedKeyName = @"Software\Classes\LE-ShellRegression-" + Guid.NewGuid();
+            keyName.SetValue(null, isolatedKeyName);
             string handler = Path.Combine(directory, "LEContextMenuHandler.dll");
             var handlerBytes = File.ReadAllBytes(handler);
             File.Delete(handler);
             try
             {
-                foreach (string method in new[] { "DoRegister", "DoUnRegister" })
-                    foreach (bool allUsers in new[] { false, true })
-                        Check(Equals(Invoke(form, method, allUsers), false),
-                            "Missing payload did not return an explicit registration failure.");
+                foreach (bool allUsers in new[] { false, true })
+                {
+                    Check(!(bool)Invoke(form, "DoRegister", allUsers),
+                        "DoRegister accepted a missing payload; allUsers=" + allUsers);
+                    bool isAdmin = (bool)formType.GetMethod("IsAdministrator").Invoke(null, null);
+                    Check((bool)Invoke(form, "DoUnRegister", allUsers) == (!allUsers || isAdmin),
+                        "Uninstalling an absent extension did not respect administrator permissions; allUsers=" + allUsers);
+                }
+                using (Registry.CurrentUser.CreateSubKey(isolatedKeyName)) { }
+                Check(!(bool)Invoke(form, "DoUnRegister", false),
+                    "Uninstalling an installed extension accepted a missing payload.");
+                Check((bool)manager.GetMethod("IsInstalled").Invoke(null, new object[] { false }),
+                    "Missing-payload failure removed the existing Shell registration.");
 
                 // No COM-visible types: RegistrationServices returns false without registering anything.
                 var name = new AssemblyName("NoComTypes" + Guid.NewGuid().ToString("N"));
@@ -299,27 +337,30 @@ namespace ManagedRegression
                         Check(key != null, "HKCR override remained active after registration failure.");
                 }
                 File.WriteAllBytes(handler, handlerBytes);
-                var manager = formType.Assembly.GetType("LEInstaller.ShellExtensionManager", true);
-                var keyName = manager.GetField("keyName", BindingFlags.Static | BindingFlags.NonPublic);
-                var originalKeyName = (string)keyName.GetValue(null);
+                Registry.CurrentUser.DeleteSubKeyTree(isolatedKeyName);
+                var friendlyName = manager.GetField("friendlyName", BindingFlags.Static | BindingFlags.NonPublic);
+                var originalFriendlyName = (string)friendlyName.GetValue(null);
                 const string clsidPath = @"Software\Classes\CLSID\{C52B9871-E5E9-41FD-B84D-C5ACADBEC7AE}\InprocServer32";
                 var shellBefore = (bool)manager.GetMethod("IsInstalled").Invoke(null, new object[] { false });
                 bool comBefore;
                 using (var comKey = Registry.CurrentUser.OpenSubKey(clsidPath)) comBefore = comKey != null;
                 try
                 {
-                    keyName.SetValue(null, null);
+                    // Fail after COM registration so rollback must remove both Shell and COM state.
+                    friendlyName.SetValue(null, null);
                     Check(!(bool)Invoke(form, "DoRegister", false),
                         "A Shell registration failure was reported as success.");
                 }
                 finally
                 {
-                    keyName.SetValue(null, originalKeyName);
+                    friendlyName.SetValue(null, originalFriendlyName);
                 }
                 Check((bool)manager.GetMethod("IsInstalled").Invoke(null, new object[] { false }) == shellBefore,
                     "A failed registration changed the Shell registration state.");
                 using (var comKey = Registry.CurrentUser.OpenSubKey(clsidPath))
                     Check((comKey != null) == comBefore, "A failed registration changed the COM registration state.");
+                Check(!(bool)manager.GetMethod("IsStaticExplorerVerbInstalled").Invoke(null, null),
+                    "A failed registration left a static Explorer verb behind.");
             }
             finally
             {
@@ -517,6 +558,7 @@ namespace ManagedRegression
             internal IntPtr Bitmap;
         }
 
+        [DllImport("advapi32.dll")] private static extern int RegOverridePredefKey(IntPtr key, IntPtr replacement);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr GlobalAlloc(uint flags, UIntPtr bytes);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr GlobalLock(IntPtr memory);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GlobalUnlock(IntPtr memory);
