@@ -45,6 +45,8 @@ NativeProbe.exe <result-path> <expected-acp> [expected-working-directory]
 
 Windows 11 x64 24H2（26100.9168）已验证源码构建与官方 v2.5.0.1 在相同探针下的 932/936 父子进程结果均为 0；真实 LEProc 启动源码构建也通过。编译/导入表与探针报告位于仓库的 `artifacts/logs`，属于本机验证产物。
 
+x64 inline hook 由 [Decoder.cpp](LocaleEmulatorX64/LocaleEmulatorPlus/support/patch/Decoder.cpp) 按完整指令长度重算 RIP-relative 的 disp32；[MemoryPatch.cpp](LocaleEmulatorX64/LocaleEmulatorPlus/support/patch/MemoryPatch.cpp) 复用近地址分配器，让跳板位于原函数附近，并对称释放虚拟内存。超出有符号 32 位位移范围或遇到不支持的 `67` 地址大小覆盖时，复制返回失败；补丁层在生成成功后才发布原始 stub。确定性回归及实际 x64 父子进程检查由 `build-dual.ps1` 执行。
+
 ## 安全选项与支持边界
 
 两个产品项目均使用 `/W4 /WX /MT /GS /DYNAMICBASE /NXCOMPAT /SAFESEH`，链接器也启用 `/WX`。分配器仍由原生源码管理，GS 与 SEH 使用官方静态 `libvcruntime.lib`，不依赖动态 VC 运行库。LoaderDll 仅导出 `LeCreateProcess`。代码、只读数据和可写数据保持分节；跳板独立分配为 RW，生成后改为 RX；子进程私有映像也按节恢复权限。

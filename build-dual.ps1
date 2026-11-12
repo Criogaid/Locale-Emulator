@@ -25,17 +25,21 @@ $toolchain = Get-OfficialToolchain
 $msbuild = $toolchain.MSBuild
 $nativeProperties = @("/p:WindowsTargetPlatformVersion=$($toolchain.SdkVersion)", "/p:VCToolsVersion=$($toolchain.MsvcVersion)")
 
-Write-Host '[dual 3/6] 构建 x64 属性表边界探针'
+Write-Host '[dual 3/6] 构建 x64 原生边界探针'
 & $msbuild (Join-Path $repository 'tests/Native/X64AttributeContracts.vcxproj') /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 @nativeProperties "/fl" "/flp:logfile=$(Join-Path $logs 'dual-x64-attribute-contracts-build.log');verbosity=normal;encoding=UTF-8"
 if ($LASTEXITCODE -ne 0) {
     throw 'x64 属性表边界探针构建失败。'
 }
-foreach ($project in @('tests/Native/NativeProbe.vcxproj', 'tests/Native/NativeLaunch.vcxproj')) {
+foreach ($project in @('tests/Native/NativeProbe.vcxproj', 'tests/Native/NativeLaunch.vcxproj', 'tests/Native/X64PatchContracts.vcxproj')) {
     $logName = 'dual-x64-' + [IO.Path]::GetFileNameWithoutExtension($project) + '-build.log'
     & $msbuild (Join-Path $repository $project) /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 @nativeProperties "/fl" "/flp:logfile=$(Join-Path $logs $logName);verbosity=normal;encoding=UTF-8"
     if ($LASTEXITCODE -ne 0) {
         throw "x64 原生探针构建失败：$project"
     }
+}
+& (Join-Path $nativeX64Root 'X64PatchContracts.exe') 2>&1 | Tee-Object -FilePath (Join-Path $artifacts 'tests/x64-patch-contracts.log')
+if ($LASTEXITCODE -ne 0) {
+    throw "x64 跳板重定位回归失败，退出码 $LASTEXITCODE。"
 }
 
 

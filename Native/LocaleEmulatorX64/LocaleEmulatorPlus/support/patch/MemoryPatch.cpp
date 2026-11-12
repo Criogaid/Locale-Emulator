@@ -29,12 +29,16 @@ class MemoryPatchManager
 {
 protected:
     lep::DynamicArray<PTRAMPOLINE_DATA> TrampolineList;
+#if ML_X86
     HANDLE ExecutableHeap;
+#endif
 
 public:
     MemoryPatchManager()
     {
+#if ML_X86
         this->ExecutableHeap = RtlCreateHeap(HEAP_CREATE_ENABLE_EXECUTE | HEAP_GROWABLE | HEAP_CREATE_ALIGN_16, nullptr, 0, 0, nullptr, nullptr);
+#endif
     }
 
 protected:
@@ -65,7 +69,7 @@ protected:
             {
                 PTRAMPOLINE_DATA TrampolineData;
 
-                TrampolineData = AllocateTrampolineData();
+                TrampolineData = AllocateTrampolineData(Address);
                 if (TrampolineData == nullptr)
                     return STATUS_NO_MEMORY;
 
@@ -113,39 +117,25 @@ protected:
         return AlignDownTo(Value + Alignment - 1, Alignment);
     }
 
-    NTSTATUS TryAllocateRelayStub(PVOID EntryAddress, PVOID CandidateBase, PVOID Target, PVOID* Relay)
+    NTSTATUS TryAllocateNearBlock(PVOID EntryAddress, PVOID CandidateBase, SIZE_T Size, PVOID* Block)
     {
-        PVOID Base;
-        SIZE_T Size;
-        NTSTATUS Status;
-        LONG RelativeOffset;
-
-        Base = CandidateBase;
-        Size = TRAMPOLINE_SIZE;
-        Status = NtAllocateVirtualMemory(CurrentProcess, &Base, 0, &Size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        PVOID Base = CandidateBase;
+        NTSTATUS Status = NtAllocateVirtualMemory(CurrentProcess, &Base, 0, &Size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
         if (NT_FAILED(Status))
             return Status;
 
+        LONG RelativeOffset;
         if (!GetRelativeJumpOffset(EntryAddress, Base, &RelativeOffset))
         {
             Mm::FreeVirtualMemory(Base);
             return STATUS_BUFFER_TOO_SMALL;
         }
 
-        Status = GenerateHookCode((PBYTE)Base, Base, Target, (ULONG_PTR)OpJumpIndirect, GetSizeOfHookOpSize((ULONG_PTR)OpJumpIndirect));
-        if (NT_FAILED(Status))
-        {
-            Mm::FreeVirtualMemory(Base);
-            return Status;
-        }
-
-        FlushInstructionCache(Base, GetSizeOfHookOpSize((ULONG_PTR)OpJumpIndirect));
-        *Relay = Base;
-
+        *Block = Base;
         return STATUS_SUCCESS;
     }
 
-    NTSTATUS AllocateRelayStub(PVOID Address, PVOID Target, PVOID* Relay)
+    NTSTATUS AllocateNearBlock(PVOID Address, SIZE_T Size, PVOID* Block)
     {
         ULONG_PTR Near, Low, High, Query, Next;
         MEMORY_BASIC_INFORMATION MemoryInfo;
@@ -155,7 +145,7 @@ protected:
         static const ULONG_PTR MinUserAddress = 0x10000;
         static const ULONG_PTR MaxRange = 0x7FFFFFFF;
 
-        *Relay = nullptr;
+        *Block = nullptr;
 
         Near = (ULONG_PTR)Address;
         Low = Near > MaxRange ? Near - MaxRange : MinUserAddress;
@@ -178,7 +168,7 @@ protected:
 
             if (MemoryInfo.State == MEM_FREE)
             {
-                Status = TryAllocateRelayStub(Address, (PVOID)Query, Target, Relay);
+                Status = TryAllocateNearBlock(Address, (PVOID)Query, Size, Block);
                 if (NT_SUCCESS(Status))
                     return Status;
             }
@@ -201,7 +191,7 @@ protected:
 
             if (MemoryInfo.State == MEM_FREE)
             {
-                Status = TryAllocateRelayStub(Address, (PVOID)Query, Target, Relay);
+                Status = TryAllocateNearBlock(Address, (PVOID)Query, Size, Block);
                 if (NT_SUCCESS(Status))
                     return Status;
             }
@@ -214,6 +204,21 @@ protected:
         }
 
         return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    NTSTATUS AllocateRelayStub(PVOID Address, PVOID Target, PVOID* Relay)
+    {
+        NTSTATUS Status = AllocateNearBlock(Address, TRAMPOLINE_SIZE, Relay);
+        FAIL_RETURN(Status);
+        Status = GenerateHookCode((PBYTE)*Relay, *Relay, Target, (ULONG_PTR)OpJumpIndirect, GetSizeOfHookOpSize((ULONG_PTR)OpJumpIndirect));
+        if (NT_FAILED(Status))
+        {
+            Mm::FreeVirtualMemory(*Relay);
+            *Relay = nullptr;
+            return Status;
+        }
+        FlushInstructionCache(*Relay, GetSizeOfHookOpSize((ULONG_PTR)OpJumpIndirect));
+        return STATUS_SUCCESS;
     }
 
 #endif
@@ -338,7 +343,7 @@ GOT_HOOK_ADDRESS_AND_SIZE:
             ForceTrampolineData ||
             (Function.Trampoline != nullptr && DoNotDisassembleOpt == FALSE))
         {
-            TrampolineData = AllocateTrampolineData();
+            TrampolineData = AllocateTrampolineData(Address);
             if (TrampolineData == nullptr)
             {
                 if (Relay != nullptr)
@@ -363,28 +368,27 @@ GOT_HOOK_ADDRESS_AND_SIZE:
 
             if (NakedTrampolineOpt == FALSE)
             {
-                CopyTrampolineStub(Trampoline, Address, CopyOpSize);
-                if (CopyOpSize == HookOpSize && HookOp == OpCall && KeepRawTrampolineOpt == FALSE)
+                Status = CopyTrampolineStub(Trampoline, Address, CopyOpSize);
+                if (NT_SUCCESS(Status))
                 {
-                    TrampolineData->Trampoline[0] = 0xE9;
-                }
-                else
-                {
-                    GenerateJumpBack(Trampoline, &TrampolineData->JumpBackAddress);
+                    if (CopyOpSize == HookOpSize && HookOp == OpCall && KeepRawTrampolineOpt == FALSE)
+                        TrampolineData->Trampoline[0] = 0xE9;
+                    else
+                        Status = GenerateJumpBack(Trampoline, &TrampolineData->JumpBackAddress);
                 }
             }
             else
             {
-                GenerateNakedTrampoline(Trampoline, Address, CopyOpSize, TrampolineData);
-
-                Status = GenerateHookCode(LocalHookBuffer, Address, TrampolineData->Trampoline, HookOp, HookOpSize);
-                if (NT_FAILED(Status))
-                {
-                    FreeTrampolineData(TrampolineData);
-                    return Status;
-                }
-
-                PatchNop(&LocalHookBuffer[HookOpSize], CopyOpSize - HookOpSize);
+                Status = GenerateNakedTrampoline(Trampoline, Address, CopyOpSize, TrampolineData);
+                if (NT_SUCCESS(Status))
+                    Status = GenerateHookCode(LocalHookBuffer, Address, TrampolineData->Trampoline, HookOp, HookOpSize);
+                if (NT_SUCCESS(Status))
+                    PatchNop(&LocalHookBuffer[HookOpSize], CopyOpSize - HookOpSize);
+            }
+            if (NT_FAILED(Status))
+            {
+                FreeTrampolineData(TrampolineData);
+                return Status;
             }
 
             if (Trampoline - TrampolineData->Trampoline > TRAMPOLINE_SIZE)
@@ -392,16 +396,19 @@ GOT_HOOK_ADDRESS_AND_SIZE:
 
             FlushInstructionCache(TrampolineData->Trampoline, TRAMPOLINE_SIZE);
 
-            if (Function.Trampoline != nullptr)
-                *Function.Trampoline = TrampolineData->Trampoline;
-
-            this->TrampolineList.Add(TrampolineData);
+            Status = this->TrampolineList.Add(TrampolineData);
+            if (NT_FAILED(Status))
+            {
+                FreeTrampolineData(TrampolineData);
+                return Status;
+            }
         }
 
         Status = ProtectMemory(Address, CopyOpSize, PAGE_EXECUTE_READWRITE, &Protect);
         if (NT_FAILED(Status))
         {
-            FreeTrampolineData(TrampolineData);
+            if (TrampolineData != nullptr)
+                RemoveTrampolineData(TrampolineData);
             if (Relay != nullptr)
                 FreeRelayStub(Relay);
 
@@ -412,6 +419,8 @@ GOT_HOOK_ADDRESS_AND_SIZE:
         FlushInstructionCache(Address, CopyOpSize);
 
         Status = ProtectMemory(Address, CopyOpSize, Protect, &Protect);
+        if (Function.Trampoline != nullptr && TrampolineData != nullptr)
+            *Function.Trampoline = TrampolineData->Trampoline;
 
         return STATUS_SUCCESS;
     }
@@ -1045,7 +1054,8 @@ GOT_HOOK_ADDRESS_AND_SIZE:
             if (Source[0] == 0xC2 || Source[0] == 0xC3)
                 return STATUS_BUFFER_TOO_SMALL;
 
-            CopyOneOpCode(Trampoline, Source, &TargetOpLength, &SourceOpLength, ForwardSize, BackwardSize);
+            NTSTATUS Status = CopyOneOpCode(Trampoline, Source, &TargetOpLength, &SourceOpLength, ForwardSize, BackwardSize);
+            FAIL_RETURN(Status);
 
             BackwardSize+= SourceOpLength;
             ForwardSize -= SourceOpLength;
@@ -1247,9 +1257,17 @@ GOT_HOOK_ADDRESS_AND_SIZE:
         return NtFlushInstructionCache(CurrentProcess, BaseAddress, NumberOfBytesToFlush);
     }
 
-    PTRAMPOLINE_DATA AllocateTrampolineData()
+    PTRAMPOLINE_DATA AllocateTrampolineData(PVOID Address)
     {
+#if ML_AMD64
+        PVOID Block;
+        if (NT_FAILED(AllocateNearBlock(Address, sizeof(TRAMPOLINE_DATA), &Block)))
+            return nullptr;
+        return (PTRAMPOLINE_DATA)Block;
+#else
+        UNREFERENCED_PARAMETER(Address);
         return (PTRAMPOLINE_DATA)RtlAllocateHeap(this->ExecutableHeap, HEAP_ZERO_MEMORY, sizeof(TRAMPOLINE_DATA));
+#endif
     }
 
     VOID FreeTrampolineData(PTRAMPOLINE_DATA TrampolineData)
@@ -1261,7 +1279,13 @@ GOT_HOOK_ADDRESS_AND_SIZE:
         }
 
         if (TrampolineData != nullptr)
+        {
+#if ML_AMD64
+            Mm::FreeVirtualMemory(TrampolineData);
+#else
             RtlFreeHeap(this->ExecutableHeap, 0, TrampolineData);
+#endif
+        }
     }
 
     NTSTATUS RemoveTrampolineData(PTRAMPOLINE_DATA TrampolineData)

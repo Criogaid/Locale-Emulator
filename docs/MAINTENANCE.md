@@ -14,6 +14,8 @@ CI 使用 GitHub 官方 `windows-2025-vs2026` 预装的 v142 x86/x64 工具和 W
 
 首次[托管运行](https://github.com/Criogaid/Locale-Emulator/actions/runs/43264208954)在安装 VS2019 上耗时约 6 分钟，随后因 `vswhere` 找不到满足要求的 16.x 安装而失败，尚未进入编译。此次改为复用预装组件；保留 v142 编译器和完整源码、ZIP、双架构运行回归，不通过跳过测试来适配运行器。
 
+后续[托管复跑](https://github.com/Criogaid/Locale-Emulator/actions/runs/43274631394)保留的 minidump 确认了 x64 owner-draw 回归中的间歇性崩溃：USER32 的 `cmp dword ptr [rip+disp32], imm8` 被复制到跳板后仍使用原位移，读到了错误地址；先前偶尔通过取决于内存布局。x64 patch 层现复用近地址分配器创建跳板，并按完整指令长度重算 RIP 位移，超范围或不支持的地址大小覆盖明确失败；生成失败不会发布 stub。`X64PatchContracts` 用相反值的有效内存稳定复现旧实现错误，并检查修复后的比较、负位移 mov/lea 和失败时目标缓冲区保持。
+
 ## 原版行为基线与工具链迁移
 
 行为基线采用上游正式发行版 v2.5.0.1 的两个原生 DLL。下载包为 `Locale.Emulator.2.5.0.1.zip`，SHA256：

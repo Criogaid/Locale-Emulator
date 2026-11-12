@@ -554,7 +554,7 @@ ForceInline PUCHAR GetOpCodeFlagsExt()
     return OpcodeFlagsExt;
 }
 
-ULONG_PTR FASTCALL LdeGetOpCodeSize64(PVOID Code, PVOID *OpCodePtr)
+ULONG_PTR FASTCALL LdeGetOpCodeSize64(PVOID Code, PVOID *OpCodePtr, PLONG *RipRelativeOffset)
 {
     // OpCode High 5 bits as index, (1 << low 3bits) as flag
 
@@ -579,6 +579,8 @@ ULONG_PTR FASTCALL LdeGetOpCodeSize64(PVOID Code, PVOID *OpCodePtr)
     PFX67       = FALSE;
     Rex         = FALSE;
     Ptr         = (PUCHAR)Code;
+    if (RipRelativeOffset != nullptr)
+        *RipRelativeOffset = nullptr;
 
 //    while ( (*cPtr == 0x2E) || (*cPtr == 0x3E) || (*cPtr == 0x36) ||
 //            (*cPtr == 0x26) || (*cPtr == 0x64) || (*cPtr == 0x65) ||
@@ -651,7 +653,11 @@ ULONG_PTR FASTCALL LdeGetOpCodeSize64(PVOID Code, PVOID *OpCodePtr)
                 if (PFX67 && (RM == 6))
                     OffsetSize = 2;
                 if (!PFX67 && (RM == 5))
+                {
                     OffsetSize = 4;
+                    if (RipRelativeOffset != nullptr)
+                        *RipRelativeOffset = (PLONG)Ptr;
+                }
              break;
 
             case 1:
@@ -952,7 +958,28 @@ CopyOneOpCode(
     Func = (PBYTE)Source;
     p    = (PBYTE)Target;
 
+#if ML_AMD64
+    PVOID OpCodeStart;
+    PLONG RipRelativeOffset;
+    Length = LdeGetOpCodeSize64(Func, &OpCodeStart, &RipRelativeOffset);
+    for (PBYTE Prefix = Func; Prefix < (PBYTE)OpCodeStart; ++Prefix)
+        if (*Prefix == 0x67)
+            return STATUS_NOT_SUPPORTED;
+
+    if (RipRelativeOffset != nullptr)
+    {
+        LONGLONG Referent = (LONGLONG)(ULONG_PTR)Func + Length + *RipRelativeOffset;
+        LONGLONG Offset = Referent - (LONGLONG)(ULONG_PTR)TargetIp - Length;
+        if (Offset < -0x80000000LL || Offset > 0x7FFFFFFFLL)
+            return STATUS_CONFLICTING_ADDRESSES;
+        CopyMemory(p, Func, Length);
+        *(PLONG)(p + PtrOffset(RipRelativeOffset, Func)) = (LONG)Offset;
+        p += Length;
+        goto EXIT_PROC;
+    }
+#else
     Length = GetOpCodeSize(Func);
+#endif
 
     OpCode          = *Func;
     pOpOffset       = Func + 1;
