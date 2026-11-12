@@ -9,7 +9,7 @@
 需要安装：
 
 - Git 和 PowerShell 7。
-- Visual Studio 2019 Build Tools：MSBuild、MSVC v142 x86/x64 工具、Windows SDK `10.0.19041.0`。原生版本统一定义在 [Toolchain.props](Native/Toolchain.props)。
+- Visual Studio 2019 或更新版本（含 Build Tools）：MSBuild、MSVC v142 x86/x64 工具和 Windows 10/11 SDK。原生目标统一定义在 [Toolchain.props](Native/Toolchain.props)：保持 v142，SDK 的 `10.0` 表示使用最新已安装版本；`Native/Toolchain.ps1` 为所有构建入口解析同一套实际路径和版本。GitHub Actions 使用自带这些组件的 `windows-2025-vs2026`，无需在每次构建前安装 Visual Studio。
 - .NET Framework 4.8 运行时（Windows 11 已提供）。托管目标统一定义在 [Directory.Build.props](Directory.Build.props)；首次构建从 NuGet 恢复微软官方 reference assemblies，无需管理员安装 targeting pack，也不需要现代 .NET SDK。引用包仅用于构建，不进入发行包。
 
 在仓库目录运行：

@@ -10,6 +10,10 @@
 
 多语言资源使用标准 `.resx`：`LEGUI`、`LEContextMenuHandler`、`LEInstaller`、`LECommonLibrary`（含 LEProc 诊断文本）各有 `Strings.resx`（英文中性资源）与 `Strings.<culture>.resx`（译文）。`Localization.targets` 在构建时用 csc 把译文生成为标准的 `<culture>\<程序集>.resources.dll`（工具链不含 al.exe）；运行时由 `ResourceManager` 按 `CurrentUICulture` 的文化链选择，缺失键回退到英文。新增语言只需添加 `Strings.<culture>.resx` 并重新构建；区域名须是有效的 .NET 文化名。Shell 扩展的卫星程序集由安装器随扩展 DLL 写入 `<culture>` 子目录。GUI 在 XAML 中使用 `{legui:Loc Key}`，其中 `UIFont` 为按语言配置的字体名。当前 GUI 与 Shell 菜单提供 21 种语言，安装器、启动器和公共诊断提供英文与简体中文，其他语言显示英文回退文本，不影响目标进程的区域模拟语言。x86 与 x64 包均携带各 `<culture>` 目录。
 
+CI 使用 GitHub 官方 `windows-2025-vs2026` 预装的 v142 x86/x64 工具和 Windows SDK，不再运行 Chocolatey 安装 VS2019。[官方运行器清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-VS2026-Readme.md)列出这些组件；`windows-2025` 的通用标签当前也指向这套 VS2026 镜像。构建通过 `Native/Toolchain.ps1` 按 v142 版本文件查找兼容工具，不限制宿主 IDE 必须为 16.x；SDK 的 `10.0` 与 MSBuild 一样选择最新已安装版本。各入口使用同一解析结果，`artifacts/logs/toolchain.json` 和包内 `build-info.json` 记录实际版本。
+
+首次[托管运行](https://github.com/Criogaid/Locale-Emulator/actions/runs/43264208954)在安装 VS2019 上耗时约 6 分钟，随后因 `vswhere` 找不到满足要求的 16.x 安装而失败，尚未进入编译。此次改为复用预装组件；保留 v142 编译器和完整源码、ZIP、双架构运行回归，不通过跳过测试来适配运行器。
+
 ## 原版行为基线与工具链迁移
 
 行为基线采用上游正式发行版 v2.5.0.1 的两个原生 DLL。下载包为 `Locale.Emulator.2.5.0.1.zip`，SHA256：

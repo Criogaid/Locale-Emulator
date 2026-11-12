@@ -6,12 +6,13 @@ ownerdraw 修复参考 [Cliff-Yang 的崩溃修补](https://github.com/Cliff-Yan
 
 ## 构建
 
-安装 Visual Studio 2019 Build Tools 的 C++ 构建工具。工具集 v142 和 Windows SDK 10.0.19041.0 的版本统一定义在 [Toolchain.props](Toolchain.props)；已验证 MSVC 14.29.30133。x86 原生项目通过 MSBuild 构建；x64 原生 Core 和 Loader 通过仓库提供的 `LocaleEmulatorX64/build-x64.ps1` 使用官方 Hostx86\x64 工具链构建；一级菜单的 `ExplorerCommand/build.ps1` 与它共用 [Toolchain.ps1](Toolchain.ps1) 中的工具链发现（SDK 版本取自 `Toolchain.props`，MSVC 版本固定在该脚本内）。产品启动器为托管 LEProc，旧独立 Loader 项目已退役。
+安装 Visual Studio 2019 或更新版本的 MSBuild、v142 x86/x64 工具和 Windows 10/11 SDK。目标统一定义在 [Toolchain.props](Toolchain.props)，SDK 的 `10.0` 表示最新已安装版本；[Toolchain.ps1](Toolchain.ps1) 从 Visual Studio 的 v142 版本文件读取实际 MSVC 目录，避免把工具集版本与宿主 IDE 版本绑定。x86 的 MSBuild、x64 Core/Loader 和一级菜单构建共用此解析结果，发行包 `build-info.json` 记录实际 MSVC/SDK 版本。产品启动器为托管 LEProc，旧独立 Loader 项目已退役。
 
 从仓库根目录执行（PowerShell）：
 
 ```powershell
-$msbuild = "C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/MSBuild/Current/Bin/MSBuild.exe"
+. ./Native/Toolchain.ps1
+$msbuild = (Get-OfficialToolchain).MSBuild
 & $msbuild Native/LoaderDll/LoaderDll.vcxproj /p:Configuration=Release /p:Platform=Win32
 & $msbuild Native/LocaleEmulator/LocaleEmulator.vcxproj /p:Configuration=Release /p:Platform=Win32
 & $msbuild tests/Native/NativeProbe.vcxproj /p:Configuration=Release /p:Platform=Win32

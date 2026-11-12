@@ -1,6 +1,6 @@
 # 托管回归程序
 
-需要 Windows、VS2019 MSBuild 和 .NET Framework 4.8 运行时。项目保留旧 csproj 和 x86 测试宿主；微软 reference assemblies 作为构建期 NuGet 包统一定义在根 `Directory.Build.props`，不依赖管理员安装 targeting pack 或现代 .NET SDK。
+需要 Windows、Visual Studio 2019 或更新版本的 MSBuild 和 .NET Framework 4.8 运行时。项目保留旧 csproj 和 x86 测试宿主；微软 reference assemblies 作为构建期 NuGet 包统一定义在根 `Directory.Build.props`，不依赖管理员安装 targeting pack 或现代 .NET SDK。
 
 从仓库根目录完成产品构建后，独立复测实际产品：
 

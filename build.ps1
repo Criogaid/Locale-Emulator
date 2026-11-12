@@ -7,19 +7,13 @@ $artifacts = Join-Path $repository 'artifacts'
 $logs = Join-Path $artifacts 'logs'
 New-Item -ItemType Directory -Path $logs -Force | Out-Null
 
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-if (-not (Test-Path -LiteralPath $vswhere)) {
-    throw '未找到 Visual Studio Installer，请安装 README 所列的官方构建组件。'
-}
-$installation = & $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installation)) {
-    throw '未找到同时安装 MSBuild 和 C++ 工具的 Visual Studio 2019。'
-}
-$msbuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
+. (Join-Path $repository 'Native/Toolchain.ps1')
+$toolchain = Get-OfficialToolchain
+$msbuild = $toolchain.MSBuild
 
 function Invoke-Build {
     param([string]$Project, [string]$Platform, [string]$LogName, [string]$Target)
-    & $msbuild (Join-Path $repository $Project) "/t:$Target" /m /nr:false /nologo /v:minimal /p:Configuration=Release "/p:SolutionDir=$repository/" "/p:Platform=$Platform" /fl "/flp:logfile=$(Join-Path $logs $LogName);verbosity=normal;encoding=UTF-8"
+    & $msbuild (Join-Path $repository $Project) "/t:$Target" /m /nr:false /nologo /v:minimal /p:Configuration=Release "/p:SolutionDir=$repository/" "/p:Platform=$Platform" "/p:WindowsTargetPlatformVersion=$($toolchain.SdkVersion)" "/p:VCToolsVersion=$($toolchain.MsvcVersion)" /fl "/flp:logfile=$(Join-Path $logs $LogName);verbosity=normal;encoding=UTF-8"
     if ($LASTEXITCODE -ne 0) {
         throw "构建失败：$Project，详细日志：$(Join-Path $logs $LogName)"
     }
@@ -90,7 +84,6 @@ if ($LASTEXITCODE -ne 0) { throw '无法读取构建提交。' }
 $changes = & git -C $repository status --porcelain=v1
 if ($LASTEXITCODE -ne 0) { throw '无法读取构建工作区状态。' }
 $os = Get-ItemProperty -LiteralPath 'HKLM:/SOFTWARE/Microsoft/Windows NT/CurrentVersion'
-[xml]$nativeToolchain = Get-Content -Raw -LiteralPath (Join-Path $repository 'Native/Toolchain.props')
 [xml]$managedToolchain = Get-Content -Raw -LiteralPath (Join-Path $repository 'Directory.Build.props')
 [ordered]@{
     version = $version.ToString()
@@ -101,8 +94,9 @@ $os = Get-ItemProperty -LiteralPath 'HKLM:/SOFTWARE/Microsoft/Windows NT/Current
     msbuild = (Get-Item -LiteralPath $msbuild).VersionInfo.FileVersion
     native_platform = 'Win32'
     managed_framework = $managedToolchain.Project.PropertyGroup.TargetFrameworkVersion
-    native_toolset = $nativeToolchain.Project.PropertyGroup.PlatformToolset
-    windows_sdk = $nativeToolchain.Project.PropertyGroup.WindowsTargetPlatformVersion
+    native_toolset = $toolchain.PlatformToolset
+    msvc = $toolchain.MsvcVersion
+    windows_sdk = $toolchain.SdkVersion
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $package 'build-info.json') -Encoding utf8NoBOM
 
 $hashes = Get-ChildItem -File -Recurse -LiteralPath $package | Sort-Object FullName | ForEach-Object {

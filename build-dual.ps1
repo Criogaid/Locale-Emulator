@@ -20,21 +20,19 @@ Write-Host '[dual 2/6] 构建 x64 原生组件'
 $explorerCommandRoot = Join-Path $dualRoot 'x64/explorer-command'
 & (Join-Path $repository 'Native/ExplorerCommand/build.ps1') -OutputDirectory $explorerCommandRoot
 
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-$installation = & $vswhere -latest -products '*' -version '[16.0,17.0)' -requires Microsoft.Component.MSBuild Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installation)) {
-    throw '未找到同时安装 MSBuild 和 C++ 工具的 Visual Studio 2019。'
-}
-$msbuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
+. (Join-Path $repository 'Native/Toolchain.ps1')
+$toolchain = Get-OfficialToolchain
+$msbuild = $toolchain.MSBuild
+$nativeProperties = @("/p:WindowsTargetPlatformVersion=$($toolchain.SdkVersion)", "/p:VCToolsVersion=$($toolchain.MsvcVersion)")
 
 Write-Host '[dual 3/6] 构建 x64 属性表边界探针'
-& $msbuild (Join-Path $repository 'tests/Native/X64AttributeContracts.vcxproj') /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 "/fl" "/flp:logfile=$(Join-Path $logs 'dual-x64-attribute-contracts-build.log');verbosity=normal;encoding=UTF-8"
+& $msbuild (Join-Path $repository 'tests/Native/X64AttributeContracts.vcxproj') /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 @nativeProperties "/fl" "/flp:logfile=$(Join-Path $logs 'dual-x64-attribute-contracts-build.log');verbosity=normal;encoding=UTF-8"
 if ($LASTEXITCODE -ne 0) {
     throw 'x64 属性表边界探针构建失败。'
 }
 foreach ($project in @('tests/Native/NativeProbe.vcxproj', 'tests/Native/NativeLaunch.vcxproj')) {
     $logName = 'dual-x64-' + [IO.Path]::GetFileNameWithoutExtension($project) + '-build.log'
-    & $msbuild (Join-Path $repository $project) /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 "/fl" "/flp:logfile=$(Join-Path $logs $logName);verbosity=normal;encoding=UTF-8"
+    & $msbuild (Join-Path $repository $project) /t:Rebuild /m /nr:false /nologo /v:minimal /p:Configuration=Release /p:Platform=x64 @nativeProperties "/fl" "/flp:logfile=$(Join-Path $logs $logName);verbosity=normal;encoding=UTF-8"
     if ($LASTEXITCODE -ne 0) {
         throw "x64 原生探针构建失败：$project"
     }
@@ -206,8 +204,9 @@ function New-Package {
         managed_platform = $Architecture
         native_platform = $Architecture
         managed_framework = 'v4.8'
-        native_toolset = 'v142'
-        windows_sdk = '10.0.19041.0'
+        native_toolset = $toolchain.PlatformToolset
+        msvc = $toolchain.MsvcVersion
+        windows_sdk = $toolchain.SdkVersion
     }
     $buildInfo | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $package 'build-info.json') -Encoding utf8NoBOM
 
@@ -242,8 +241,7 @@ Write-Host '[dual 5/6] 装配 x86 与 x64 ZIP'
 $x86 = New-Package -Architecture x86 -ManagedRoot $releaseRoot -NativeRoot $releaseRoot
 $x64 = New-Package -Architecture x64 -ManagedRoot $managedX64Root -NativeRoot $nativeX64Root -IncludeX86Compatibility
 
-. (Join-Path $repository 'Native/Toolchain.ps1')
-$dumpbin = Join-Path (Get-OfficialToolchain).HostBin 'dumpbin.exe'
+$dumpbin = Join-Path $toolchain.HostBin 'dumpbin.exe'
 # Every PE check below reads dumpbin output; $Mode is '/headers' or '/exports', $Patterns are regexes that must all match.
 function Assert-DumpbinContains {
     param([string]$Image, [string]$Mode, [string[]]$Patterns, [string]$FailureFormat)
